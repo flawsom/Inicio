@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 780" width="1280" height="780" role="img" aria-label="The Inicio console overview: a forms table with live response counts, sync-conflict totals and recent activity">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06080f"/><stop offset="1" stop-color="#0c1322"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.85" cy="0.04" r="0.62">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity="0.15"/><stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="0.08" cy="0.98" r="0.5">
+      <stop offset="0" stop-color="#a78bfa" stop-opacity="0.13"/><stop offset="1" stop-color="#a78bfa" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="780" rx="22" fill="url(#bg)"/>
+  <rect width="1280" height="780" rx="22" fill="url(#glow)"/>
+  <rect width="1280" height="780" rx="22" fill="url(#glow2)"/>
+  <rect x="0.75" y="0.75" width="1278.5" height="778.5" rx="21.5" fill="none" stroke="#ffffff" stroke-opacity="0.10"/>
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <rect x="1" y="1" width="1278" height="62" rx="21" fill="#ffffff" fill-opacity="0.03"/>
+    <rect x="1" y="56" width="1278" height="1" fill="#ffffff" fill-opacity="0.08"/>
+    <rect x="24" y="18" width="28" height="28" rx="8" fill="#0f172a" stroke="#ffffff" stroke-opacity="0.14"/>
+    <rect x="33" y="26" width="10" height="3" rx="1.5" fill="#e2e8f0"/>
+    <rect x="33" y="32" width="10" height="3" rx="1.5" fill="#e2e8f0"/>
+    <rect x="33" y="38" width="6" height="3" rx="1.5" fill="#38bdf8"/>
+    <text x="64" y="38" font-size="16" font-weight="700" fill="#e8eef9">Inicio</text>
+    <rect x="132" y="20" width="150" height="26" rx="13" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.12"/>
+    <text x="146" y="38" font-size="13" fill="#b6c4d8">Inicio · owner</text>
+    <rect x="1083" y="20" width="173" height="26" rx="13" fill="#34d399" fill-opacity="0.10" stroke="#34d399" stroke-opacity="0.30"/>
+    <text x="1097" y="38" font-size="12.5" fill="#34d399">4 forms · 2 published</text>
+    <rect x="1" y="63" width="286" height="716" fill="#ffffff" fill-opacity="0.02"/>
+    <rect x="286" y="63" width="1" height="716" fill="#ffffff" stroke-opacity="0.08"/>
+    <text x="28" y="100" font-size="11" font-weight="700" letter-spacing="1.4" fill="#6b7c95">WORKSPACE</text>
+    <rect x="18" y="122" width="252" height="38" rx="11" fill="#38bdf8" fill-opacity="0.10" stroke="#38bdf8" stroke-opacity="0.28"/>
+    <text x="36" y="147" font-size="13.5" font-weight="600" fill="#e8eef9">Overview</text>
+    <text x="36" y="193" font-size="13.5" fill="#93a1b8">Forms</text>
+    <text x="36" y="239" font-size="13.5" fill="#93a1b8">Responses</text>
+    <text x="36" y="285" font-size="13.5" fill="#93a1b8">Distribute</text>
+    <text x="36" y="331" font-size="13.5" fill="#93a1b8">People and invitations</text>
+    <text x="36" y="377" font-size="13.5" fill="#93a1b8">Exports</text>
+    <text x="36" y="423" font-size="13.5" fill="#93a1b8">Templates</text>
+    <rect x="18" y="690" width="252" height="1" fill="#ffffff" fill-opacity="0.08"/>
+    <text x="36" y="720" font-size="12" fill="#6b7c95">Row-level security: on</text>
+    <text x="36" y="744" font-size="12" fill="#6b7c95">Least-privilege role: app_role</text>
+    <text x="311" y="106" font-size="22" font-weight="700" fill="#e8eef9">Your workspace</text>
+    <text x="311" y="132" font-size="13" font-weight="400" fill="#93a1b8">Everything below is read from the database on this request. No cache, no snapshot table.</text>
+    <rect x="311" y="156" width="224" height="96" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.1"/>
+    <rect x="311" y="156" width="3" height="96" rx="1.5" fill="#38bdf8" fill-opacity="0.75"/>
+    <text x="331" y="184" font-size="10.5" font-weight="700" letter-spacing="1.4" fill="#6b7c95">FORMS</text>
+    <text x="331" y="214" font-size="26" font-weight="700" fill="#e8eef9">4</text>
+    <text x="331" y="236" font-size="11.5" font-weight="400" fill="#6b7c95">2 published · 2 draft</text>
+    <rect x="551" y="156" width="224" height="96" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.1"/>
+    <rect x="551" y="156" width="3" height="96" rx="1.5" fill="#34d399" fill-opacity="0.75"/>
+    <text x="571" y="184" font-size="10.5" font-weight="700" letter-spacing="1.4" fill="#6b7c95">SUBMITTED</text>
+    <text x="571" y="214" font-size="26" font-weight="700" fill="#e8eef9">1,284</text>
+    <text x="571" y="236" font-size="11.5" font-weight="400" fill="#6b7c95">across 3 forms</text>
+    <rect x="791" y="156" width="224" height="96" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.1"/>
+    <rect x="791" y="156" width="3" height="96" rx="1.5" fill="#a78bfa" fill-opacity="0.75"/>
+    <text x="811" y="184" font-size="10.5" font-weight="700" letter-spacing="1.4" fill="#6b7c95">IN PROGRESS</text>
+    <text x="811" y="214" font-size="26" font-weight="700" fill="#e8eef9">96</text>
+    <text x="811" y="236" font-size="11.5" font-weight="400" fill="#6b7c95">resumable on the device</text>
+    <rect x="1031" y="156" width="224" height="96" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.1"/>
+    <rect x="1031" y="156" width="3" height="96" rx="1.5" fill="#fbbf24" fill-opacity="0.75"/>
+    <text x="1051" y="184" font-size="10.5" font-weight="700" letter-spacing="1.4" fill="#6b7c95">SYNC CONFLICTS</text>
+    <text x="1051" y="214" font-size="26" font-weight="700" fill="#e8eef9">3</text>
+    <text x="1051" y="236" font-size="11.5" font-weight="400" fill="#6b7c95">kept, never overwritten</text>
+    <rect x="311" y="280" width="664" height="330" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.1"/>
+    <text x="335" y="314" font-size="15" font-weight="700" fill="#e8eef9">Forms</text>
+    <rect x="880" y="296" width="88" height="24" rx="12" fill="#38bdf8" fill-opacity="0.10" stroke="#38bdf8" stroke-opacity="0.30"/>
+    <text x="890" y="312" font-size="11.5" font-weight="600" fill="#38bdf8">live reads</text>
+    <rect x="335" y="336" width="616" height="1" fill="#ffffff" fill-opacity="0.08"/>
+    <text x="335" y="358" font-size="10.5" font-weight="700" letter-spacing="1.4" fill="#6b7c95">FORM</text>
+    <text x="585" y="358" font-size="10.5" font-weight="700" letter-spacing="1.4" fill="#6b7c95">VERSION</text>
+    <text x="700" y="358" font-size="10.5" font-weight="700" letter-spacing="1.4" fill="#6b7c95">STATUS</text>
+    <text x="828" y="358" font-size="10.5" font-weight="700" letter-spacing="1.4" fill="#6b7c95">RESPONSES</text>
+    <rect x="327" y="376" width="632" height="40" rx="10" fill="#ffffff" fill-opacity="0.025"/>
+    <text x="335" y="402" font-size="13" font-weight="400" fill="#e8eef9">School Ranking Survey 2026</text>
+    <text x="585" y="402" font-size="12.5" font-weight="600" fill="#93a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">v2</text>
+    <rect x="700" y="384" width="88" height="24" rx="12" fill="#34d399" fill-opacity="0.10" stroke="#34d399" stroke-opacity="0.30"/>
+    <text x="710" y="400" font-size="11" font-weight="600" fill="#34d399">collecting</text>
+    <text x="828" y="402" font-size="12.5" font-weight="600" fill="#b6c4d8">1,284</text>
+    <text x="335" y="446" font-size="13" font-weight="400" fill="#b6c4d8">Teacher Pulse</text>
+    <text x="585" y="446" font-size="12.5" font-weight="600" fill="#93a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">v1 draft</text>
+    <rect x="700" y="428" width="108" height="24" rx="12" fill="#6b7c95" fill-opacity="0.10" stroke="#6b7c95" stroke-opacity="0.30"/>
+    <text x="710" y="444" font-size="11" font-weight="600" fill="#6b7c95">not published</text>
+    <text x="828" y="446" font-size="12.5" font-weight="600" fill="#b6c4d8">—</text>
+    <rect x="327" y="464" width="632" height="40" rx="10" fill="#ffffff" fill-opacity="0.025"/>
+    <text x="335" y="490" font-size="13" font-weight="400" fill="#b6c4d8">Household Panel</text>
+    <text x="585" y="490" font-size="12.5" font-weight="600" fill="#93a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">v3</text>
+    <rect x="700" y="472" width="61" height="24" rx="12" fill="#6b7c95" fill-opacity="0.10" stroke="#6b7c95" stroke-opacity="0.30"/>
+    <text x="710" y="488" font-size="11" font-weight="600" fill="#6b7c95">closed</text>
+    <text x="828" y="490" font-size="12.5" font-weight="600" fill="#b6c4d8">642</text>
+    <text x="335" y="534" font-size="13" font-weight="400" fill="#b6c4d8">School Ranking Survey 2026</text>
+    <text x="585" y="534" font-size="12.5" font-weight="600" fill="#93a1b8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">v1</text>
+    <rect x="700" y="516" width="74" height="24" rx="12" fill="#6b7c95" fill-opacity="0.10" stroke="#6b7c95" stroke-opacity="0.30"/>
+    <text x="710" y="532" font-size="11" font-weight="600" fill="#6b7c95">archived</text>
+    <text x="828" y="534" font-size="12.5" font-weight="600" fill="#b6c4d8">1,190</text>
+    <rect x="335" y="552" width="616" height="1" fill="#ffffff" fill-opacity="0.08"/>
+    <text x="335" y="580" font-size="12" font-weight="400" fill="#6b7c95">A published version is frozen: 1,190 responses stay attached to v1 even after v2 shipped.</text>
+    <rect x="991" y="280" width="265" height="330" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.1"/>
+    <text x="1015" y="314" font-size="15" font-weight="700" fill="#e8eef9">Recent activity</text>
+    <circle cx="1021" cy="338" r="4" fill="#34d399" fill-opacity="0.9"/>
+    <text x="1036" y="342" font-size="12.5" font-weight="600" fill="#b6c4d8">Invitation accepted</text>
+    <text x="1036" y="359" font-size="11" font-weight="400" fill="#6b7c95">r.okafor@school.edu.gh</text>
+    <circle cx="1021" cy="388" r="4" fill="#38bdf8" fill-opacity="0.9"/>
+    <text x="1036" y="392" font-size="12.5" font-weight="600" fill="#b6c4d8">Version 2 published</text>
+    <text x="1036" y="409" font-size="11" font-weight="400" fill="#6b7c95">by you · immutable</text>
+    <circle cx="1021" cy="438" r="4" fill="#fbbf24" fill-opacity="0.9"/>
+    <text x="1036" y="442" font-size="12.5" font-weight="600" fill="#b6c4d8">Sync conflict kept</text>
+    <text x="1036" y="459" font-size="11" font-weight="400" fill="#6b7c95">1 device value retained</text>
+    <circle cx="1021" cy="488" r="4" fill="#6b7c95" fill-opacity="0.9"/>
+    <text x="1036" y="492" font-size="12.5" font-weight="600" fill="#b6c4d8">CSV bundle exported</text>
+    <text x="1036" y="509" font-size="11" font-weight="400" fill="#6b7c95">codebook + labels</text>
+    <circle cx="1021" cy="538" r="4" fill="#a78bfa" fill-opacity="0.9"/>
+    <text x="1036" y="542" font-size="12.5" font-weight="600" fill="#b6c4d8">Role changed to admin</text>
+    <text x="1036" y="559" font-size="11" font-weight="400" fill="#6b7c95">recorded in the audit log</text>
+    <rect x="311" y="634" width="945" height="118" rx="16" fill="#ffffff" fill-opacity="0.03" stroke="#ffffff" stroke-opacity="0.1"/>
+    <text x="335" y="664" font-size="11" font-weight="700" letter-spacing="1.4" fill="#6b7c95">WHY THIS SCREEN CAN SAY “LIVE”</text>
+    <text x="335" y="692" font-size="12.5" font-weight="400" fill="#93a1b8">Every figure is recomputed inside a tenant-scoped transaction. The organisation is a parameter of the</text>
+    <text x="335" y="712" font-size="12.5" font-weight="400" fill="#93a1b8">connection, not a filter the application remembers to apply — PostgreSQL enforces it.</text>
+    <text x="335" y="736" font-size="12" font-weight="500" fill="#38bdf8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">SELECT count(*) FROM response WHERE org_id = current_setting('app.org_id')::uuid;</text>
+    <text x="1010" y="692" font-size="11.5" font-weight="400" fill="#6b7c95">Illustration of the</text>
+    <text x="1010" y="710" font-size="11.5" font-weight="400" fill="#6b7c95">running console.</text>
+    <text x="1010" y="736" font-size="10.5" font-weight="400" fill="#6b7c95" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">docs/assets/dashboard.svg</text>
+  </g>
+</svg>

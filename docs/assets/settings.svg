@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 780" width="1280" height="780" role="img" aria-label="The Inicio console, People and invitations: member roles, single-use invitation links, and the terms-evidence record">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06080f"/><stop offset="1" stop-color="#0c1322"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.85" cy="0.04" r="0.62">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity="0.15"/><stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="0.08" cy="0.98" r="0.5">
+      <stop offset="0" stop-color="#a78bfa" stop-opacity="0.13"/><stop offset="1" stop-color="#a78bfa" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="780" rx="22" fill="url(#bg)"/>
+  <rect width="1280" height="780" rx="22" fill="url(#glow)"/>
+  <rect width="1280" height="780" rx="22" fill="url(#glow2)"/>
+  <rect x="0.75" y="0.75" width="1278.5" height="778.5" rx="21.5" fill="none" stroke="#ffffff" stroke-opacity="0.10"/>
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <rect x="1" y="1" width="1278" height="62" rx="21" fill="#ffffff" fill-opacity="0.03"/>
+    <rect x="1" y="56" width="1278" height="1" fill="#ffffff" fill-opacity="0.08"/>
+    <rect x="24" y="18" width="28" height="28" rx="8" fill="#0f172a" stroke="#ffffff" stroke-opacity="0.14"/>
+    <rect x="33" y="26" width="10" height="3" rx="1.5" fill="#e2e8f0"/>
+    <rect x="33" y="32" width="10" height="3" rx="1.5" fill="#e2e8f0"/>
+    <rect x="33" y="38" width="6" height="3" rx="1.5" fill="#38bdf8"/>
+    <text x="64" y="38" font-size="16" font-weight="700" fill="#e8eef9">Inicio</text>
+    <rect x="132" y="20" width="150" height="26" rx="13" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.12"/>
+    <text x="146" y="38" font-size="13" fill="#b6c4d8">Inicio · owner</text>
+    <rect x="1083" y="20" width="173" height="26" rx="13" fill="#a78bfa" fill-opacity="0.10" stroke="#a78bfa" stroke-opacity="0.30"/>
+    <text x="1097" y="38" font-size="12.5" fill="#a78bfa">roles enforced in SQL</text>
+    <rect x="1" y="63" width="286" height="716" fill="#ffffff" fill-opacity="0.02"/>
+    <rect x="286" y="63" width="1" height="716" fill="#ffffff" stroke-opacity="0.08"/>
+    <text x="28" y="100" font-size="11" font-weight="700" letter-spacing="1.4" fill="#6b7c95">WORKSPACE</text>
+    <text x="36" y="147" font-size="13.5" fill="#93a1b8">Overview</text>
+    <text x="36" y="193" font-size="13.5" fill="#93a1b8">Forms</text>
+    <text x="36" y="239" font-size="13.5" fill="#93a1b8">Responses</text>
+    <text x="36" y="285" font-size="13.5" fill="#93a1b8">Distribute</text>
+    <rect x="18" y="306" width="252" height="38" rx="11" fill="#38bdf8" fill-opacity="0.10" stroke="#38bdf8" stroke-opacity="0.28"/>
+    <text x="36" y="331" font-size="13.5" font-weight="600" fill="#e8eef9">People and invitations</text>
+    <text x="36" y="377" font-size="13.5" fill="#93a1b8">Exports</text>
+    <text x="36" y="423" font-size="13.5" fill="#93a1b8">Templates</text>
+    <rect x="18" y="690" width="252" height="1" fill="#ffffff" fill-opacity="0.08"/>
+    <text x="36" y="720" font-size="12" fill="#6b7c95">Row-level security: on</text>
+    <text x="36" y="744" font-size="12" fill="#6b7c95">Least-privilege role: app_role</text>
+    <text x="311" y="106" font-size="22" font-weight="700" fill="#e8eef9">People and invitations</text>
+    <text x="311" y="132" font-size="13" font-weight="400" fill="#93a1b8">Accounts are invitation only. One link, one person — a link stops working the moment it is used.</text>
+    <rect x="311" y="156" width="664" height="300" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.1"/>
+    <text x="335" y="190" font-size="15" font-weight="700" fill="#e8eef9">Members</text>
+    <rect x="830" y="172" width="68" height="24" rx="12" fill="#38bdf8" fill-opacity="0.10" stroke="#38bdf8" stroke-opacity="0.30"/>
+    <text x="840" y="188" font-size="11.5" font-weight="600" fill="#38bdf8">4 seats</text>
+    <rect x="335" y="212" width="616" height="1" fill="#ffffff" fill-opacity="0.08"/>
+    <text x="335" y="234" font-size="10.5" font-weight="700" letter-spacing="1.4" fill="#6b7c95">PERSON</text>
+    <text x="585" y="234" font-size="10.5" font-weight="700" letter-spacing="1.4" fill="#6b7c95">ROLE</text>
+    <text x="720" y="234" font-size="10.5" font-weight="700" letter-spacing="1.4" fill="#6b7c95">STATUS</text>
+    <text x="850" y="234" font-size="10.5" font-weight="700" letter-spacing="1.4" fill="#6b7c95">LAST SEEN</text>
+    <rect x="327" y="252" width="632" height="42" rx="10" fill="#ffffff" fill-opacity="0.025"/>
+    <text x="335" y="279" font-size="12.5" font-weight="400" fill="#e8eef9">sibaprasadpanda56@gmail.com</text>
+    <rect x="585" y="261" width="54" height="24" rx="12" fill="#a78bfa" fill-opacity="0.10" stroke="#a78bfa" stroke-opacity="0.30"/>
+    <text x="595" y="277" font-size="11" font-weight="600" fill="#a78bfa">owner</text>
+    <rect x="720" y="261" width="61" height="24" rx="12" fill="#34d399" fill-opacity="0.10" stroke="#34d399" stroke-opacity="0.30"/>
+    <text x="730" y="277" font-size="11" font-weight="600" fill="#34d399">active</text>
+    <text x="850" y="279" font-size="11.5" font-weight="400" fill="#6b7c95">now</text>
+    <text x="335" y="325" font-size="12.5" font-weight="400" fill="#e8eef9">r.okafor@school.edu.gh</text>
+    <rect x="585" y="307" width="54" height="24" rx="12" fill="#a78bfa" fill-opacity="0.10" stroke="#a78bfa" stroke-opacity="0.30"/>
+    <text x="595" y="323" font-size="11" font-weight="600" fill="#a78bfa">admin</text>
+    <rect x="720" y="307" width="61" height="24" rx="12" fill="#34d399" fill-opacity="0.10" stroke="#34d399" stroke-opacity="0.30"/>
+    <text x="730" y="323" font-size="11" font-weight="600" fill="#34d399">active</text>
+    <text x="850" y="325" font-size="11.5" font-weight="400" fill="#6b7c95">2 h ago</text>
+    <rect x="327" y="344" width="632" height="42" rx="10" fill="#ffffff" fill-opacity="0.025"/>
+    <text x="335" y="371" font-size="12.5" font-weight="400" fill="#b6c4d8">t.mensah@district.gov.gh</text>
+    <rect x="585" y="353" width="61" height="24" rx="12" fill="#a78bfa" fill-opacity="0.10" stroke="#a78bfa" stroke-opacity="0.30"/>
+    <text x="595" y="369" font-size="11" font-weight="600" fill="#a78bfa">member</text>
+    <rect x="720" y="353" width="61" height="24" rx="12" fill="#93a1b8" fill-opacity="0.10" stroke="#93a1b8" stroke-opacity="0.30"/>
+    <text x="730" y="369" font-size="11" font-weight="600" fill="#93a1b8">active</text>
+    <text x="850" y="371" font-size="11.5" font-weight="400" fill="#6b7c95">yesterday</text>
+    <text x="335" y="417" font-size="12.5" font-weight="400" fill="#b6c4d8">a.nkrumah@district.gov.gh</text>
+    <rect x="585" y="399" width="61" height="24" rx="12" fill="#a78bfa" fill-opacity="0.10" stroke="#a78bfa" stroke-opacity="0.30"/>
+    <text x="595" y="415" font-size="11" font-weight="600" fill="#a78bfa">viewer</text>
+    <rect x="720" y="399" width="68" height="24" rx="12" fill="#fbbf24" fill-opacity="0.10" stroke="#fbbf24" stroke-opacity="0.30"/>
+    <text x="730" y="415" font-size="11" font-weight="600" fill="#fbbf24">invited</text>
+    <text x="850" y="417" font-size="11.5" font-weight="400" fill="#6b7c95">single-use link</text>
+    <text x="335" y="442" font-size="12" font-weight="400" fill="#6b7c95">Roles are checked on every request and re-checked by the database policies themselves.</text>
+    <rect x="991" y="156" width="265" height="300" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.1"/>
+    <text x="1015" y="190" font-size="15" font-weight="700" fill="#e8eef9">New invitation</text>
+    <text x="1015" y="214" font-size="11.5" font-weight="400" fill="#6b7c95">for a.nkrumah@district.gov.gh</text>
+    <text x="1015" y="248" font-size="11" font-weight="700" letter-spacing="1.4" fill="#6b7c95">SINGLE-USE LINK</text>
+    <rect x="1015" y="258" width="217" height="34" rx="10" fill="#0b1120" stroke="#ffffff" stroke-opacity="0.12"/>
+    <text x="1025" y="280" font-size="12" font-weight="500" fill="#38bdf8" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">/invite/9f3c…8ab1</text>
+    <rect x="1015" y="306" width="47" height="30" rx="15" fill="#38bdf8" fill-opacity="0.10" stroke="#38bdf8" stroke-opacity="0.30"/>
+    <text x="1025" y="325" font-size="12" font-weight="600" fill="#38bdf8">copy</text>
+    <rect x="1063" y="306" width="74" height="30" rx="15" fill="#34d399" fill-opacity="0.10" stroke="#34d399" stroke-opacity="0.30"/>
+    <text x="1073" y="325" font-size="12" font-weight="600" fill="#34d399">email it</text>
+    <rect x="1140" y="306" width="61" height="30" rx="15" fill="#fbbf24" fill-opacity="0.10" stroke="#fbbf24" stroke-opacity="0.30"/>
+    <text x="1150" y="325" font-size="12" font-weight="600" fill="#fbbf24">revoke</text>
+    <rect x="1015" y="352" width="217" height="1" fill="#ffffff" fill-opacity="0.08"/>
+    <text x="1015" y="380" font-size="11" font-weight="700" letter-spacing="1.4" fill="#6b7c95">WHAT THE SERVER RECORDS</text>
+    <circle cx="1021" cy="396" r="3.5" fill="#a78bfa" fill-opacity="0.85"/>
+    <text x="1034" y="400" font-size="11.5" font-weight="400" fill="#93a1b8">issued by owner</text>
+    <circle cx="1021" cy="418" r="3.5" fill="#a78bfa" fill-opacity="0.85"/>
+    <text x="1034" y="422" font-size="11.5" font-weight="400" fill="#93a1b8">expires in 6 days</text>
+    <circle cx="1021" cy="440" r="3.5" fill="#a78bfa" fill-opacity="0.85"/>
+    <text x="1034" y="444" font-size="11.5" font-weight="400" fill="#93a1b8">accepted once, then dead</text>
+    <circle cx="1021" cy="462" r="3.5" fill="#a78bfa" fill-opacity="0.85"/>
+    <text x="1034" y="466" font-size="11.5" font-weight="400" fill="#93a1b8">revocation is immediate</text>
+    <rect x="311" y="476" width="945" height="134" rx="16" fill="#ffffff" fill-opacity="0.03" stroke="#ffffff" stroke-opacity="0.1"/>
+    <text x="335" y="506" font-size="11" font-weight="700" letter-spacing="1.4" fill="#6b7c95">ROLES — ENFORCED BY ROW LEVEL SECURITY, NOT BY THE INTERFACE</text>
+    <rect x="335" y="522" width="216" height="66" rx="12" fill="#ffffff" fill-opacity="0.03" stroke="#38bdf8" stroke-opacity="0.22"/>
+    <rect x="349" y="534" width="54" height="22" rx="11" fill="#38bdf8" fill-opacity="0.10" stroke="#38bdf8" stroke-opacity="0.30"/>
+    <text x="359" y="549" font-size="11" font-weight="600" fill="#38bdf8">owner</text>
+    <text x="349" y="574" font-size="10.8" font-weight="400" fill="#6b7c95">everything, including billing</text>
+    <text x="349" y="589" font-size="10.8" font-weight="400" fill="#6b7c95">and roles</text>
+    <rect x="563" y="522" width="216" height="66" rx="12" fill="#ffffff" fill-opacity="0.03" stroke="#a78bfa" stroke-opacity="0.22"/>
+    <rect x="577" y="534" width="54" height="22" rx="11" fill="#a78bfa" fill-opacity="0.10" stroke="#a78bfa" stroke-opacity="0.30"/>
+    <text x="587" y="549" font-size="11" font-weight="600" fill="#a78bfa">admin</text>
+    <text x="577" y="574" font-size="10.8" font-weight="400" fill="#6b7c95">people, forms, distribution,</text>
+    <text x="577" y="589" font-size="10.8" font-weight="400" fill="#6b7c95">exports</text>
+    <rect x="791" y="522" width="216" height="66" rx="12" fill="#ffffff" fill-opacity="0.03" stroke="#34d399" stroke-opacity="0.22"/>
+    <rect x="805" y="534" width="61" height="22" rx="11" fill="#34d399" fill-opacity="0.10" stroke="#34d399" stroke-opacity="0.30"/>
+    <text x="815" y="549" font-size="11" font-weight="600" fill="#34d399">member</text>
+    <text x="805" y="574" font-size="10.8" font-weight="400" fill="#6b7c95">build and collect, no member</text>
+    <text x="805" y="589" font-size="10.8" font-weight="400" fill="#6b7c95">changes</text>
+    <rect x="1019" y="522" width="216" height="66" rx="12" fill="#ffffff" fill-opacity="0.03" stroke="#93a1b8" stroke-opacity="0.22"/>
+    <rect x="1033" y="534" width="61" height="22" rx="11" fill="#93a1b8" fill-opacity="0.10" stroke="#93a1b8" stroke-opacity="0.30"/>
+    <text x="1043" y="549" font-size="11" font-weight="600" fill="#93a1b8">viewer</text>
+    <text x="1033" y="574" font-size="10.8" font-weight="400" fill="#6b7c95">read responses and exports</text>
+    <text x="1033" y="589" font-size="10.8" font-weight="400" fill="#6b7c95">only</text>
+    <rect x="311" y="634" width="945" height="118" rx="16" fill="#ffffff" fill-opacity="0.03" stroke="#ffffff" stroke-opacity="0.1"/>
+    <text x="335" y="664" font-size="11" font-weight="700" letter-spacing="1.4" fill="#6b7c95">CONSENT WITH EVIDENCE, NOT A CHECKBOX</text>
+    <text x="335" y="692" font-size="12.5" font-weight="400" fill="#93a1b8">Accepting the terms writes a row: policy version, exact text hash, timestamp, IP address and user agent.</text>
+    <text x="335" y="714" font-size="12.5" font-weight="400" fill="#93a1b8">The record is append-only and tenant-scoped, so “who agreed to what, and when” is answerable months later.</text>
+    <text x="335" y="738" font-size="12" font-weight="500" fill="#a78bfa" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">terms_acceptance(user_id, policy_version, text_sha256, accepted_at, ip, user_agent)</text>
+    <text x="1010" y="692" font-size="11.5" font-weight="400" fill="#6b7c95">Illustration of the</text>
+    <text x="1010" y="710" font-size="11.5" font-weight="400" fill="#6b7c95">running console.</text>
+    <text x="1010" y="736" font-size="10.5" font-weight="400" fill="#6b7c95" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">docs/assets/settings.svg</text>
+  </g>
+</svg>

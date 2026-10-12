@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 700" width="1280" height="700" role="img" aria-label="The responses and exports tab: live status counts, answer tallies, a daily timeline, a sync-conflict note and the export formats">
+  <defs>
+    <linearGradient id="abg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06080f"/><stop offset="1" stop-color="#0c1322"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity="0.35"/><stop offset="1" stop-color="#38bdf8" stop-opacity="0.95"/>
+    </linearGradient>
+    <radialGradient id="aglow" cx="0.1" cy="0.0" r="0.7">
+      <stop offset="0" stop-color="#a78bfa" stop-opacity="0.16"/><stop offset="1" stop-color="#a78bfa" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="700" rx="22" fill="url(#abg)"/>
+  <rect width="1280" height="700" rx="22" fill="url(#aglow)"/>
+  <rect x="0.75" y="0.75" width="1278.5" height="698.5" rx="21.5" fill="none" stroke="#ffffff" stroke-opacity="0.10"/>
+  <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+
+    <text x="36" y="58" font-size="22" font-weight="700" fill="#eef4fd">Responses &amp; exports</text>
+    <text x="36" y="82" font-size="13" fill="#8394ad">Every number below is recomputed from the database on this request — no cache, no snapshot table.</text>
+
+    <!-- status cards -->
+    <g>
+      <rect x="36" y="106" width="260" height="96" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.10"/>
+      <text x="58" y="140" font-size="12" font-weight="700" letter-spacing="1.2" fill="#6b7c95">SUBMITTED</text>
+      <text x="58" y="182" font-size="38" font-weight="700" fill="#6ee7b7">3</text>
+      <rect x="310" y="106" width="260" height="96" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.10"/>
+      <text x="332" y="140" font-size="12" font-weight="700" letter-spacing="1.2" fill="#6b7c95">IN PROGRESS</text>
+      <text x="332" y="182" font-size="38" font-weight="700" fill="#7dd3fc">1</text>
+      <rect x="584" y="106" width="260" height="96" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.10"/>
+      <text x="606" y="140" font-size="12" font-weight="700" letter-spacing="1.2" fill="#6b7c95">SYNC CONFLICTS</text>
+      <text x="606" y="182" font-size="38" font-weight="700" fill="#fcd34d">1</text>
+      <rect x="858" y="106" width="386" height="96" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.10"/>
+      <text x="880" y="140" font-size="12" font-weight="700" letter-spacing="1.2" fill="#6b7c95">SERVER TIME OF THIS READ</text>
+      <text x="880" y="178" font-size="17" font-weight="600" fill="#dbe6f5">14:26:11</text>
+      <text x="880" y="196" font-size="12" fill="#6b7c95">shown so "live" is visible, not claimed</text>
+    </g>
+
+    <!-- tallies -->
+    <rect x="36" y="228" width="596" height="300" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.10"/>
+    <text x="58" y="260" font-size="12" font-weight="700" letter-spacing="1.2" fill="#6b7c95">ANSWER TALLIES</text>
+    <line x1="58" y1="280" x2="610" y2="280" stroke="#ffffff" stroke-opacity="0.10"/>
+    <g font-size="13">
+      <text x="58" y="308" fill="#6b7c95">QUESTION</text><text x="330" y="308" fill="#6b7c95">VALUE</text><text x="560" y="308" fill="#6b7c95">N</text>
+      <text x="58" y="342" fill="#dbe6f5">school_type</text><text x="330" y="342" fill="#c4b5fd">govt</text><text x="566" y="342" fill="#e8eef9">2</text>
+      <text x="58" y="374" fill="#dbe6f5">school_type</text><text x="330" y="374" fill="#c4b5fd">private</text><text x="566" y="374" fill="#e8eef9">1</text>
+      <text x="58" y="406" fill="#dbe6f5">enrolment</text><text x="330" y="406" fill="#c4b5fd">1248</text><text x="566" y="406" fill="#e8eef9">1</text>
+      <text x="58" y="438" fill="#dbe6f5">enrolment</text><text x="330" y="438" fill="#c4b5fd">860</text><text x="566" y="438" fill="#e8eef9">1</text>
+      <text x="58" y="470" fill="#dbe6f5">facilities</text><text x="330" y="470" fill="#93a1b8">(blank)</text><text x="566" y="470" fill="#e8eef9">1</text>
+      <text x="58" y="502" fill="#dbe6f5">secondary_details</text><text x="330" y="502" fill="#93a1b8">(blank)</text><text x="566" y="502" fill="#e8eef9">3</text>
+    </g>
+    <text x="58" y="520" font-size="11.5" fill="#6b7c95">A skipped question is stored as null — "not asked" is a fact the codebook records.</text>
+
+    <!-- timeline -->
+    <rect x="656" y="228" width="588" height="300" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.10"/>
+    <text x="678" y="260" font-size="12" font-weight="700" letter-spacing="1.2" fill="#6b7c95">DAILY ACTIVITY</text>
+    <line x1="678" y1="440" x2="1222" y2="440" stroke="#ffffff" stroke-opacity="0.14"/>
+    <g fill="url(#bar)">
+      <rect x="690" y="392" width="34" height="48" rx="6"/>
+      <rect x="752" y="368" width="34" height="72" rx="6"/>
+      <rect x="814" y="404" width="34" height="36" rx="6"/>
+      <rect x="876" y="344" width="34" height="96" rx="6"/>
+      <rect x="938" y="380" width="34" height="60" rx="6"/>
+      <rect x="1000" y="356" width="34" height="84" rx="6"/>
+      <rect x="1062" y="416" width="34" height="24" rx="6"/>
+    </g>
+    <g font-size="11" fill="#6b7c95">
+      <text x="696" y="458">Mon</text><text x="760" y="458">Tue</text><text x="822" y="458">Wed</text><text x="884" y="458">Thu</text>
+      <text x="946" y="458">Fri</text><text x="1008" y="458">Sat</text><text x="1070" y="458">Sun</text>
+    </g>
+    <text x="678" y="492" font-size="13" fill="#dbe6f5">Submitted 3 · started 4</text>
+    <text x="678" y="514" font-size="11.5" fill="#6b7c95">A response counts as started the moment a link is opened, so drop-off is visible.</text>
+
+    <!-- conflict + exports -->
+    <rect x="36" y="548" width="596" height="124" rx="16" fill="#fbbf24" fill-opacity="0.07" stroke="#fbbf24" stroke-opacity="0.28"/>
+    <text x="58" y="580" font-size="13" font-weight="700" fill="#fcd34d">1 answer was edited on two devices before syncing</text>
+    <text x="58" y="604" font-size="12.5" fill="#d9c48f">Keep both: the value the server held is what the export carries,</text>
+    <text x="58" y="624" font-size="12.5" fill="#d9c48f">and the other copy is preserved beside it in the database.</text>
+    <text x="58" y="654" font-size="11.5" fill="#a89363">Nothing is overwritten. Nothing is silently dropped.</text>
+
+    <rect x="656" y="548" width="588" height="124" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.10"/>
+    <text x="678" y="580" font-size="12" font-weight="700" letter-spacing="1.2" fill="#6b7c95">EXPORT</text>
+    <rect x="678" y="594" width="168" height="36" rx="10" fill="#38bdf8" fill-opacity="0.16" stroke="#38bdf8" stroke-opacity="0.45"/>
+    <text x="698" y="617" font-size="12.5" font-weight="600" fill="#7dd3fc">CSV bundle (.zip)</text>
+    <rect x="858" y="594" width="110" height="36" rx="10" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.14"/>
+    <text x="890" y="617" font-size="12.5" fill="#dbe6f5">XLSX</text>
+    <rect x="980" y="594" width="110" height="36" rx="10" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.14"/>
+    <text x="1012" y="617" font-size="12.5" fill="#dbe6f5">JSON</text>
+    <rect x="1102" y="594" width="122" height="36" rx="10" fill="#fb7185" fill-opacity="0.10" stroke="#fb7185" stroke-opacity="0.32"/>
+    <text x="1118" y="617" font-size="12.5" fill="#fda4af">.sav / .dta</text>
+    <text x="678" y="654" font-size="11.5" fill="#6b7c95">Statistical exports refuse with a reason until the pyreadstat worker ships.</text>
+  </g>
+</svg>
