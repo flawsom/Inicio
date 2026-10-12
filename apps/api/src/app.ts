@@ -4,6 +4,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { env } from './env.js';
+import { assertTenancyEnforced } from './db/pool.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './auth/routes.js';
 import { platformRoutes } from './platform/index.js';
@@ -22,6 +23,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     trustProxy: true,
     bodyLimit: 1024 * 1024,
   });
+
+  // Refuse to serve on a connection that cannot enforce tenancy (see pool.ts).
+  await assertTenancyEnforced();
 
   await app.register(helmet);
   // The console and the API are served from one origin, so CORS never applies

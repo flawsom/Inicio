@@ -22,6 +22,13 @@ const schema = z.object({
 
   // Least-privilege app connection. RLS is only enforced for a role that is
   // neither superuser nor BYPASSRLS, so this must be `app_role` in production.
+  //
+  // `APP_DATABASE_URL` wins when it is set. A hosting provider's database
+  // integration usually claims `DATABASE_URL` for the *owner* connection (the
+  // Neon integration on Vercel injects exactly that), and the owner URL is what
+  // migrations need while being exactly what the application must never use.
+  // Two roles therefore get two names instead of being told apart by trust.
+  APP_DATABASE_URL: optionalStr,
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   MIGRATION_DATABASE_URL: optionalStr,
   DATABASE_SSL: boolish.default(false),
@@ -80,7 +87,9 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
       .join('\n');
     throw new Error(`Invalid environment configuration:\n${detail}`);
   }
-  return parsed.data;
+  // The application connects as the least-privileged role: an explicit
+  // APP_DATABASE_URL when the platform provides one, otherwise DATABASE_URL.
+  return { ...parsed.data, DATABASE_URL: parsed.data.APP_DATABASE_URL ?? parsed.data.DATABASE_URL };
 }
 
 export const env: Env = loadEnv();
