@@ -453,3 +453,86 @@ on more than one hostname without either one handing out a link that points at t
 database: invitation-only gate, publish, three real respondent submissions, live reads, every
 export format and its contents, single-use link enforcement, and an XLSForm import round trip.
 35 of 35 checks passed.
+
+## D25 - Offline collection: the device owns the response, and a disagreement is data
+
+**The problem.** Collection assumed the server was reachable. A respondent with no signal could not
+open a survey (the definition came from the network), could not start a response (the server minted
+its id), and a save that failed existed only on screen: the interface said "saved" when nothing had
+been sent. For the field teams this product targets, that is the single largest source of lost work,
+and the master prompt's invariant is explicit — **NO SILENT DATA LOSS**, ever, anywhere.
+
+**Chosen, and why each part.**
+
+1. **The device owns the response UUID.** A client-generated UUID *is* the response id, and
+   `POST /collect/:token/responses` resolves it idempotently: the first call creates, a retry
+   returns the existing row with `created: false`. Server-assigned ids cannot be known while
+   offline, and without a stable identity a retried start after a dropped connection creates a
+   second response — the duplicate this phase exists to prevent. A client UUID presented against a
+   different survey is refused (`409 client_id_conflict`) rather than silently adopted. The unique
+   index is `(org_id, client_uuid)`, so tenancy still bounds it.
+
+2. **The published definition is cached on the device.** A respondent can therefore open a survey
+   they have visited once with no network, and the renderer evaluates the *same* engine the server
+   does. With no cached copy and no connection the page says so plainly instead of showing a
+   spinner forever.
+
+3. **Every keystroke lands in IndexedDB first.** Persistence never depends on a timer or a socket.
+   The queue that follows is deliberately not a log of keystrokes: a save supersedes the previous
+   save (each carries the whole answer set) and a submit supersedes a pending save, so the queue
+   stays one entry deep no matter how long the connection is gone.
+
+4. **The device sends `base` — the last server state it saw.** This is what makes a merge possible
+   at all. Without it the server cannot tell "the device is re-sending what I already hold" (a
+   no-op) from "the device changed this field while I also changed it" (a real conflict, and data
+   loss if overwritten). With it, `planSync` decides per question: only the device moved ⇒ the
+   device wins; only the server moved ⇒ the server wins; both moved the same way ⇒ converged;
+   **both moved differently ⇒ the server's value is stored, the device's value is preserved in
+   `response_answer.device_value`, and the disagreement is recorded in `response_conflict`.** A
+   calculated value the device reports that disagrees with the server's own computation is flagged
+   the same way (§13.4), and hidden questions are stored as `null` (§13.2.1) rather than keeping a
+   stale value.
+
+   The `PATCH` response returns the canonical stored answers, and the device adopts them as its new
+   `base`. The next comparison is then against what the database actually holds, not against the
+   device's belief about it.
+
+5. **A refused submission keeps the answers.** A `422 incomplete` demotes the submit intent to an
+   ordinary save and reports the missing/invalid questions, because retrying cannot fix a missing
+   answer and the answers must still reach the server. A retried submit after a *successful* one is
+   `409 already_submitted`, which the client treats as success.
+
+6. **The service worker caches the shell and nothing else.** `/api`, `/auth` and `/health` are
+   passed straight to the network, so no cached body can ever be served as live data. What is
+   precached is the document and the hashed bundles it references — the thing that makes the app
+   openable at all with no signal. It is registered in **production builds only**; in the Vite dev
+   server a worker would sit between the browser and hot module replacement and cache the very
+   files that are supposed to change on every save.
+
+7. **Autosave is belt and braces.** On change (debounced), on field blur, on `visibilitychange` and
+   `pagehide`, on `online`, on window focus, and on a 2-minute timer — because a respondent who
+   types one answer and then thinks for ten minutes should still have it on the server.
+
+**What the respondent sees.** One line, in their words, never a developer's: "No connection. Your
+answers are saved on this device and will be sent automatically", plus "Saved on this device at
+…" and "The server has everything up to …", plus a **Send now** button when anything is waiting.
+The distinction between *queued* and *confirmed* is stated rather than implied.
+
+**Verified.** 131 automated tests (54 engine, 58 API, 19 web) with `lint`, `typecheck` and `build`
+clean. The 6 new API tests drive a real PostgreSQL as `app_role` and assert idempotent start,
+two-device merge, that the loser's value is *retained* rather than dropped, hidden⇒null, a
+calculated-value mismatch, an idempotent retried submit, and that an invalid submit still writes
+nothing. The 19 web tests cover the queue/backoff/resume rules with an injected clock and store,
+and execute `public/sw.js` inside a VM to prove the routing — including that a `/api` request is
+never intercepted and is never even fetched by the worker. Through the preview origin (port 3000,
+the path the browser takes) `.run/e2e-offline.mjs` runs **24 of 24** checks over a real database
+and deletes the organisation it created; the pre-existing consumer harness still passes **33 of
+33**.
+
+**Honest limits.** The offline queue is verified by unit tests and over HTTP, not by a scripted
+browser — this environment has no browser automation, so a person should confirm installing the app
+and filling a form in airplane mode on a real device. Offline *submission* is acknowledged only
+when the server answers, so the confirmation screen appears after the connection returns, by
+design. `response_conflict` is surfaced in the Responses tab (a per-response count and a plain
+explanation) but is not yet a research-data column in the export bundle; that belongs with the
+quality-flag queue (P12) and the codebook.

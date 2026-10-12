@@ -25,7 +25,7 @@ Legend: **built+verified** · **built, partially verified** · **not built**
 - **Operational detail is admin-only.** The public mail status says whether codes
   can be sent, not which relay refused or why.
 
-## 1. Verified now (105 automated tests, plus end-to-end over HTTP)
+## 1. Verified now (131 automated tests, plus end-to-end over HTTP)
 
 | Area | State | Evidence |
 |---|---|---|
@@ -40,6 +40,8 @@ Legend: **built+verified** · **built, partially verified** · **not built**
 | Distribution + collection | built+verified | anonymous / single-use / multiple / panel links; token shown once; partial save and resume; required + constraint enforcement **server-side**; `.sav`/`.dta` refused with 501 |
 | Templates | built+verified | the school ranking survey publishes, round-trips through a spreadsheet and collects a real response with a server-computed score |
 | Web app | built+verified (API-level) | login, organisations, forms, JSON builder with live analyser feedback, live counts (5 s poll), export buttons, copy-once link, and a collection renderer that shares the engine with the server |
+| Offline collection | built+verified | `apps/web/src/offline`; the published definition is cached and every answer is written to IndexedDB before anything is sent; a durable one-deep queue syncs on change, on blur, on tab hide, on reconnect and on a 2-minute timer; the device owns a stable response UUID so a retried start is idempotent; `collect-sync.test.ts` proves two-device merges keep the losing value in `response_answer.device_value` and record it in `response_conflict`; `.run/e2e-offline.mjs` runs 24 checks over a real database through the preview origin |
+| Installable PWA | built+verified | `apps/web/public/{sw.js,manifest.webmanifest,icon-*.png}`; the worker precaches the shell and its hashed assets and **never** intercepts `/api`, `/auth` or `/health`, so no cached body can be served as live data; `service-worker.test.ts` executes the worker in a VM and asserts both; registration is production-only so it cannot shadow hot module replacement |
 
 ## 2. Not built (and deliberately not faked)
 
@@ -47,7 +49,6 @@ Legend: **built+verified** · **built, partially verified** · **not built**
 |---|---|---|
 | `.sav` / `.dta` export | not built | a Python `pyreadstat` worker (Cloud Run free tier); until then the API returns **501 with a reason** rather than the label-syntax-only "SPSS export" that some tools ship |
 | File uploads (image/audio/video) | not built | object storage (R2/S3) with presigned URLs and a virus-scan step; the renderer marks those inputs as not yet collected rather than silently skipping them |
-| Offline collection (PWA + queue) | not built | service worker + local queue + conflict rules (last-writer-wins with `device_value` retained) |
 | AI authoring / grounded analysis | not built | Workers AI or an LLM API; the **guardrails** are already specified (draft-only, analyser-validated, evidence-linked) in `specs/PLATFORM.md` §7 |
 | SSO/SAML/passkeys, SCIM, WCAG 2.2 AA audit, backups | not built | hardening phase |
 | Realtime via `postgres_changes` | not built | today the dashboard polls every 5 s; Supabase Realtime is the planned upgrade, and its free tier caps concurrent connections (below) |
@@ -91,10 +92,12 @@ Three consequences we state rather than hide:
    free tier allows 200 concurrent connections.
 3. **The `.sav`/`.dta` worker** — unblocks SPSS/Stata exports and the missing-code numeric
    mapping already documented in the codebook.
-4. **Offline PWA** — queue and sync; the schema already keeps `device_value` for conflict display.
-5. **AI authoring + grounded analysis** — draft-only generation, validated by the same analyser;
+4. **AI authoring + grounded analysis** — draft-only generation, validated by the same analyser;
    analysis must render the response ids it was derived from.
-6. **Hardening** — passkeys/SSO, SCIM, per-org budgets, backups/restore drills, WCAG 2.2 AA.
+5. **Hardening** — passkeys/SSO, SCIM, per-org budgets, backups/restore drills, WCAG 2.2 AA.
+
+Done since this list was written: **offline collection + the installable PWA** (moved to §1), and
+the sync conflicts it produces are surfaced in the Responses tab.
 
 ## 5. What a reviewer should check first
 

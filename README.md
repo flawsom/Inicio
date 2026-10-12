@@ -10,16 +10,18 @@ repository originally specified is now a *template* inside the product, not the 
 
 | | |
 |---|---|
-| Verified | 106 automated tests (54 engine, 52 API), `lint` + `typecheck` + `build` clean |
-| Works now | invitation-only onboarding, organisations + roles (owner/admin/member/viewer), forms/versions/publish, XLSForm import & export, logic engine, distribution links (anonymous, single-use, multiple, panel), collection with partial save, live analytics, exports (CSV bundle / XLSX / JSON), templates, terms acceptance with recorded evidence, web app |
+| Verified | 131 automated tests (54 engine, 58 API, 19 web), `lint` + `typecheck` + `build` clean |
+| Works now | invitation-only onboarding, organisations + roles (owner/admin/member/viewer), forms/versions/publish, XLSForm import & export, logic engine, distribution links (anonymous, single-use, multiple, panel), **offline-first collection** (cached definition, IndexedDB drafts, a durable sync queue, conflict retention), an **installable PWA**, live analytics, exports (CSV bundle / XLSX / JSON), templates, terms acceptance with recorded evidence, web app |
 | Refused on purpose | `.sav` / `.dta` return **501 with a reason** until the pyreadstat worker exists (see D9) |
-| Not built | file uploads, offline queue, AI authoring/analysis, SSO/SCIM, scheduled backups — see `docs/ROADMAP.md` §2 |
+| Not built | file uploads, AI authoring/analysis, SSO/SCIM, scheduled backups — see `docs/ROADMAP.md` §2 |
 
 ## Layout
 
 ```
 apps/api                  Fastify API — /api/v1 (platform) and the Phase-1 /auth (legacy)
 apps/web                  React + Vite web app: workspace shell + collection renderer
+apps/web/src/offline      device-side draft store, sync queue and conflict rules
+apps/web/public           installable-app assets: service worker, web manifest, icons
 packages/engine           canonical form model, expression engine, XLSForm adapter, export pipeline
 api/ingest.ts             Vercel serverless entry point (translator, not a second router)
 vercel.json               single-project deployment: SPA + API on one origin
@@ -123,6 +125,25 @@ cannot do across two unrelated domains.
    the tab regains focus. Export as a CSV bundle (data + codebook + value labels + missing table
    + metadata, plus an Excel-safe copy), XLSX or JSON.
 
+## Offline collection
+
+A respondent can open a survey once and then fill it in with no connection at all.
+
+- The published definition is cached on the device, so the form renders, evaluates logic and
+  validates offline using the **same engine the server uses**.
+- Every answer is written to IndexedDB as it is typed, and queued. The header states whether the
+  server has the answers or only this device does, with the time of each, and offers **Send now**.
+- The device owns a stable UUID for its response, so a start retried after a dropped connection
+  resumes the same response instead of creating a second one. Syncing twice never duplicates.
+- Each sync sends the last server state the device saw (`base`). If a device and the server changed
+  the same field, the server's value is kept, the device's value is preserved beside it, and the
+  disagreement is recorded and shown in the Responses tab. Nothing is overwritten or dropped.
+- Autosave runs on change, on field blur, on tab hide and page close, on reconnect and on a
+  2-minute timer.
+- The service worker caches the app shell only. `/api`, `/auth` and `/health` always go to the
+  network, so no cached body can be mistaken for live data. It is registered in production builds
+  only, so it never interferes with the dev server.
+
 ## Verification
 
 ```bash
@@ -141,6 +162,13 @@ The tests that carry the most weight:
 - `apps/api/test/admin-invites.test.ts` — the terms gate, the invitation lifecycle, the last
   owner cannot be removed, a member never reaches the admin surface.
 - `apps/api/test/platform-rls.test.ts` — RLS invariants against real PostgreSQL as `app_role`.
+- `apps/api/test/collect-sync.test.ts` — a device-owned UUID makes a start idempotent; two devices
+  editing one response merge, and the losing value is **retained** rather than dropped; hidden⇒null;
+  a calculated value the device got wrong is flagged; a retried submit counts once.
+- `apps/web/test/offline.test.ts` — the queue, backoff and resume rules, with an injected clock,
+  store and transport.
+- `apps/web/test/service-worker.test.ts` — runs `public/sw.js` in a VM and proves an `/api` request
+  is never intercepted and never even fetched by the worker.
 - `packages/engine/test/xlsform.test.ts` — `import(export(import(x))) ≡ import(x)` (fixpoint),
   plus the "what we dropped" report.
 - `packages/engine/test/export.test.ts` — `0` vs blank, five kinds of missing, CSV injection,
@@ -148,13 +176,19 @@ The tests that carry the most weight:
 
 `.run/e2e-consumer.mjs` (untracked) walks the whole consumer journey against any base URL:
 invite-only gate, publish, three real respondent submissions through a distribution link, live
-reads, every export format, single-use enforcement, XLSForm import round trip.
+reads, every export format, single-use enforcement, XLSForm import round trip. `.run/e2e-offline.mjs`
+does the same for the offline contract — a device UUID, a retried start, a two-device conflict whose
+device value is preserved in the database, a doubled submit — plus the manifest and service worker
+as the browser fetches them (24 checks).
 
 ## Known limitations
 
 - `.sav` / `.dta` exports are refused with a reason rather than faked; they need the pyreadstat
   worker.
 - File upload questions are recognised and preserved, but not yet collected (no object storage).
+- A sync conflict is stored per answer (`device_value`) and per response (`response_conflict`), and
+  shown in the console, but it is not yet a column in the export bundle; that belongs with the
+  quality-flag queue and the codebook.
 - The rate limiter is in-process, so it is per-instance until Redis is wired in.
 - Invitations are not emailed automatically; the administrator copies the link and sends it.
 - No scheduled backups yet: the managed Postgres provider's own snapshot window is what exists.

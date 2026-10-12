@@ -530,7 +530,8 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
                   coalesce(
                     (SELECT jsonb_object_agg(a.question_id, a.value) FROM response_answer a WHERE a.response_id = r.id),
                     '{}'::jsonb
-                  ) AS answers
+                  ) AS answers,
+                  (SELECT count(*)::int FROM response_conflict c WHERE c.response_id = r.id) AS conflict_count
              FROM response r
              JOIN form_version v ON v.id = r.form_version_id
             WHERE r.form_id = $1
@@ -578,12 +579,22 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
           GROUP BY 1 ORDER BY 1`,
         [form.id],
       );
+      // Sync conflicts are live facts about the data, so they are counted on
+      // every request like everything else here — never from a cached total.
+      const { rows: conflictRows } = await client.query<{ count: number }>(
+        `SELECT count(*)::int AS count
+           FROM response_conflict c
+           JOIN response r ON r.id = c.response_id
+          WHERE r.form_id = $1`,
+        [form.id],
+      );
       return {
         definition: published?.definition ?? null,
         publishedVersion: published?.version ?? null,
         byStatus: counts,
         tallies,
         timeline,
+        conflicts: conflictRows[0]?.count ?? 0,
         generatedAt: new Date().toISOString(),
       };
     });

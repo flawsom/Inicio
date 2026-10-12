@@ -85,6 +85,9 @@ importers:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
     devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.5
       '@types/react':
         specifier: ^18.3.12
         version: 18.3.31
@@ -100,6 +103,9 @@ importers:
       vite:
         specifier: ^6.0.5
         version: 6.4.4(@types/node@22.20.5)(tsx@4.23.15)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@22.20.5)(tsx@4.23.15)
 
   packages/engine:
     dependencies:

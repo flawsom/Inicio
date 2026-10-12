@@ -92,6 +92,8 @@ export interface ResponseRow {
   submitted_at: string | null;
   form_version: number;
   answers: Record<string, unknown>;
+  /** How many answers this response and the server disagree about. */
+  conflict_count: number;
 }
 
 export type MailTransportKind = 'smtp' | 'resend';
@@ -188,6 +190,8 @@ export interface FormAnalytics {
   byStatus: Array<{ status: string; count: number }>;
   tallies: Array<{ question_id: string; value: unknown; count: number }>;
   timeline: Array<{ day: string; started: number; submitted: number }>;
+  /** Responses where a device and the server disagreed about an answer. */
+  conflicts: number;
   generatedAt: string;
 }
 
@@ -295,14 +299,41 @@ export const api = {
     request<{ token: string; collectPath: string; warning: string }>('POST', `/forms/${formId}/links`, { kind }),
   deactivateLink: (formId: string, linkId: string) => request<void>('DELETE', `/forms/${formId}/links/${linkId}`),
 
-  /** Public collection: no session, the token is the credential. */
+  /**
+   * Public collection: no session, the token is the credential.
+   *
+   * `clientId` is the device's stable id for the response, so a start retried
+   * after a dropped connection resumes the same response instead of creating a
+   * second one. `base` is the last server state the device saw; the server uses
+   * it to tell a real conflict from a no-op.
+   */
   collectForm: (token: string) =>
-    request<{ form: { id: string; title: string; version: number; definition: Definition } }>('GET', `/collect/${token}`),
-  startResponse: (token: string) => request<{ responseId: string }>('POST', `/collect/${token}/responses`, {}),
-  saveResponse: (token: string, responseId: string, answers: Record<string, unknown>) =>
-    request<{ missing: string[]; invalid: string[] }>('PATCH', `/collect/${token}/responses/${responseId}`, { answers }),
-  submitResponse: (token: string, responseId: string, answers: Record<string, unknown>) =>
-    request<{ status: string }>('POST', `/collect/${token}/responses/${responseId}/submit`, { answers }),
+    request<{ form: { id: string; title: string; version: number; definition: Definition }; link: { kind: string } }>(
+      'GET',
+      `/collect/${token}`,
+    ),
+  resumeResponse: (token: string, responseId: string) =>
+    request<{ responseId: string; status: string; answers: Record<string, unknown> }>(
+      'GET',
+      `/collect/${token}/responses/${responseId}`,
+    ),
+  startResponse: (token: string, clientId?: string, answers: Record<string, unknown> = {}, base: Record<string, unknown> = {}) =>
+    request<{ responseId: string; created: boolean; status: string }>('POST', `/collect/${token}/responses`, {
+      clientId,
+      answers,
+      base,
+    }),
+  saveResponse: (token: string, responseId: string, answers: Record<string, unknown>, base: Record<string, unknown> = {}) =>
+    request<{ missing: string[]; invalid: string[]; answers: Record<string, unknown>; conflicts: number }>(
+      'PATCH',
+      `/collect/${token}/responses/${responseId}`,
+      { answers, base },
+    ),
+  submitResponse: (token: string, responseId: string, answers: Record<string, unknown>, base: Record<string, unknown> = {}) =>
+    request<{ status: string; conflicts: number }>('POST', `/collect/${token}/responses/${responseId}/submit`, {
+      answers,
+      base,
+    }),
 };
 
 export function apiUrl(path: string): string {

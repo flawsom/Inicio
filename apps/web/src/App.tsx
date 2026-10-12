@@ -504,6 +504,13 @@ function DataTab({ formId, publishedVersion }: { formId: string; publishedVersio
             {analytics.timeline.slice(-7).map((d) => `${d.day} ${d.submitted}/${d.started}`).join(' · ')}
           </p>
         )}
+        {analytics !== null && analytics !== undefined && analytics.conflicts > 0 && (
+          <p className="muted small" role="status">
+            {analytics.conflicts === 1 ? '1 answer was' : `${analytics.conflicts} answers were`} edited on two devices
+            before syncing. The value the server held is kept, and the other copy is stored beside it — nothing was
+            overwritten.
+          </p>
+        )}
       </div>
 
       <table>
@@ -514,6 +521,7 @@ function DataTab({ formId, publishedVersion }: { formId: string; publishedVersio
             <th>Version</th>
             <th>Started</th>
             <th>Answers</th>
+            <th>Sync conflicts</th>
           </tr>
         </thead>
         <tbody>
@@ -524,11 +532,18 @@ function DataTab({ formId, publishedVersion }: { formId: string; publishedVersio
               <td>v{row.form_version}</td>
               <td className="small">{new Date(row.started_at).toLocaleString()}</td>
               <td className="small mono">{JSON.stringify(row.answers)}</td>
+              <td className="small">
+                {row.conflict_count > 0 ? (
+                  <span className="error">{row.conflict_count}</span>
+                ) : (
+                  <span className="muted">—</span>
+                )}
+              </td>
             </tr>
           ))}
           {(data?.responses ?? []).length === 0 && (
             <tr>
-              <td colSpan={5} className="muted">
+              <td colSpan={6} className="muted">
                 {canExport
                   ? 'No responses yet. Create a link in the Distribute tab.'
                   : 'No responses yet, and none can arrive until this form is published.'}

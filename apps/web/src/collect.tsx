@@ -1,21 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { evaluateForm, filterChoices, type FormDefinition, type Question } from '@inicio/engine';
 import { ApiError, api, type Definition } from './api';
+import { pendingCount, resolveResume, syncLabel, timeOf } from './offline/core';
+import { openStore, type OfflineStore } from './offline/store';
+import {
+  CollectorSync,
+  adoptDefinition,
+  defaultContext,
+  ensureDraft,
+  recordAnswers,
+  requestSubmit,
+  type Transport,
+} from './offline/sync';
+import type { StoredDraft, SyncOutcome } from './offline/types';
 
 /**
- * The collection renderer.
+ * The collection renderer, offline-first.
  *
  * Logic is evaluated with the *same* engine the server uses, so what a respondent
  * sees here and what the server stores cannot disagree: hidden questions disappear,
  * cascading selects filter, required questions block submission. The server still
  * re-checks all of it on submit: this is the ergonomics, not the authority.
  *
- * Answers are saved as they are typed (debounced), so an abandoned interview is
- * recoverable, and the response id is kept in localStorage against the token.
+ * Every answer is written to IndexedDB the moment it is typed, and a small durable
+ * queue sends it on. With no network the form still renders (the published
+ * definition was cached on the last visit), still evaluates logic, still validates,
+ * and still saves — and the header says plainly whether the server has the answers
+ * or only this device does. Nothing is ever dropped silently.
  */
 
 const UPLOAD_TYPES = new Set(['image', 'audio', 'video', 'file']);
 const GEO_TYPES = new Set(['geopoint', 'geotrace', 'geoshape']);
+const AUTOSAVE_MS = 120_000;
 
 /**
  * Why a respondent cannot open the survey, in their language.
@@ -48,6 +64,21 @@ function Unavailable({ code, message }: { code: string; message: string }): JSX.
   );
 }
 
+function Offline({ hasDraft }: { hasDraft: boolean }): JSX.Element {
+  return (
+    <div className="collect">
+      <div className="card">
+        <h1>You are offline</h1>
+        <p className="muted">
+          {hasDraft
+            ? 'Your answers are saved on this device. Open this page again once you have a connection and they will be sent automatically.'
+            : 'This survey needs to be opened once with a connection before it can be filled in offline. Please try again when you have signal.'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function storageKey(token: string): string {
   return `inicio:collect:${token}`;
 }
@@ -55,105 +86,233 @@ function storageKey(token: string): string {
 export function Collect({ token }: { token: string }): JSX.Element {
   const [definition, setDefinition] = useState<Definition | null>(null);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
-  const [responseId, setResponseId] = useState<string | null>(null);
-  const [status, setStatus] = useState<string | null>(null);
+  const [draft, setDraft] = useState<StoredDraft | null>(null);
+  const [status, setStatus] = useState<string>('in_progress');
   const [problems, setProblems] = useState<{ missing: string[]; invalid: string[] }>({ missing: [], invalid: [] });
   const [error, setError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState<{ code: string; message: string } | null>(null);
-  const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine !== false));
+  const [syncing, setSyncing] = useState(false);
+  const [outcome, setOutcome] = useState<SyncOutcome | null>(null);
   const [busy, setBusy] = useState(false);
-  const saveTimer = useRef<number | null>(null);
+
+  const storeRef = useRef<OfflineStore | null>(null);
+  const syncRef = useRef<CollectorSync | null>(null);
+  const draftRef = useRef<StoredDraft | null>(null);
+  const answersRef = useRef<Record<string, unknown>>({});
+  const timer = useRef<number | null>(null);
+
+  draftRef.current = draft;
+  answersRef.current = answers;
+
+  const transport = useMemo<Transport>(
+    () => ({
+      async start(t, clientId, payload) {
+        const res = await api.startResponse(t, clientId, payload.answers, payload.base);
+        setOnline(true);
+        return { responseId: res.responseId, status: res.status as StoredDraft['status'] };
+      },
+      async save(t, responseId, payload) {
+        const res = await api.saveResponse(t, responseId, payload.answers, payload.base);
+        setOnline(true);
+        return res;
+      },
+      async submit(t, responseId, payload) {
+        const res = await api.submitResponse(t, responseId, payload.answers, payload.base);
+        setOnline(true);
+        return { status: res.status as StoredDraft['status'] };
+      },
+    }),
+    [],
+  );
+
+  const ctx = useMemo(() => defaultContext(), []);
+
+  /**
+   * Pushes whatever is queued. Safe to call on every keystroke, focus and
+   * reconnect: the runner is a no-op when nothing is due.
+   */
+  const flush = useCallback(async (): Promise<SyncOutcome | null> => {
+    const store = storeRef.current;
+    if (!store) return null;
+    if (!syncRef.current) syncRef.current = new CollectorSync(store, token, transport, ctx);
+    setSyncing(true);
+    try {
+      const result = await syncRef.current.flush();
+      const latest = await store.getDraft(token);
+      if (latest) {
+        setDraft(latest);
+        setStatus(latest.status);
+      }
+      setOutcome(result);
+      if (result.missing.length > 0 || result.invalid.length > 0) {
+        setProblems({ missing: result.missing, invalid: result.invalid });
+      }
+      return result;
+    } finally {
+      setSyncing(false);
+    }
+  }, [token, transport, ctx]);
+
+  const scheduleFlush = useCallback(
+    (delay: number) => {
+      if (timer.current) window.clearTimeout(timer.current);
+      timer.current = window.setTimeout(() => {
+        void flush();
+      }, delay);
+    },
+    [flush],
+  );
+
+  /* ----------------------------------------------------------------- lifecycle */
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+
+    const boot = async (): Promise<void> => {
+      const store = await openStore();
+      if (cancelled) return;
+      storeRef.current = store;
+
+      // A response id kept by an older build in localStorage is adopted, so an
+      // upgrade mid-interview does not abandon work already in progress.
+      const legacy = window.localStorage.getItem(storageKey(token));
+      let local = await ensureDraft(store, token, legacy);
+      if (cancelled) return;
+      setDraft(local);
+      setAnswers(local.answers);
+      setStatus(local.status);
+
+      // Paint from the cached definition first: it is what makes the form usable
+      // before the network answers, and with no network at all.
+      const cached = await store.getCachedForm(token);
+      if (cached && !cancelled) setDefinition(cached.definition as Definition);
+
       try {
         const loaded = await api.collectForm(token);
         if (cancelled) return;
         setDefinition(loaded.form.definition);
-        const existing = window.localStorage.getItem(storageKey(token));
-        if (existing) {
-          // Resume: the server has the answers already, this only restores the id.
-          const resumed = await fetch(`/api/v1/collect/${token}/responses/${existing}`, { credentials: 'include' });
-          if (resumed.ok) {
-            const body = (await resumed.json()) as { answers: Record<string, unknown>; status: string };
-            setResponseId(existing);
-            setAnswers(body.answers ?? {});
-            setStatus(body.status);
-            return;
+        setOnline(true);
+        await adoptDefinition(store, token, {
+          title: loaded.form.title,
+          version: loaded.form.version,
+          definition: loaded.form.definition,
+          linkKind: loaded.link?.kind ?? 'anonymous',
+        });
+        if (local.responseId) {
+          const server = await api.resumeResponse(token, local.responseId);
+          if (!cancelled && server.status) {
+            local = resolveResume(local, { answers: server.answers ?? {}, status: server.status as StoredDraft['status'] });
+            await store.putDraft(local);
+            setDraft(local);
+            setAnswers(local.answers);
+            setStatus(local.status);
           }
-          window.localStorage.removeItem(storageKey(token));
         }
-        const started = await api.startResponse(token);
-        window.localStorage.setItem(storageKey(token), started.responseId);
-        setResponseId(started.responseId);
       } catch (err) {
         if (cancelled) return;
-        setUnavailable(
-          err instanceof ApiError
-            ? { code: err.code, message: err.message ?? 'This survey cannot be opened right now.' }
-            : { code: 'error', message: 'This survey cannot be opened right now. Please try again.' },
-        );
+        if (err instanceof ApiError) {
+          // The server answered, so the answer is final: expired, closed, used,
+          // or not published. Each one has a sentence a respondent understands.
+          setUnavailable({ code: err.code, message: err.message ?? 'This survey cannot be opened right now.' });
+          return;
+        }
+        // A network failure is not an answer. Fall back to the cached copy, and
+        // if there is none, say so plainly rather than showing a spinner forever.
+        setOnline(false);
       }
-    })();
+
+      void flush();
+    };
+
+    void boot();
     return () => {
       cancelled = true;
+      if (timer.current) window.clearTimeout(timer.current);
     };
-  }, [token]);
+  }, [token, flush]);
+
+  useEffect(() => {
+    const onOnline = (): void => {
+      setOnline(true);
+      void flush();
+    };
+    const onOffline = (): void => setOnline(false);
+    const onVisible = (): void => {
+      if (document.visibilityState === 'visible') void flush();
+    };
+    const onHide = (): void => void flush();
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    window.addEventListener('pagehide', onHide);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+      window.removeEventListener('pagehide', onHide);
+    };
+  }, [flush]);
+
+  // Autosave on a timer as well as on change, so a respondent who types one
+  // answer and then thinks for ten minutes still has it on the server.
+  useEffect(() => {
+    const id = window.setInterval(() => void flush(), AUTOSAVE_MS);
+    return () => window.clearInterval(id);
+  }, [flush]);
 
   const form = definition as unknown as FormDefinition | null;
   const evaluation = useMemo(() => (form ? evaluateForm(form, answers) : null), [form, answers]);
 
-  const save = useCallback(
-    (next: Record<string, unknown>) => {
-      if (!responseId || status !== 'in_progress') return;
-      void api
-        .saveResponse(token, responseId, next)
-        .then((res) => {
-          setProblems({ missing: res.missing, invalid: res.invalid });
-          setSavedAt(new Date().toLocaleTimeString());
-        })
-        .catch(() => setError('your answers could not be saved just now: they are still on screen'));
-    },
-    [responseId, status, token],
-  );
+  /* ------------------------------------------------------------------- writing */
 
   const update = (name: string, value: unknown): void => {
     const next = { ...answers, [name]: value };
     setAnswers(next);
-    if (saveTimer.current) window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => save(next), 900);
+    const store = storeRef.current;
+    if (!store) return;
+    // Persist before anything else: the device is the only copy until the server
+    // acknowledges, and that must not depend on a timer or a network.
+    void recordAnswers(store, token, next, [name]).then((saved) => {
+      setDraft(saved);
+    });
+    scheduleFlush(1200);
   };
 
   const submit = async (): Promise<void> => {
-    if (!responseId) return;
+    const store = storeRef.current;
+    if (!store || status !== 'in_progress') return;
     setBusy(true);
     setError(null);
+    setProblems({ missing: [], invalid: [] });
     try {
-      const result = await api.submitResponse(token, responseId, answers);
-      setStatus(result.status);
-      window.localStorage.removeItem(storageKey(token));
-    } catch (err) {
-      if (err instanceof ApiError && err.code === 'incomplete' && err.message) {
-        try {
-          const detail = JSON.parse(err.message) as { missing: string[]; invalid: string[] };
-          setProblems({ missing: detail.missing ?? [], invalid: detail.invalid ?? [] });
-        } catch {
-          setProblems({ missing: [], invalid: [] });
-        }
-      } else if (err instanceof ApiError && err.code === 'already_submitted') {
-        setStatus('submitted');
-      } else {
-        setError(err instanceof ApiError ? err.message : 'submission failed');
+      await requestSubmit(store, token, answers, Object.keys(answers));
+      const result = await flush();
+      if (result && result.missing.length === 0 && result.invalid.length === 0) {
+        setStatus(result.status);
       }
+      if (result && result.status !== 'in_progress') {
+        window.localStorage.removeItem(storageKey(token));
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'your answers could not be submitted just now: they are still on this device');
     } finally {
       setBusy(false);
     }
   };
 
+  /* ----------------------------------------------------------------- rendering */
+
   if (unavailable) return <Unavailable code={unavailable.code} message={unavailable.message} />;
-  if (error && !definition) return <div className="card error">{error}</div>;
-  if (!definition || !form || !evaluation) return <div className="card">Loading…</div>;
+  if (!definition) {
+    // With no cached copy and no connection there is nothing honest to render;
+    // an offline notice is better than an endless spinner.
+    if (!online) return <Offline hasDraft={Boolean(draft && Object.keys(draft.answers).length > 0)} />;
+    return <div className="card">Loading…</div>;
+  }
+  if (!form || !evaluation) return <div className="card">Loading…</div>;
 
   if (status && status !== 'in_progress') {
     const labels: Record<string, string> = {
@@ -164,7 +323,10 @@ export function Collect({ token }: { token: string }): JSX.Element {
     return (
       <div className="card">
         <h1>{labels[status] ?? 'Response recorded.'}</h1>
-        <p className="muted">Reference: {responseId}</p>
+        <p className="muted">Reference: {draft?.responseId ?? draft?.clientId}</p>
+        {outcome && outcome.conflicts > 0 && (
+          <p className="muted small">Some answers were saved alongside a differing copy for review. Nothing was lost.</p>
+        )}
       </div>
     );
   }
@@ -183,9 +345,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
     }
 
     if (UPLOAD_TYPES.has(question.type)) {
-      return (
-        <input type="file" disabled />
-      );
+      return <input type="file" disabled />;
     }
 
     if (GEO_TYPES.has(question.type)) {
@@ -195,6 +355,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
             placeholder="latitude longitude"
             value={typeof value === 'string' ? value : ''}
             onChange={(e) => update(question.name, e.target.value)}
+            onBlur={() => void flush()}
           />
           <button
             type="button"
@@ -217,7 +378,12 @@ export function Collect({ token }: { token: string }): JSX.Element {
           ? [{ value: 'yes', label: { en: 'Yes' } }, { value: 'no', label: { en: 'No' } }]
           : filterChoices(form, question, answers).map((c) => ({ value: c.value, label: c.label }));
       return (
-        <select value={typeof value === 'string' ? value : ''} disabled={disabled} onChange={(e) => update(question.name, e.target.value)}>
+        <select
+          value={typeof value === 'string' ? value : ''}
+          disabled={disabled}
+          onChange={(e) => update(question.name, e.target.value)}
+          onBlur={() => void flush()}
+        >
           <option value="">- choose -</option>
           {options.map((option) => (
             <option key={option.value} value={option.value}>
@@ -244,6 +410,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
                     e.target.checked ? [...selected, option.value] : selected.filter((v) => v !== option.value),
                   )
                 }
+                onBlur={() => void flush()}
               />
               {option.label?.[definition.defaultLanguage] ?? Object.values(option.label ?? {})[0] ?? option.value}
             </label>
@@ -260,6 +427,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
         value={value === null || value === undefined ? '' : String(value)}
         disabled={disabled}
         onChange={(e) => update(question.name, numeric ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
+        onBlur={() => void flush()}
       />
     );
   };
@@ -273,13 +441,26 @@ export function Collect({ token }: { token: string }): JSX.Element {
   const topLevel = form.questions.filter((q) => !q.groupId && evaluation.states[q.name]?.visible);
   if (topLevel.length > 0) sections.push({ key: 'ungrouped', title: definition.title, questions: topLevel });
 
+  const waiting = draft ? pendingCount(draft.outbox) : 0;
+  const savedAt = timeOf(draft?.updatedAt ?? null);
+  const syncedAt = timeOf(draft?.syncedAt ?? null);
+
   return (
     <div className="collect">
       <header>
         <h1>{definition.title}</h1>
-        <p className="muted">
-          {savedAt ? `Saved at ${savedAt}` : 'Answers save as you go'} · version {definition.languages.join('/')}
+        <p className={online ? 'muted small' : 'offline small'} role="status" aria-live="polite">
+          {draft ? syncLabel(draft, online, syncing) : 'Loading…'}
         </p>
+        <p className="muted small">
+          {savedAt && <>Saved on this device at {savedAt}. </>}
+          {syncedAt ? <>The server has everything up to {syncedAt}.</> : <>Not sent to the server yet.</>}
+        </p>
+        {(waiting > 0 || outcome?.phase === 'error') && (
+          <button type="button" className="ghost" onClick={() => void flush()} disabled={!online}>
+            {online ? 'Send now' : 'Waiting for a connection'}
+          </button>
+        )}
       </header>
 
       {sections.map((section) => (
@@ -310,6 +491,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
           {busy ? 'Submitting…' : 'Submit'}
         </button>
         {problems.missing.length > 0 && <span className="muted">{problems.missing.length} required answer(s) still missing</span>}
+        {!online && <span className="muted">Your answers are safe on this device and will be sent automatically.</span>}
       </div>
     </div>
   );

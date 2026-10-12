@@ -32,10 +32,16 @@ JAR="$HOME/.cache/pg16-binaries.jar"
 port_open() { (exec 3<>"/dev/tcp/127.0.0.1/$PGPORT") 2>/dev/null && exec 3<&- 3>&-; }
 
 echo "== pnpm =="
+# The shim goes somewhere a plain shell already looks: `$HOME/.local/bin` is on
+# PATH in this image, while `$HOME/bin` is not, and `corepack enable` cannot
+# write to the Node install directory (no root). Without this, `pnpm typecheck`
+# and `pnpm test` fail from the workspace scripts, which shell out to `pnpm`.
 if ! command -v pnpm >/dev/null 2>&1; then
-  mkdir -p "$HOME/bin"
-  printf '#!/bin/sh\nexec corepack pnpm "$@"\n' > "$HOME/bin/pnpm"
-  chmod +x "$HOME/bin/pnpm"
+  for dir in "$HOME/.local/bin" "$HOME/bin"; do
+    mkdir -p "$dir"
+    printf '#!/bin/sh\nexec corepack pnpm "$@"\n' > "$dir/pnpm"
+    chmod +x "$dir/pnpm"
+  done
 fi
 corepack prepare pnpm@9.15.0 --activate >/dev/null
 echo "pnpm $(pnpm --version)"

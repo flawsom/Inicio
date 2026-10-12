@@ -16,12 +16,30 @@ import { HttpError, withCollector, type ResolvedLink } from './db.js';
  * engine the browser uses, required-but-unanswered questions block submission, hidden
  * questions are stored as null rather than silently kept, and calculated values are
  * stored so an export never depends on a client having computed them.
+ *
+ * Offline-first (SPEC §16, §17, §37): a device may collect for hours with no
+ * network. When it reconnects it sends the answers it holds plus the last server
+ * state it saw as `base`. Two guarantees follow:
+ *   - the device owns a stable UUID, so a retried start resolves to the *same*
+ *     response rather than creating a second one (nothing is duplicated);
+ *   - when both the device and the server changed the same field, both values are
+ *     kept — the server's stays authoritative, the device's is preserved, and the
+ *     disagreement is recorded. Nothing is silently overwritten (nothing is lost).
  */
 
 const answersSchema = z.record(z.string(), z.unknown());
+const startSchema = z.object({
+  /** The device's stable id for this response. Retries are idempotent against it. */
+  clientId: z.string().uuid().optional(),
+  answers: answersSchema.default({}),
+  /** The last server-confirmed answers the device saw, for conflict detection. */
+  base: answersSchema.optional(),
+  /** Panel links carry an opaque id/ticket from the query string. */
+  embedded: z.record(z.string(), z.unknown()).optional(),
+});
 const saveSchema = z.object({
   answers: answersSchema.default({}),
-  /** Panel links carry an opaque id/ticket from the query string. */
+  base: answersSchema.optional(),
   embedded: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -69,28 +87,145 @@ async function publishedVersionOf(client: PoolClient, link: ResolvedLink): Promi
   return version;
 }
 
+/** Structural comparison for JSON values; `undefined` and `null` are the same absence here. */
+function sameJson(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
+}
+
+export type ConflictKind = 'device_server_mismatch' | 'calculation_mismatch';
+
+export interface SyncEntry {
+  questionId: string;
+  /** What the server will store in `response_answer.value`. */
+  value: unknown;
+  /** The device's value when the two disagreed; preserved, never dropped. */
+  deviceValue?: unknown;
+  conflict: ConflictKind | null;
+}
+
+export interface SyncPlan {
+  entries: SyncEntry[];
+  /** Canonical values after logic, keyed by question name — what the device should adopt as `base`. */
+  values: Record<string, unknown>;
+  missing: string[];
+  invalid: string[];
+  conflicts: number;
+}
+
 /**
- * Applies the definition to the submitted answers, server-side.
- * Returns the values to persist (hidden questions become null, calculated questions
- * become the computed value) plus anything that must block submission.
+ * Decides, per question, whether the incoming device answer, the stored server
+ * answer, or neither should win (SPEC §37.1/§37.2).
+ *
+ * The rules, in order:
+ *  - relevance and calculation are recomputed server-side, always;
+ *  - with no `base` the device is authoritative (a first sync, or an older client);
+ *  - when only the device moved, the device wins;
+ *  - when only the server moved, the server wins;
+ *  - when both moved differently, the server wins *and* the device value is kept
+ *    alongside it, with the disagreement recorded.
  */
-function applyDefinition(
+export function planSync(
   definition: FormDefinition,
-  answers: Record<string, unknown>,
-): { values: Record<string, unknown>; missing: string[]; invalid: string[] } {
-  const evaluation = evaluateForm(definition, answers);
+  incoming: Record<string, unknown>,
+  base: Record<string, unknown> | undefined,
+  current: Map<string, unknown>,
+): SyncPlan {
+  const evaluation = evaluateForm(definition, incoming);
+  const entries: SyncEntry[] = [];
   const values: Record<string, unknown> = {};
+  let conflicts = 0;
+
   for (const question of definition.questions) {
     const state = evaluation.states[question.name];
-    if (!state || !state.visible) {
-      // A skipped question is stored as null: "not asked" is a fact the codebook
-      // documents, and keeping a stale value would make exports lie.
-      values[question.name] = null;
-      continue;
+    // A hidden question is stored as null: "not asked" is a fact the codebook
+    // documents, and keeping a stale value would make exports lie.
+    const serverValue = !state || !state.visible ? null : state.value ?? null;
+    const hasCurrent = current.has(question.name);
+    const currentValue = hasCurrent ? current.get(question.name) : undefined;
+
+    let stored: unknown = serverValue;
+    let deviceValue: unknown;
+    let conflict: ConflictKind | null = null;
+
+    if (base === undefined || !hasCurrent) {
+      // No baseline, or the server holds nothing to defend: the device wins.
+      stored = serverValue;
+    } else {
+      const baseValue = base[question.name];
+      const clientChanged = !sameJson(serverValue, baseValue);
+      const serverChanged = !sameJson(currentValue, baseValue);
+
+      if (!clientChanged) {
+        stored = currentValue ?? null;
+      } else if (!serverChanged || sameJson(serverValue, currentValue)) {
+        stored = serverValue;
+      } else {
+        stored = currentValue ?? null;
+        deviceValue = serverValue;
+        conflict = 'device_server_mismatch';
+      }
     }
-    values[question.name] = state.value;
+
+    // §13.4 — a derived value the device computed must equal the server's.
+    if (question.rules?.calculate && state?.visible && incoming[question.name] !== undefined && !sameJson(incoming[question.name], serverValue)) {
+      if (conflict === null) {
+        conflict = 'calculation_mismatch';
+        deviceValue = incoming[question.name];
+        stored = serverValue;
+      }
+    }
+
+    if (conflict) conflicts += 1;
+    const final = stored ?? null;
+    values[question.name] = final;
+    entries.push(deviceValue === undefined ? { questionId: question.name, value: final, conflict } : { questionId: question.name, value: final, deviceValue, conflict });
   }
-  return { values, missing: evaluation.missing, invalid: evaluation.invalid };
+
+  return { entries, values, missing: evaluation.missing, invalid: evaluation.invalid, conflicts };
+}
+
+async function readCurrent(client: PoolClient, responseId: string): Promise<Map<string, unknown>> {
+  const { rows } = await client.query<{ question_id: string; value: unknown }>(
+    `SELECT question_id, value FROM response_answer WHERE response_id = $1`,
+    [responseId],
+  );
+  return new Map(rows.map((row) => [row.question_id, row.value]));
+}
+
+async function writeAnswers(client: PoolClient, orgId: string, responseId: string, plan: SyncPlan): Promise<void> {
+  for (const entry of plan.entries) {
+    await client.query(
+      `INSERT INTO response_answer (org_id, response_id, question_id, value, device_value)
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb)
+       ON CONFLICT (response_id, question_id)
+       DO UPDATE SET value = EXCLUDED.value, device_value = EXCLUDED.device_value, updated_at = now()`,
+      [
+        orgId,
+        responseId,
+        entry.questionId,
+        JSON.stringify(entry.value ?? null),
+        entry.deviceValue === undefined ? null : JSON.stringify(entry.deviceValue ?? null),
+      ],
+    );
+
+    if (entry.conflict) {
+      await client.query(
+        `INSERT INTO response_conflict (org_id, response_id, question_id, kind, server_value, device_value)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
+         ON CONFLICT (response_id, question_id)
+         DO UPDATE SET kind = EXCLUDED.kind, server_value = EXCLUDED.server_value,
+                       device_value = EXCLUDED.device_value, detected_at = now()`,
+        [
+          orgId,
+          responseId,
+          entry.questionId,
+          entry.conflict,
+          JSON.stringify(entry.value ?? null),
+          JSON.stringify(entry.deviceValue ?? null),
+        ],
+      );
+    }
+  }
 }
 
 /** Quotas count on submission, and are allowed to overshoot under concurrency. */
@@ -136,18 +271,6 @@ function screenedOut(definition: FormDefinition, values: Record<string, unknown>
   return false;
 }
 
-async function writeAnswers(client: PoolClient, orgId: string, responseId: string, values: Record<string, unknown>): Promise<void> {
-  for (const [questionId, value] of Object.entries(values)) {
-    await client.query(
-      `INSERT INTO response_answer (org_id, response_id, question_id, value)
-       VALUES ($1, $2, $3, $4::jsonb)
-       ON CONFLICT (response_id, question_id)
-       DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-      [orgId, responseId, questionId, JSON.stringify(value ?? null)],
-    );
-  }
-}
-
 export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
   /** What the renderer needs before a response exists. */
   app.get('/:token', async (req: FastifyRequest<{ Params: { token: string } }>, reply: FastifyReply) => {
@@ -163,20 +286,45 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
     return reply.send(payload);
   });
 
-  /** Start (or resume) a response. */
+  /**
+   * Start (or resume) a response.
+   *
+   * When the device supplies its own `clientId`, that id *is* the response id, so
+   * a start retried after a dropped connection returns the existing response
+   * instead of creating a second one. That is the whole point: syncing twice must
+   * not duplicate anything.
+   */
   app.post(
     '/:token/responses',
     async (req: FastifyRequest<{ Params: { token: string } }>, reply: FastifyReply) => {
       const link = await requireLink(req.params.token);
-      const body = saveSchema.safeParse(req.body ?? {});
+      const body = startSchema.safeParse(req.body ?? {});
       if (!body.success) return reply.code(400).send({ error: 'invalid_request' });
-      const responseId = randomUUID();
+      const clientId = body.data.clientId;
+      const responseId = clientId ?? randomUUID();
 
       const payload = await withCollector(link.org_id, responseId, async (client) => {
         const version = await publishedVersionOf(client, link);
-        await client.query(
-          `INSERT INTO response (id, org_id, form_id, form_version_id, status, meta, respondent_ref)
-           VALUES ($1, $2, $3, $4, 'in_progress', $5::jsonb, $6)`,
+        const form = { title: version.title, version: version.version, definition: version.definition };
+
+        // `app.response_id` is already this id, so the collector policy lets the
+        // lookup see exactly the one row that could be ours.
+        const { rows: existing } = await client.query<{ id: string; form_id: string; status: string }>(
+          `SELECT id, form_id, status FROM response WHERE id = $1`,
+          [responseId],
+        );
+        if (existing[0]) {
+          if (existing[0].form_id !== link.form_id) {
+            throw new HttpError(409, 'client_id_conflict', 'That device reference belongs to a different survey.');
+          }
+          return { responseId, created: false, status: existing[0].status, form };
+        }
+
+        const { rows: inserted } = await client.query<{ id: string }>(
+          `INSERT INTO response (id, org_id, form_id, form_version_id, status, meta, respondent_ref, client_uuid)
+           VALUES ($1, $2, $3, $4, 'in_progress', $5::jsonb, $6, $7)
+           ON CONFLICT (id) DO NOTHING
+           RETURNING id`,
           [
             responseId,
             link.org_id,
@@ -184,16 +332,31 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
             version.id,
             JSON.stringify(body.data.embedded ?? {}),
             typeof body.data.embedded?.['pid'] === 'string' ? String(body.data.embedded['pid']) : null,
+            clientId ?? null,
           ],
         );
-        if (Object.keys(body.data.answers).length > 0) {
-          const { values } = applyDefinition(version.definition, body.data.answers);
-          await writeAnswers(client, link.org_id, responseId, values);
+
+        if (inserted.length === 0) {
+          // Lost a race with a concurrent start for the same client id: the other
+          // one won, which is the same outcome this call wanted.
+          const { rows: again } = await client.query<{ id: string; form_id: string; status: string }>(
+            `SELECT id, form_id, status FROM response WHERE id = $1`,
+            [responseId],
+          );
+          if (!again[0] || again[0].form_id !== link.form_id) {
+            throw new HttpError(409, 'client_id_conflict', 'That device reference belongs to a different survey.');
+          }
+          return { responseId, created: false, status: again[0].status, form };
         }
-        return { responseId, form: { title: version.title, version: version.version, definition: version.definition } };
+
+        if (Object.keys(body.data.answers).length > 0) {
+          const plan = planSync(version.definition, body.data.answers, body.data.base, new Map());
+          await writeAnswers(client, link.org_id, responseId, plan);
+        }
+        return { responseId, created: true, status: 'in_progress', form };
       });
       reply.header('cache-control', 'no-store');
-      return reply.code(201).send(payload);
+      return reply.code(payload.created ? 201 : 200).send(payload);
     },
   );
 
@@ -227,7 +390,7 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  /** Partial save. Saved on every section transition and on field blur. */
+  /** Partial save. Saved on every section transition, on field blur, and on a timer. */
   app.patch(
     '/:token/responses/:responseId',
     async (req: FastifyRequest<{ Params: { token: string; responseId: string } }>, reply: FastifyReply) => {
@@ -244,9 +407,11 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
         if (!rows[0]) throw new HttpError(404, 'not_found');
         if (rows[0].status !== 'in_progress') throw new HttpError(409, 'already_submitted');
 
-        const { values, missing, invalid } = applyDefinition(version.definition, body.data.answers);
-        await writeAnswers(client, link.org_id, req.params.responseId, values);
-        return { saved: Object.keys(values).length, missing, invalid };
+        const plan = planSync(version.definition, body.data.answers, body.data.base, await readCurrent(client, req.params.responseId));
+        await writeAnswers(client, link.org_id, req.params.responseId, plan);
+        // `answers` is what the server actually holds: the device adopts it as its
+        // new baseline, so the next sync compares against reality rather than hope.
+        return { saved: plan.entries.length, missing: plan.missing, invalid: plan.invalid, answers: plan.values, conflicts: plan.conflicts };
       });
       reply.header('cache-control', 'no-store');
       return reply.send(payload);
@@ -271,20 +436,20 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
         if (!locked[0]) throw new HttpError(404, 'not_found');
         if (locked[0].status !== 'in_progress') throw new HttpError(409, 'already_submitted');
 
-        const { values, missing, invalid } = applyDefinition(version.definition, body.data.answers);
-        if (missing.length > 0 || invalid.length > 0) {
+        const plan = planSync(version.definition, body.data.answers, body.data.base, await readCurrent(client, req.params.responseId));
+        if (plan.missing.length > 0 || plan.invalid.length > 0) {
           // Nothing is written: an invalid submission must not leave half a response.
           throw new HttpError(
             422,
             'incomplete',
-            JSON.stringify({ missing, invalid, message: 'required or invalid answers block submission' }),
+            JSON.stringify({ missing: plan.missing, invalid: plan.invalid, message: 'required or invalid answers block submission' }),
           );
         }
 
-        await writeAnswers(client, link.org_id, req.params.responseId, values);
+        await writeAnswers(client, link.org_id, req.params.responseId, plan);
 
-        const quotaStatus = await applyQuotas(client, link.form_id, values);
-        const status = quotaStatus ?? (screenedOut(version.definition, values) ? 'screened_out' : 'submitted');
+        const quotaStatus = await applyQuotas(client, link.form_id, plan.values);
+        const status = quotaStatus ?? (screenedOut(version.definition, plan.values) ? 'screened_out' : 'submitted');
 
         const { rows: updated } = await client.query<{ uses: number | null }>(
           `SELECT app_consume_dist_link($1) AS uses`,
@@ -299,7 +464,7 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
           req.params.responseId,
           status,
         ]);
-        return { responseId: req.params.responseId, status, answered: Object.keys(values).length };
+        return { responseId: req.params.responseId, status, answered: plan.entries.length, conflicts: plan.conflicts };
       });
 
       await pool.query(`UPDATE dist_invite SET status = 'finished' WHERE dist_link_id = $1 AND status <> 'finished'`, [
