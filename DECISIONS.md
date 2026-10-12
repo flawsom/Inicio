@@ -536,3 +536,41 @@ when the server answers, so the confirmation screen appears after the connection
 design. `response_conflict` is surfaced in the Responses tab (a per-response count and a plain
 explanation) but is not yet a research-data column in the export bundle; that belongs with the
 quality-flag queue (P12) and the codebook.
+
+## D26 - A root static file must be named in the SPA catch-all's exclusions
+
+**What happened.** The offline app worked locally and not in production. On Vercel a `rewrites` entry
+takes precedence over the static filesystem, so the SPA catch-all answered `/sw.js` and
+`/manifest.webmanifest` with `index.html` and a **200**. The service worker therefore never
+installed (`index.html` is not valid JavaScript) and the manifest was never parsed — and every
+check that asked "is it 200?" said yes, because the fallback returns 200 for everything.
+
+**How it was actually found.** By asserting the *content*: the fix was verified with
+`content-type: application/javascript` for the worker, `application/manifest+json` for the
+manifest, `image/png` for the icons, and `text/html` for a real app route still falling back to the
+shell. A status-code check on the deployed origin cannot distinguish a served file from the
+fallback, and this is the second time in this project that a plausible-looking 200 hid the real
+behaviour.
+
+**The rule.** Every root static file is named in the catch-all's negative lookahead
+(`api/`, `assets/`, `sw.js`, `manifest.webmanifest`, the icons, `favicon.ico`), and a new root asset
+must be added there too. The same trap does not exist on Netlify, whose `/*` → `/index.html`
+`status = 200` redirect is a *fallback* that real files shadow — but the deployed check is by
+content type regardless of host.
+
+**Also confirmed on the live host.** `sw.js` is served `cache-control: max-age=0, must-revalidate`,
+which is what a worker needs so an update is picked up on the next navigation rather than being
+pinned for a year by an immutable cache header.
+
+**Verified live (production, 2026-10-12).** Migration `0009` applied before the code that needs it;
+`main` at `7ec8be2` deployed by the connected Vercel project. `.run/e2e-offline.mjs` — 28/28 through
+`https://inicio-six-psi.vercel.app`: a throwaway account that accepts its own terms and is deleted
+afterwards, organisation and form creation, publish, a device-owned UUID start, a retried start,
+two-device conflict with the device value read back from the production database, a doubled submit,
+live analytics and conflict counts, JSON and CSV exports carrying the submitted answer, and the
+manifest/worker as the browser fetches them. Separately, the RLS criterion was re-proved against
+production: the deployed API connects as `app_role` (not superuser, no `BYPASSRLS`), and a forged
+`app.org_id` read **0 rows from all 9 tenant tables**. Production afterwards holds exactly one
+account, one organisation, no forms, no responses, no conflicts — the harness removed everything it
+created, and the owner's own terms acceptance is still pending because accepting legal terms is the
+owner's action, not a script's.
