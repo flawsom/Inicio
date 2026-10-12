@@ -235,7 +235,7 @@ export const api = {
   removeMember: (orgId: string, userId: string) => request<void>('DELETE', `/orgs/${orgId}/members/${userId}`),
   invites: (orgId: string) => request<{ invites: Invite[] }>('GET', `/orgs/${orgId}/invites`),
   createInvite: (orgId: string, email: string, role: string, expiresInDays = 7) =>
-    request<{ invite: Invite; url: string; singleUse: boolean }>('POST', `/orgs/${orgId}/invites`, {
+    request<{ invite: Invite; path: string; url: string; singleUse: boolean }>('POST', `/orgs/${orgId}/invites`, {
       email,
       role,
       expiresInDays,

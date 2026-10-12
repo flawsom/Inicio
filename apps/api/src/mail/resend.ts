@@ -25,13 +25,32 @@ export class MailProviderError extends Error {
   }
 }
 
+/**
+ * The parts of a fetch response this module actually reads.
+ *
+ * Declared structurally on purpose: the ambient `Response` type depends on
+ * which lib set is in scope (DOM, undici through @types/node, or the Workers
+ * runtime), and a bundler that type-checks the function with a different lib set
+ * should not be able to break a correct call site.
+ */
+export interface HttpResponseLike {
+  ok: boolean;
+  status: number;
+  json(): Promise<unknown>;
+}
+
+export type FetchLike = (
+  url: string,
+  init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal },
+) => Promise<HttpResponseLike>;
+
 export interface ResendConfig {
   apiKey: string;
   from: string;
   /** Overridable so tests (and self-hosted gateways) never hit the network. */
   url?: string;
   timeoutMs?: number;
-  fetchImpl?: typeof fetch;
+  fetchImpl?: FetchLike;
 }
 
 /**
@@ -50,7 +69,7 @@ export function createResendSender(cfg: ResendConfig): {
   send(job: { to: string; subject: string; html: string; text: string }): Promise<SendOutcome>;
 } {
   const url = cfg.url ?? 'https://api.resend.com/emails';
-  const doFetch = cfg.fetchImpl ?? globalThis.fetch;
+  const doFetch: FetchLike = cfg.fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
   const endpoint = { host: new URL(url).hostname, port: Number(new URL(url).port || 443) };
 
   return {

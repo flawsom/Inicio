@@ -410,3 +410,38 @@ declared, so the contract and the payload agree.
 **The invariant this round rests on:** every number, list and link the interface
 shows is read from the server at that moment, and the only path to an account is
 an invitation.
+
+## D24 - Hosting: one origin, and the entry point is a translator
+
+**The problem.** The product is a Fastify API plus a Vite SPA, and every frontend request assumes
+one origin: `api.ts` calls `/api/v1` relatively, and the session cookie is host-only. Deploying
+the SPA and the API to two different domains would have looked fine until login, because a
+host-only cookie set by `api.example.com` is simply not sent by a page on `app.example.com`.
+
+**Chosen.** A single Vercel project serves both, so the browser only ever talks to one origin.
+`vercel.json` builds the SPA and routes `/api/*`, `/auth/*` and `/health` to a serverless
+function; Netlify, if it is used, is a mirror of the SPA that proxies those same prefixes back to
+the Vercel deployment, which makes it a second front door to one origin rather than a second
+backend.
+
+**The wrinkle worth writing down.** Vercel only discovers functions in the project's root `api/`
+directory, and it replaces the request path when it routes a rewrite to a function, and its
+catch-all file convention (`api/[...path].ts`) produced a single-segment route rather than a
+catch-all in this configuration. Rather than restructure the application around a platform
+quirk, `api/ingest.ts` is a translator: the rewrite carries the original prefix and tail as
+platform bookkeeping parameters, the entry point rebuilds the URL, strips both parameters, and
+hands the request to the same `buildApp()` that the long-running server uses. One copy of the
+routes, one copy of the tenancy rules.
+
+**Also chosen while deploying.** The API connects as `app_role`, never the database owner, on the
+hosted database too: RLS is bypassed for a superuser and not applied to a table owner, so
+migrating with the owner connection and then serving with it would have silently disabled
+tenancy. The CORS allow-list includes the deployment's own `VERCEL_URL` so preview builds work
+without opening it to every origin. Invitation links are returned as a *path* as well as an
+absolute URL, and the console prefixes its own origin: the same deployment can then be reachable
+on more than one hostname without either one handing out a link that points at the other.
+
+**Verified.** The full consumer journey ran against the live deployment with the managed
+database: invitation-only gate, publish, three real respondent submissions, live reads, every
+export format and its contents, single-use link enforcement, and an XLSForm import round trip.
+35 of 35 checks passed.

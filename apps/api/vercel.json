@@ -1,6 +1,0 @@
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm --filter @inicio/api build",
-  "functions": { "src/serverless.ts": { "runtime": "@vercel/node@5", "maxDuration": 30 } },
-  "rewrites": [{ "source": "/(.*)", "destination": "/src/serverless.ts" }]
-}

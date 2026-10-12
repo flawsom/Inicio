@@ -1,0 +1,44 @@
+# Netlify deployment: the web app, proxied to the API.
+#
+# Why a proxy rather than a separate API host: the browser must see one origin,
+# or the session cookie set by the API belongs to a different site than the page
+# that needs it. Requests to /api/*, /auth/* and /health are rewritten to the
+# Vercel deployment, which serves both the app and the API, so Netlify is a
+# second front door to the same origin rather than a second backend.
+#
+# The API's own deploy step provisions the database and runs the migrations;
+# Netlify never touches the database.
+
+[build]
+  command = "pnpm --filter @inicio/web build"
+  publish = "apps/web/dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # Netlify installs the workspace before running the workspace build command.
+  NPM_FLAGS = "--version"
+
+# API first, so the catch-all SPA rule below cannot swallow it.
+[[redirects]]
+  from = "/api/*"
+  to = "https://inicio-six-psi.vercel.app/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/auth/*"
+  to = "https://inicio-six-psi.vercel.app/auth/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/health"
+  to = "https://inicio-six-psi.vercel.app/health"
+  status = 200
+  force = true
+
+# Single page application: every other path renders the app shell.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

@@ -24,7 +24,13 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(helmet);
-  await app.register(cors, { origin: env.APP_ORIGIN, credentials: true });
+  // The console and the API are served from one origin, so CORS never applies
+  // to a normal request. It still matters for a custom domain and for the
+  // per-deployment preview URLs Vercel mints, so those are allowed explicitly
+  // rather than by opening the door to every origin.
+  const allowedOrigins = new Set<string>([env.APP_ORIGIN]);
+  if (process.env.VERCEL_URL) allowedOrigins.add(`https://${process.env.VERCEL_URL}`);
+  await app.register(cors, { origin: [...allowedOrigins], credentials: true });
   await app.register(cookie);
   await app.register(rateLimit, { max: env.RATE_LIMIT_MAX, timeWindow: '1 minute' });
 

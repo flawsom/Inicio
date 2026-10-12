@@ -149,7 +149,12 @@ export const platformAdminRoutes: FastifyPluginAsync = async (app) => {
 
       return reply.code(201).send({
         invite,
-        // Shown once, never retrievable later.
+        // The link is returned as a *path* as well as an absolute URL. The path is
+        // what the console uses, because it prefixes its own origin: one
+        // deployment can then be reached on more than one hostname (a Vercel
+        // domain and a Netlify domain, say) without either of them handing out a
+        // link that points at the other.
+        path: `/invite/${token}`,
         url: `${env.APP_ORIGIN}/invite/${token}`,
         singleUse: true,
       });

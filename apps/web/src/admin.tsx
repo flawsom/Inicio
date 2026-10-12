@@ -81,7 +81,10 @@ export function AdminView({ orgId, canAdminister }: { orgId: string; canAdminist
     setNotice(null);
     try {
       const res = await api.createInvite(orgId, email, role, Number(days));
-      setFreshLink({ email: res.invite.email, url: res.url });
+      // Prefer the server's path and this tab's own origin: the invite then
+      // points at whichever hostname the administrator is actually using.
+      const link = res.path ? `${window.location.origin}${res.path}` : res.url;
+      setFreshLink({ email: res.invite.email, url: link });
       setEmail('');
       setNotice(`Invitation created for ${res.invite.email}. Copy the link before leaving this page.`);
       await reload();
