@@ -14,6 +14,20 @@ export default tseslint.config(
     },
   },
   {
+    // The end-to-end harnesses in scripts/ are Node programs: they drive the API
+    // over `fetch` and read response bodies into `Buffer`s.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        URL: 'readonly',
+        fetch: 'readonly',
+        Buffer: 'readonly',
+      },
+    },
+  },
+  {
     // The service worker runs in its own global scope: `self`, `caches` and
     // `fetch` are the platform it is written against, not undefined variables.
     files: ['apps/web/public/sw.js'],
