@@ -94,6 +94,11 @@ cannot do across two unrelated domains.
 - `vercel.json` builds the SPA to `apps/web/dist` and routes `/api/*`, `/auth/*` and `/health`
   to `api/ingest.ts`. Build the app and the API in one deploy, so a version never goes live
   against mismatched code.
+- **A root static file must be named in the SPA catch-all's exclusions.** On Vercel a `rewrites`
+  entry wins over the static filesystem, so an unmatched `/sw.js` is answered with `index.html`
+  and the app cannot install. `api/`, `assets/` and each root file (`sw.js`,
+  `manifest.webmanifest`, the icons) are excluded by name; add any new root asset there too,
+  and verify it by **content type**, not status code, because the fallback returns `200`.
 - Vercel replaces the path when it routes a rewrite to a function, so the entry point restores
   the original URL before Fastify sees it. Everything after that is the same application that
   runs locally and in Docker.

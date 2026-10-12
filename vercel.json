@@ -11,10 +11,25 @@
     }
   },
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/ingest?inicio_route=api" },
-    { "source": "/api", "destination": "/api/ingest?inicio_route=api" },
-    { "source": "/auth/:path*", "destination": "/api/ingest?inicio_route=auth" },
-    { "source": "/health", "destination": "/api/ingest?inicio_route=health" },
-    { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "/api/ingest?inicio_route=api"
+    },
+    {
+      "source": "/api",
+      "destination": "/api/ingest?inicio_route=api"
+    },
+    {
+      "source": "/auth/:path*",
+      "destination": "/api/ingest?inicio_route=auth"
+    },
+    {
+      "source": "/health",
+      "destination": "/api/ingest?inicio_route=health"
+    },
+    {
+      "source": "/((?!api/|assets/|sw\\.js|manifest\\.webmanifest|icon-192\\.png|icon-512\\.png|apple-touch-icon\\.png|favicon\\.ico).*)",
+      "destination": "/index.html"
+    }
   ]
 }
