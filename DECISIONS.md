@@ -433,10 +433,18 @@ platform bookkeeping parameters, the entry point rebuilds the URL, strips both p
 hands the request to the same `buildApp()` that the long-running server uses. One copy of the
 routes, one copy of the tenancy rules.
 
-**Also chosen while deploying.** The API connects as `app_role`, never the database owner, on the
-hosted database too: RLS is bypassed for a superuser and not applied to a table owner, so
-migrating with the owner connection and then serving with it would have silently disabled
-tenancy. The CORS allow-list includes the deployment's own `VERCEL_URL` so preview builds work
+**Also found while deploying, and fixed.** The first hosted deployment connected as the database
+*owner*, not `app_role`: the provider's database integration claims `DATABASE_URL` for the owner
+connection, and on Neon that role holds `BYPASSRLS`, which switches row level security off
+entirely. Every HTTP test still passed, because the tests had never connected that way. The fix
+has three parts: `APP_DATABASE_URL` names the application's connection explicitly and wins when
+set, so the owner URL a platform injects stays what migrations need and never becomes what the
+server uses; the role is checked on every cold start; and in production a connection that is a
+superuser or holds `BYPASSRLS` stops the process with a message naming the fix. Proved both ways
+against the live database, then proved live isolation with two organisations: the second account
+got 404 on the first account's form, responses, analytics, export and member list, and a 403
+(the database's own refusal) when it tried to create a form inside the first account's
+organisation. The CORS allow-list includes the deployment's own `VERCEL_URL` so preview builds work
 without opening it to every origin. Invitation links are returned as a *path* as well as an
 absolute URL, and the console prefixes its own origin: the same deployment can then be reachable
 on more than one hostname without either one handing out a link that points at the other.
