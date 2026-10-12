@@ -1,0 +1,211 @@
+openapi: 3.1.0
+info:
+  title: Inicio School Ranking Survey API
+  version: 1.0.0
+servers: [{ url: https://api.inicio.example/v1 }]
+security: [{ sessionCookie: [] }]
+tags: [Auth, Questionnaire, Response, Attachment, Admin, Export]
+
+paths:
+  /auth/otp/request:
+    post:
+      tags: [Auth]
+      summary: Request OTP to a registered school email
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [email], properties: { email: { type: string, format: email } } }
+      responses:
+        '200': { description: OTP sent }
+        '404': { description: Email not invited }
+        '429': { description: Rate limited }
+
+  /auth/otp/verify:
+    post:
+      tags: [Auth]
+      summary: Verify OTP, issue session
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, required: [email, code], properties: { email: { type: string }, code: { type: string, pattern: '^[0-9]{6}$' } } }
+      responses:
+        '200':
+          description: Session issued
+          content:
+            application/json:
+              schema: { type: object, properties: { subject: { type: string } } }
+        '401': { description: Invalid or expired OTP }
+
+  /auth/logout:
+    post: { tags: [Auth], responses: { '204': { description: Logged out } } }
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Current session subject (Phase 1 addition)
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema: { type: object, properties: { subject: { type: string } } }
+        '401': { description: Not signed in }
+
+  /questionnaire/active:
+    get:
+      tags: [Questionnaire]
+      summary: Active questionnaire config
+      responses:
+        '200':
+          description: Config
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Questionnaire' }
+
+  /responses/me:
+    get:
+      tags: [Response]
+      summary: Current school's response set
+      responses:
+        '200': { description: Response set, content: { application/json: { schema: { $ref: '#/components/schemas/ResponseSet' } } } }
+
+  /responses/me/answers:
+    patch:
+      tags: [Response]
+      summary: Upsert answers (draft save)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sectionId: { type: string }
+                answers:
+                  type: array
+                  items: { type: object, properties: { questionId: { type: string }, value: {} } }
+      responses:
+        '200': { description: Saved, content: { application/json: { schema: { $ref: '#/components/schemas/ResponseSet' } } } }
+
+  /responses/me/submit:
+    post:
+      tags: [Response]
+      summary: Final submit (validates, locks, emails)
+      responses:
+        '200': { description: Locked, content: { application/json: { schema: { type: object, properties: { uniqueSubmissionId: { type: string }, submittedAt: { type: string, format: date-time } } } } } }
+        '422': { description: Missing required, content: { application/json: { schema: { $ref: '#/components/schemas/ValidationError' } } } }
+
+  /responses/me/attachments:
+    post:
+      tags: [Attachment]
+      summary: Upload attachment (multipart)
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                questionId: { type: string }
+                file: { type: string, format: binary }
+      responses:
+        '201': { description: Stored, content: { application/json: { schema: { $ref: '#/components/schemas/Attachment' } } } }
+        '413': { description: Too large }
+        '415': { description: Bad type }
+
+  /attachments/{id}:
+    delete:
+      tags: [Attachment]
+      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '204': { description: Deleted } }
+
+  /admin/schools:
+    get:
+      tags: [Admin]
+      summary: List schools
+      responses: { '200': { description: Schools, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/School' } } } } } }
+    post:
+      tags: [Admin]
+      summary: Create/import school
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/School' }
+      responses: { '201': { description: Created } }
+
+  /admin/monitor:
+    get:
+      tags: [Admin]
+      summary: Live completion + attachment matrix
+      responses: { '200': { description: Stats, content: { application/json: { schema: { $ref: '#/components/schemas/Monitor' } } } } }
+
+  /admin/attachments/{schoolId}/zip:
+    get:
+      tags: [Admin]
+      summary: Bulk-download all attachments for a school
+      parameters: [{ name: schoolId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: ZIP, content: { application/zip: {} } } }
+
+  /admin/export:
+    post:
+      tags: [Export]
+      summary: Queue an export
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { format: { type: string, enum: [csv, xlsx, json, xml, sav, do, kml, geojson, pdf] }, scope: { type: string } } }
+      responses: { '202': { description: Queued, content: { application/json: { schema: { type: object, properties: { jobId: { type: string, format: uuid } } } } } } }
+
+  /admin/export/{jobId}:
+    get:
+      tags: [Export]
+      parameters: [{ name: jobId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Job status, content: { application/json: { schema: { type: object, properties: { status: { type: string }, url: { type: string } } } } } } }
+
+components:
+  securitySchemes:
+    sessionCookie: { type: apiKey, in: cookie, name: sid }
+  schemas:
+    School:
+      type: object
+      required: [name, registeredEmail]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        region: { type: string }
+        registeredEmail: { type: string, format: email }
+        status: { type: string, enum: [invited, active, disabled] }
+    Questionnaire:
+      type: object
+      properties:
+        version: { type: string }
+        title: { type: string }
+        languages: { type: array, items: { type: string } }
+        sections: { type: array, items: { type: object, additionalProperties: true } }
+    ResponseSet:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [draft, submitted, locked] }
+        completionPct: { type: number }
+        lastSectionId: { type: string }
+        uniqueSubmissionId: { type: string }
+    Attachment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        questionId: { type: string }
+        filename: { type: string }
+        mime: { type: string }
+        sizeBytes: { type: integer }
+        status: { type: string, enum: [uploaded, pending, not_applicable, deleted] }
+    Monitor:
+      type: object
+      properties:
+        loggedIn: { type: integer }
+        drafts: { type: integer }
+        completed: { type: integer }
+        pending: { type: integer }
+    ValidationError:
+      type: object
+      properties:
+        missing: { type: array, items: { type: string } }
+        message: { type: string }

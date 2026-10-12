@@ -1,0 +1,73 @@
+{
+  "version": "1.0.0",
+  "title": "School Ranking Survey 2026 — Delhi/NCR",
+  "languages": ["en", "hi"],
+  "sections": [
+    {
+      "id": "admin",
+      "title": { "en": "Section A — Administration & Institutional Profile", "hi": "खंड अ — प्रशासन एवं संस्थागत प्रोफ़ाइल" },
+      "order": 1,
+      "questions": [
+        { "id": "a1", "type": "text", "label": { "en": "School name", "hi": "विद्यालय का नाम" }, "required": true, "order": 1 },
+        { "id": "a2", "type": "text", "label": { "en": "UDISE code", "hi": "यूडाइस कोड" }, "required": true, "validation": { "pattern": "^[0-9]{11}$" }, "order": 2 },
+        { "id": "a3", "type": "select_one", "label": { "en": "Board affiliation", "hi": "बोर्ड संबद्धता" }, "required": true,
+          "options": [
+            { "value": "cbse", "label": { "en": "CBSE", "hi": "सीबीएसई" } },
+            { "value": "icse", "label": { "en": "ICSE", "hi": "आईसीएसई" } },
+            { "value": "state", "label": { "en": "State Board", "hi": "राज्य बोर्ड" } },
+            { "value": "ib", "label": { "en": "IB / Cambridge", "hi": "आईबी / कैम्ब्रिज" } }
+          ], "order": 3 },
+        { "id": "a4", "type": "select_one", "label": { "en": "School type", "hi": "विद्यालय का प्रकार" }, "required": true,
+          "options": [
+            { "value": "coed", "label": { "en": "Co-educational", "hi": "सह-शिक्षा" } },
+            { "value": "boys", "label": { "en": "Boys only", "hi": "केवल बालक" } },
+            { "value": "girls", "label": { "en": "Girls only", "hi": "केवल बालिका" } }
+          ], "order": 4 },
+        { "id": "a5", "type": "integer", "label": { "en": "Year established", "hi": "स्थापना वर्ष" }, "required": true, "validation": { "min": 1800, "max": 2026 }, "order": 5 },
+        { "id": "a6", "type": "integer", "label": { "en": "Total enrolled students", "hi": "कुल नामांकित छात्र" }, "required": true, "validation": { "min": 1, "max": 20000 }, "order": 6 },
+        { "id": "a7", "type": "integer", "label": { "en": "Total teaching staff", "hi": "कुल शिक्षण स्टाफ" }, "required": true, "validation": { "min": 1, "max": 2000 }, "order": 7 },
+        { "id": "a8", "type": "upload", "label": { "en": "Registration / affiliation certificate", "hi": "पंजीकरण / संबद्धता प्रमाणपत्र" }, "required": true,
+          "allowsUpload": { "multiple": true, "maxFiles": 3, "maxSizeMb": 10, "accept": ["pdf", "jpg", "jpeg", "png"] }, "order": 8 }
+      ]
+    },
+    {
+      "id": "finance",
+      "title": { "en": "Section B — Finance & Financial Health", "hi": "खंड ब — वित्त एवं आर्थिक स्थिति" },
+      "order": 2,
+      "questions": [
+        { "id": "b1", "type": "currency", "label": { "en": "Annual tuition fee (lowest grade)", "hi": "वार्षिक ट्यूशन शुल्क (न्यूनतम कक्षा)" }, "required": true, "order": 1 },
+        { "id": "b2", "type": "currency", "label": { "en": "Annual tuition fee (highest grade)", "hi": "वार्षिक ट्यूशन शुल्क (उच्चतम कक्षा)" }, "required": true, "order": 2 },
+        { "id": "b3", "type": "currency", "label": { "en": "Total annual fee collection", "hi": "कुल वार्षिक शुल्क संग्रह" }, "required": true, "order": 3 },
+        { "id": "b4", "type": "percentage", "label": { "en": "Staff salaries as % of total expenditure", "hi": "कुल व्यय में वेतन का प्रतिशत" }, "required": true, "validation": { "min": 0, "max": 100 }, "order": 4 },
+        { "id": "b5", "type": "percentage", "label": { "en": "Infrastructure spend as % of expenditure", "hi": "अवसंरचना व्यय का प्रतिशत" }, "required": true, "validation": { "min": 0, "max": 100 }, "order": 5 },
+        { "id": "b6", "type": "yesno", "label": { "en": "Offers fee concessions / scholarships?", "hi": "शुल्क रियायत / छात्रवृत्ति?" }, "required": true, "order": 6 },
+        { "id": "b7", "type": "integer", "label": { "en": "Number of students on scholarship", "hi": "छात्रवृत्ति प्राप्त छात्र" }, "condition": "${b6} == 'yes'", "validation": { "min": 0 }, "order": 7 },
+        { "id": "b8", "type": "upload", "label": { "en": "Audited financial statements / fee structure", "hi": "लेखा परीक्षित वित्तीय विवरण" }, "required": true,
+          "allowsUpload": { "multiple": true, "maxFiles": 4, "maxSizeMb": 10, "accept": ["pdf", "xlsx", "xls"] }, "order": 8 }
+      ]
+    },
+    {
+      "id": "academic",
+      "title": { "en": "Section C — Academics & Learning Outcomes", "hi": "खंड स — शैक्षणिक एवं अधिगम परिणाम" },
+      "order": 3,
+      "questions": [
+        { "id": "c1", "type": "percentage", "label": { "en": "Board pass percentage (latest year)", "hi": "बोर्ड उत्तीर्ण प्रतिशत" }, "required": true, "validation": { "min": 0, "max": 100 }, "order": 1 },
+        { "id": "c2", "type": "decimal", "label": { "en": "Average board score", "hi": "औसत बोर्ड अंक" }, "required": true, "validation": { "min": 0, "max": 100 }, "order": 2 },
+        { "id": "c3", "type": "decimal", "label": { "en": "Student-teacher ratio", "hi": "छात्र-शिक्षक अनुपात" }, "required": true, "validation": { "min": 0, "max": 200 }, "order": 3 },
+        { "id": "c4", "type": "percentage", "label": { "en": "Teachers with postgraduate qualification", "hi": "स्नातकोत्तर योग्यता वाले शिक्षक" }, "required": true, "validation": { "min": 0, "max": 100 }, "order": 4 },
+        { "id": "c5", "type": "integer", "label": { "en": "Avg. annual teacher training hours", "hi": "औसत वार्षिक शिक्षक प्रशिक्षण घंटे" }, "required": true, "validation": { "min": 0 }, "order": 5 },
+        { "id": "c6", "type": "select_multiple", "label": { "en": "Co-curricular programmes offered", "hi": "सह-पाठ्यक्रम कार्यक्रम" }, "required": true,
+          "options": [
+            { "value": "sports", "label": { "en": "Sports", "hi": "खेल" } },
+            { "value": "music", "label": { "en": "Music / Performing arts", "hi": "संगीत / प्रदर्शन कला" } },
+            { "value": "stem", "label": { "en": "STEM clubs", "hi": "स्टेम क्लब" } },
+            { "value": "debate", "label": { "en": "Debate / MUN", "hi": "वाद-विवाद / एमयूएन" } },
+            { "value": "olympiad", "label": { "en": "Olympiad coaching", "hi": "ओलंपियाड कोचिंग" } }
+          ], "order": 6 },
+        { "id": "c7", "type": "textarea", "label": { "en": "Key academic achievements (latest year)", "hi": "प्रमुख शैक्षणिक उपलब्धियाँ" }, "validation": { "maxLength": 1000 }, "order": 7 },
+        { "id": "c8", "type": "upload", "label": { "en": "Board results / achievement documents", "hi": "बोर्ड परिणाम दस्तावेज़" }, "required": true,
+          "allowsUpload": { "multiple": true, "maxFiles": 3, "maxSizeMb": 10, "accept": ["pdf", "jpg", "jpeg", "png"] }, "order": 8 }
+      ]
+    }
+  ]
+}

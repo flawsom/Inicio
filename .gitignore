@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.vercel
+.netlify
+.pgdata/
+*.log
+.DS_Store
+
+# local run artefacts (dev env file, logs, PIDs) — never committed
+.run/

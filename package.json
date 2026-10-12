@@ -1,0 +1,26 @@
+{
+  "name": "inicio-survey-portal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Inicio School Ranking Survey 2026 portal \u2014 Phase 1 (schema, RLS, auth/OTP, audit)",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "test": "pnpm -r --if-present test",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "dev:api": "pnpm --filter @inicio/api dev",
+    "dev:web": "pnpm --filter @inicio/web dev",
+    "db:migrate": "pnpm --filter @inicio/api db:migrate",
+    "admin:create": "pnpm --filter @inicio/api admin:create"
+  },
+  "devDependencies": {
+    "eslint": "^9.15.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.16.0"
+  }
+}

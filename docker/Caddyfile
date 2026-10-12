@@ -1,0 +1,15 @@
+# Auto-TLS reverse proxy for the self-hosted profile (§4).
+# In the Vercel/Netlify profile the SPA is served statically and this is unused.
+{$APP_DOMAIN:localhost} {
+	encode zstd gzip
+	@api path /api/* /auth/* /responses/* /admin/* /attachments/* /questionnaire/*
+	handle @api {
+		uri strip_prefix /api
+		reverse_proxy api:3000
+	}
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+}
