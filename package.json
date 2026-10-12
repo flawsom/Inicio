@@ -12,6 +12,8 @@
     "build": "pnpm -r --if-present build",
     "test": "pnpm -r --if-present test",
     "coverage": "pnpm -r --if-present coverage",
+    "e2e:consumer": "node scripts/e2e-consumer.mjs",
+    "e2e:offline": "node scripts/e2e-offline.mjs",
     "lint": "eslint .",
     "typecheck": "pnpm -r --if-present typecheck && tsc -p api/tsconfig.json",
     "dev:api": "pnpm --filter @inicio/api dev",

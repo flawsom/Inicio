@@ -391,14 +391,14 @@ one-time code, and the first thing the console offers is an invitation.
 </td>
 <td valign="top" width="66%">
 
-**🎬 A recorded tour is not committed yet.** The two harnesses in `.run/` are the substitute until
+**🎬 A recorded tour is not committed yet.** The two harnesses in `scripts/` are the substitute until
 one is: they drive sign-in, authoring, publishing, respondent submissions, conflict handling, exports
 and the PWA through a real database, and print a pass/fail line for every check.
 
 ```bash
 # 33 end-to-end consumer checks + 28 offline-sync checks, against the running stack
-node .run/e2e-consumer.mjs
-node .run/e2e-offline.mjs
+pnpm e2e:consumer    # 33 checks: the whole consumer journey
+pnpm e2e:offline     # 28 checks: the offline sync contract
 ```
 
 **Want a video here?** Drop a file into `docs/assets/` and use one of these — the section is already
@@ -839,7 +839,11 @@ Inicio
 │   ├── openapi.yaml                 the API contract
 │   ├── expression-grammar.md        the grammar the engine implements
 │   └── questionnaire.json           the 2026 school ranking survey, as template #1
-├── scripts/sandbox-setup.sh         rootless local stack (pnpm + embedded PostgreSQL 16)
+├── scripts
+│   ├── sandbox-setup.sh             rootless local stack (pnpm + embedded PostgreSQL 16)
+│   ├── e2e-consumer.mjs             the whole consumer journey over HTTP, against a real database
+│   ├── e2e-offline.mjs              the offline sync contract, conflicts included
+│   └── netlify-deploy.sh            publish the SPA to Netlify with the API proxied to one origin
 ├── vercel.json                      one project: SPA and API, one origin
 ├── netlify.toml                     SPA mirror, /api proxied to the same origin
 ├── DECISIONS.md                     every significant choice, with the reasoning and the alternatives
@@ -1337,9 +1341,16 @@ through the same origin the browser uses (`:3000`, which proxies `/api/v1`). Bot
 organisation and delete it afterwards, leaving the database exactly as they found it.
 
 ```bash
-node .run/e2e-consumer.mjs    # 33 checks: invitation gate, publish, submissions, exports, enforcement
-node .run/e2e-offline.mjs     # 28 checks: offline contract, conflict retention, PWA, live reads
+pnpm e2e:consumer    # 33 checks: invitation gate, publish, submissions, exports, enforcement
+pnpm e2e:offline     # 28 checks: offline contract, conflict retention, PWA, live reads
 ```
+
+They need three things: a running stack (`pnpm dev:api` and `pnpm dev:web`),
+`MIGRATION_DATABASE_URL` pointing at the **owner** connection of the database under test — the
+harnesses use it only to create and then remove their own throwaway organisation — and `E2E_OWNER`,
+the email of an existing account, which the consumer harness walks the invitation gate as.
+`E2E_BASE` overrides the origin, which is how these same checks were run against the production
+deployment.
 
 Verified against **both** the local stack and the production deployment:
 
@@ -1405,8 +1416,8 @@ fine until the first login.
 netlify deploy --prod --dir apps/web/dist      # after `pnpm build`
 ```
 
-<sub>The deploy script lives at `.run/netlify-deploy.sh`. It needs a Netlify personal access token,
-which is the only thing this step is waiting on.</sub>
+<sub>The deploy script is committed at `scripts/netlify-deploy.sh`; it reads the token from the
+environment and needs nothing else. That token is the only thing this step is waiting on.</sub>
 
 ### Docker / self-hosted
 
@@ -1508,8 +1519,8 @@ to review and harder to revert.
 The two live harnesses are the fastest way to find out whether you broke the product end to end:
 
 ```bash
-node .run/e2e-consumer.mjs      # 33 checks over HTTP against the running stack
-node .run/e2e-offline.mjs       # 28 checks, including the offline sync contract
+pnpm e2e:consumer      # 33 checks over HTTP against the running stack
+pnpm e2e:offline       # 28 checks, including the offline sync contract
 ```
 
 Both create and delete their own organisation, so running them against your local stack is safe. Do
