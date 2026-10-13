@@ -74,12 +74,25 @@ function stubMatchMedia(matches: (query: string) => boolean): void {
   });
 }
 
+/**
+ * What the reveal was actually handed, not just what it did with it.
+ *
+ * Revealing whatever it is given makes this stub blind to the defect it should
+ * catch: content the observer was never given cannot be revealed by it, and a
+ * stub that only ever reports success cannot tell "revealed" from "never
+ * observed". Recording the targets is what lets a test ask whether the cards the
+ * API renders — which exist only after the fetch resolves — were handed over at
+ * all.
+ */
+const observed = new Set<Element>();
+
 class StubObserver {
   root = null;
   rootMargin = '';
   thresholds: number[] = [];
   constructor(private readonly callback: IntersectionObserverCallback) {}
   observe(target: Element): void {
+    observed.add(target);
     // Everything is in view immediately: the reveal is decoration, and a test
     // should not have to scroll to see a word.
     this.callback([{ isIntersecting: true, target } as IntersectionObserverEntry], this as unknown as IntersectionObserver);
@@ -102,6 +115,7 @@ beforeEach(() => {
   fetchMock = vi.fn(async () => jsonResponse(SUMMARY));
   vi.stubGlobal('fetch', fetchMock);
   window.history.replaceState({}, '', '/');
+  observed.clear();
 
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -147,6 +161,25 @@ describe('the landing page', () => {
     expect(text()).toContain('12');
     // It says where the numbers came from.
     expect(text()).toContain('GET /api/v1/public/summary');
+  });
+
+  it('reveals the template cards the API renders after the page has mounted', async () => {
+    await renderLanding();
+
+    // The cards in this band are the API's: they do not exist when the reveal
+    // effect runs, so an observer built there never sees them and they keep the
+    // hidden state for good. Measured on the live deployment before the fix: all
+    // three were `opacity: 0`, 26px down, and scrolled past by every visitor.
+    const cards = Array.from(container.querySelectorAll<HTMLElement>('#templates article'));
+    expect(cards.length).toBeGreaterThan(0);
+    for (const card of cards) {
+      expect(observed.has(card), 'the card was never handed to the reveal observer').toBe(true);
+      expect(card.classList.contains('in')).toBe(true);
+    }
+
+    // And nothing anywhere on the page is left in the hidden state.
+    const stillHidden = Array.from(container.querySelectorAll<HTMLElement>('[data-reveal]:not(.in)'));
+    expect(stillHidden.map((element) => element.textContent?.slice(0, 40))).toEqual([]);
   });
 
   it('is complete when the scene cannot be created', async () => {

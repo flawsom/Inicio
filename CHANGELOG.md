@@ -218,6 +218,16 @@ what changed and why.
 
 ### Fixed
 
+- **The template cards on the landing page were invisible.** The reveal is an `IntersectionObserver`
+  built once when the page mounts, observing the markup that exists at that moment — and the three
+  template cards are rendered from the `/api/v1/public/summary` response, which arrives after. Nothing
+  ever observed them, so they kept the hidden state the reveal class applies: measured in a browser
+  against the deployment, all three were `opacity: 0`, translated 26 px down, and un-revealed for every
+  visitor, whatever they scrolled. The effect now watches its own subtree and adopts anything that
+  appears later, so "reveal on first sight" is true for fetched content and not merely for the markup
+  that happened to mount with the page. Held by `apps/web/test/landing.test.tsx`, whose observer stub
+  now records what it was handed — the earlier stub revealed whatever it was given, which is exactly why
+  it could not see a card nobody handed to it.
 - **Every animated headline rendered as one long word.** The landing page's reveal gives
   each character its own box so the letters can stagger in, and a box is exactly what the
   sentence cannot survive: the browser will end a line after any atomic inline, and an

@@ -134,8 +134,6 @@ function useReveal<T extends HTMLElement>(): RefObject<T> {
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
-    const splittable = Array.from(root.querySelectorAll<HTMLElement>('[data-split]'));
-    splittable.forEach((target) => splitChars(target));
     root.classList.add('l-anim');
 
     const observer = new IntersectionObserver(
@@ -148,10 +146,49 @@ function useReveal<T extends HTMLElement>(): RefObject<T> {
       },
       { rootMargin: '0px 0px -12% 0px', threshold: 0.15 },
     );
-    // Both selectors: a split headline animates per character, a plain reveal
-    // animates as one block, and an element that is both needs one observation.
-    for (const target of root.querySelectorAll('[data-reveal], [data-split]')) observer.observe(target);
-    return () => observer.disconnect();
+
+    /**
+     * Split and observe everything in `scope`, and `scope` itself.
+     *
+     * Both selectors: a split headline animates per character, a plain reveal
+     * animates as one block, and an element that is both needs one observation.
+     * Splitting is gated on `data-split` — a plain reveal block must keep its text
+     * whole — and both `splitChars` and `observe` are idempotent, so adopting the
+     * same subtree twice changes nothing.
+     */
+    const adopt = (scope: HTMLElement): void => {
+      const targets = [
+        ...(scope.matches('[data-reveal], [data-split]') ? [scope] : []),
+        ...Array.from(scope.querySelectorAll<HTMLElement>('[data-reveal], [data-split]')),
+      ];
+      for (const target of targets) {
+        if (target.hasAttribute('data-split')) splitChars(target);
+        observer.observe(target);
+      }
+    };
+
+    adopt(root);
+
+    // The template cards are rendered from the API response, which arrives after
+    // this effect has run — and an observer built here sees only what exists now.
+    // They therefore kept the hidden state the reveal class applies: measured on
+    // the deployment, three `opacity: 0` cards that no amount of scrolling
+    // revealed, because nothing had ever observed them. Watching the subtree is
+    // what makes "reveal on first sight" true for fetched content rather than
+    // only for the markup that happened to mount with the page.
+    const mutations = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of Array.from(record.addedNodes)) {
+          if (node instanceof HTMLElement) adopt(node);
+        }
+      }
+    });
+    mutations.observe(root, { childList: true, subtree: true });
+
+    return () => {
+      mutations.disconnect();
+      observer.disconnect();
+    };
   }, []);
   return ref;
 }
