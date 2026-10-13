@@ -1263,7 +1263,7 @@ than leaving its absence ambiguous.
 ### Measured on the live deployment
 
 Method: 12 sequential requests per path from a single VM over the public internet, 0.6 s apart,
-`time_starttransfer` in milliseconds, 12 October 2026. Reproduce it:
+`time_starttransfer` in milliseconds, 13 October 2026. Reproduce it:
 
 ```bash
 for i in $(seq 1 12); do
@@ -1274,15 +1274,20 @@ done
 
 | Path | What it measures | Median | p95 | Notes |
 |---|---|---:|---:|---|
-| `/` (HTML shell) | Edge cache and static shell | **56 ms** | 96 ms | max 140 ms |
-| `/assets/index-*.js` | 208.87 kB, **65.80 kB over the wire** | **59 ms** | 64 ms | max 68 ms |
-| `/api/v1/legal/terms` | Function, **no database round trip** | **59 ms** | 115 ms | max 159 ms |
-| `/health` | Function **with** a database round trip | **357 ms** | 367 ms | one cold start at 1 671 ms in this sample |
+| `/` (HTML shell) | Edge cache and static shell | **99 ms** | 111 ms | max 114 ms |
+| `/assets/index-*.js` | The console: 214.75 kB, **67.85 kB over the wire** | **100 ms** | 153 ms | max 200 ms |
+| `/assets/landing-*.js` | The landing page, after first paint: 16.20 kB, **5.56 kB over the wire** | **96 ms** | 103 ms | max 111 ms |
+| `/assets/instrument-*.js` | three.js, the landing page only: 533.48 kB, **135.76 kB over the wire** | **101 ms** | 107 ms | max 120 ms |
+| `/api/v1/legal/terms` | Function, **no database round trip** | **98 ms** | 169 ms | max 183 ms |
+| `/api/v1/public/summary` | Function **with** a database round trip, never cached | **396 ms** | 410 ms | one cold start at 1 753 ms in this sample |
+| `/health` | Function **with** a database round trip | **392 ms** | 437 ms | one cold start at 1 780 ms in this sample |
 
-**The honest reading of that table:** the difference between the third and fourth rows is not the
-code, it is geography — the serverless function's round trip to PostgreSQL. Co-locating the function
-region with the database region is the single largest latency win available on this deployment, and it
-is a hosting setting rather than a code change. Everything else is already inside the noise of a
+**The honest reading of that table:** the gap is not between static assets — 214.75 kB of console and
+533.51 kB of three.js cross the wire in the same ~100 ms, because they are served from the edge and the
+network is not the constraint. It is between the static rows and the last three, and it is geography
+rather than code: the serverless function's round trip to PostgreSQL. Co-locating the function region
+with the database region is the single largest latency win available on this deployment, and it is a
+hosting setting rather than a code change. Everything else is already inside the noise of a
 transatlantic HTTP request.
 
 <sub>⚠️ A sustained burst from one address eventually trips the hosting provider's own bot mitigation
@@ -1300,10 +1305,10 @@ only ever fetched by a reader who is looking at the landing page.
 |---|---:|---:|---|
 | `index.html` | 1.74 kB | 0.84 kB | everyone |
 | `index-*.css` (console) | 8.02 kB | 2.52 kB | everyone |
-| `index-*.js` (console, 62 modules) | **214.75 kB** | **67.86 kB** | everyone |
+| `index-*.js` (console, 62 modules) | **214.75 kB** | **67.85 kB** | everyone |
 | `landing-*.css` | 10.53 kB | 3.12 kB | the landing page |
-| `landing-*.js` | 16.18 kB | 5.55 kB | the landing page |
-| `instrument-*.js` (three.js) | 533.51 kB | 135.77 kB | the landing page, after first paint |
+| `landing-*.js` | 16.20 kB | 5.56 kB | the landing page |
+| `instrument-*.js` (three.js) | 533.48 kB | 135.76 kB | the landing page, after first paint |
 
 The console bundle is 214.75 kB raw, of which the push channel and the connection indicator are a few
 kilobytes. There is no charting library, no UI kit, no state manager and no icon package: the console is

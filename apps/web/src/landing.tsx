@@ -378,7 +378,8 @@ function LiveBand({ summary, readAt, failed }: { summary: Summary | null; readAt
       </dl>
       <p className="llive-note">
         These come from <code>GET /api/v1/public/summary</code>, which reports how the software is doing and
-        nothing about who is using it. There is no analytics script on this page and no third party in the path.
+        nothing about who is using it. There is no analytics script on this page, and the one third-party
+        request is the font.
       </p>
     </section>
   );
