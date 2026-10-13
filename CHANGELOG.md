@@ -61,7 +61,7 @@ what changed and why.
   a push naming its aggregate refetches the screen, a push naming another one does not, two pushes
   inside a frame cost one read, and a minute of clock passes while the stream is live without a single
   timed request. `pnpm test` is the suite these entries describe; it stood at 169 tests when the push
-  channel shipped and is 253 now: 55 engine, 103 API, 95 web.
+  channel shipped, and it is 256 now: 55 engine, 103 API, 98 web.
 - **One visual world, for the whole product.** The signed-in surfaces were restyled onto a single design
   system: the pearl and ink palette with the two accents, a spacing scale used for every margin, padding
   and gap, a type scale with real line heights, and one glass pane (`.card`) at four sizes. The console
@@ -218,6 +218,16 @@ what changed and why.
 
 ### Fixed
 
+- **The README's roadmap listed CI as outstanding while the same document enforced it.** "CI on every push"
+  and "Accessibility and performance budgets" sat unchecked under *Next, in order* — and the README's own
+  *Enforced on every push* table, a few screens above, already runs lint, typecheck, the whole suite against
+  a real PostgreSQL 16, the build, the byte budgets, the renderer-split assertion, 23 measured colour pairs
+  and `axe-core` on every push, before both end-to-end harnesses. Two entries in a list of what is *next*
+  were also simply done. The checklist now separates what is enforced today (moved up to *shipped*) from
+  what genuinely is not: **backups and a rehearsed restore**, file uploads, `.sav`/`.dta`, a WCAG 2.2 AA
+  audit by a person with a screen reader, the Lighthouse budget that is still deliberately empty, and the
+  drag-and-drop builder. The counts were stale in the same pass — 253 tests to 256, of which `apps/web`
+  went from 95 to 98 when the reveal test for the template cards landed.
 - **The template cards on the landing page were invisible.** The reveal is an `IntersectionObserver`
   built once when the page mounts, observing the markup that exists at that moment — and the three
   template cards are rendered from the `/api/v1/public/summary` response, which arrives after. Nothing

@@ -19,7 +19,7 @@ there is no signal** — and exporting data that is ready for analysis rather th
 [![License](https://img.shields.io/badge/license-Apache--2.0-34d399?style=flat-square&labelColor=0f172a)](LICENSE)
 [![Build](https://img.shields.io/badge/build-clean-34d399?style=flat-square&labelColor=0f172a)](#-testing)
 [![CI](https://img.shields.io/badge/CI-lint_·_types_·_tests_·_budgets-34d399?style=flat-square&labelColor=0f172a)](#enforced-on-every-push)
-[![Tests](https://img.shields.io/badge/tests-253%20passing-34d399?style=flat-square&labelColor=0f172a)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-256%20passing-34d399?style=flat-square&labelColor=0f172a)](#-testing)
 [![Typecheck](https://img.shields.io/badge/typecheck-0%20errors-38bdf8?style=flat-square&labelColor=0f172a)](#-testing)
 [![Lint](https://img.shields.io/badge/lint-0%20errors-a78bfa?style=flat-square&labelColor=0f172a)](#-testing)
 [![Production](https://img.shields.io/badge/production-live-22c55e?style=flat-square&labelColor=0f172a&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app/health)
@@ -369,7 +369,7 @@ standing, rather than showing the definition they used to have.
 | 📶 **Honest connection state** | "No connection. Your answers are saved on this device and will be sent automatically", plus a **Send now** button and the timestamp the server has everything up to. |
 | 🐳 **A self-hosted profile** | Compose brings up PostgreSQL 16, Valkey, MinIO, ClamAV and Mailpit, with Caddy in front. |
 | 🧪 **Two live harnesses** | 35 end-to-end consumer checks and 28 offline-sync checks drive a real database through the same origin the browser uses. Each harness prints its own pass/fail line and reports the count it actually ran. |
-| 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 253 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
+| 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 256 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
 | ⚖️ **Budgets, not intentions** | The build fails if the critical path grows past 80 kB gzipped, if any chunk passes 150 kB, if the WebGL scene *or the XLSForm writer* leaks out of its lazy chunk, if a measured colour pair drops under 4.5:1, or if `axe-core` finds a violation on the public page or the consent gate. |
 
 </details>
@@ -896,7 +896,7 @@ Open **http://localhost:3000**, request a one-time code, read it in Mailpit, and
 ```bash
 pnpm lint        # ESLint 9, flat config
 pnpm typecheck   # tsc across four workspace packages
-pnpm test        # 253 tests
+pnpm test        # 256 tests
 pnpm coverage    # v8 coverage, per package
 pnpm build       # engine -> api -> web
 pnpm budgets     # the built bundle, gzipped, against its ceilings
@@ -1604,19 +1604,19 @@ than pretending the score is 100. What can be verified today is verifiable: the 
 ```bash
 pnpm lint         # ESLint 9, flat config — 0 errors
 pnpm typecheck    # tsc across engine, api, web and the serverless entry
-pnpm test         # 253 tests
+pnpm test         # 256 tests
 pnpm coverage     # v8 coverage, per package
 pnpm build        # engine -> api -> web
 pnpm budgets      # the built bundle, gzipped, against its ceilings
 ```
 
-### What the 253 tests actually cover
+### What the 256 tests actually cover
 
 | Suite | Tests | Focus |
 |---|---:|---|
 | `packages/engine` | **55** | Expression parsing and evaluation, validation, XLSForm round-trip fixpoint, XLSX read/write, dataset and codebook assembly, every export writer, and **the workbook the studio shows**: `xlsFormSheets` asserted row by row against the file `exportXlsForm` zips, so the viewer and the download cannot drift |
 | `apps/api` | **103** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers, and **the push channel over a real socket**: `ready` first, silence while nothing changes, then one coalesced event naming the aggregate that moved, with a 404 and no stream for a form the caller cannot see, plus the public summary: read live, and asserted key by key to carry no tenant data, **and the integration surface**: a key whose secret is shown once and stored as a hash, its scope enforced at the route that declares it and *named* when it is missing, a key refused across organisations even though its creator belongs to both, revocation effective on the very next request, an endpoint that disables itself after five consecutive failures, a delivery signature checked against an independent HMAC in the test, a duplicate scan that refuses to record the same finding twice, and **the read scopes**: a key granted `forms:read` reaches the forms list *narrowed to its own organisation*, is `403 key_org_mismatch` on another organisation's form even though its creator belongs to both, and is told it is missing `responses:export` when it tries to export with only `responses:read` |
-| `apps/web` | **95** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request), **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure), **23 measured contrast pairs** taken from the stylesheets themselves, **`axe-core` audits** of the two public surfaces, **the quality queue** (the evidence behind each finding is on the row, a decision carries the reason typed with it and re-reads the list it just changed, dismissing is asserted to be a different outcome from resolving, and a second scan is reported as finding nothing new rather than as doing nothing) and **the integration screen** (the scope catalogue's `enforced` flag genuinely disables a scope no route declares, a key secret is shown once in a read-only field that carries a panel saying so, an `http://` endpoint cannot be added at all, and "send test" reports the receiver's real `500` rather than "sent"), **raising a finding by hand** from a response row (the raise waits for a reason, and "already in the queue" is asserted to read differently from "recorded"), **the definition studio** (the JSON panel is the server's own definition; its rows move the XLSForm sheets and the preview with no request at all, because all three read one object; the sheets are the workbook the download writes; the preview hides a question whose relevance rule says so, renders the two inline choices, sends nothing and stores nothing when it is typed into, and produces *field-for-field identical markup* to the component the collection page renders), and **the shell guard** that keeps the ambient layer and a form field from ever sharing a class name again |
+| `apps/web` | **98** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer), **and the cards that arrive after the mount** (the template articles the API renders are handed to the reveal observer instead of keeping the hidden state, which is how three invisible cards reached production) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request), **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure), **23 measured contrast pairs** taken from the stylesheets themselves, **`axe-core` audits** of the two public surfaces, **the quality queue** (the evidence behind each finding is on the row, a decision carries the reason typed with it and re-reads the list it just changed, dismissing is asserted to be a different outcome from resolving, and a second scan is reported as finding nothing new rather than as doing nothing) and **the integration screen** (the scope catalogue's `enforced` flag genuinely disables a scope no route declares, a key secret is shown once in a read-only field that carries a panel saying so, an `http://` endpoint cannot be added at all, and "send test" reports the receiver's real `500` rather than "sent"), **raising a finding by hand** from a response row (the raise waits for a reason, and "already in the queue" is asserted to read differently from "recorded"), **the definition studio** (the JSON panel is the server's own definition; its rows move the XLSForm sheets and the preview with no request at all, because all three read one object; the sheets are the workbook the download writes; the preview hides a question whose relevance rule says so, renders the two inline choices, sends nothing and stores nothing when it is typed into, and produces *field-for-field identical markup* to the component the collection page renders), and **the shell guard** that keeps the ambient layer and a form field from ever sharing a class name again |
 
 ### Enforced on every push
 
@@ -1904,15 +1904,16 @@ ceilings underneath — lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). This is t
 - [x] **API keys with scopes, and webhooks** — deny-by-default machine access, HMAC-signed deliveries with retries, and a console screen that shows each secret exactly once
 - [x] **Consent with evidence**, and templates (the 2026 school ranking survey is #1)
 - [x] **A one-origin deployment** with verified tenancy on production
+- [x] **CI on every push** — lint, typecheck, the whole suite against a real PostgreSQL 16, the build and the byte budgets, then both end-to-end harnesses over the same origin a browser uses. Both jobs are green on `main`, so "verified" no longer means "verified on somebody's machine at the time"
+- [x] **Component tests for the React UI** — the landing page, the realtime client, the ambient field, the console's live read, the quality queue, the integration screen and the definition studio are mounted in jsdom, so the web number is no longer carried by the harnesses alone
+- [x] **Budgets enforced rather than intended** — the gzip ceilings, the assertion that the WebGL scene and the XLSForm writer stay out of the critical chunks, 23 measured colour pairs and an `axe-core` audit of the public surfaces all fail the build
 
 ### 🔜 Next, in order
 
 - [ ] **File uploads** — object storage with presigned URLs, type and size limits and a scan step; unblocks the honest `image` and `file` question types
 - [ ] **`.sav` / `.dta` export** — the Python `pyreadstat` worker that turns today's `501` into a real file
-- [ ] **CI on every push** — lint, typecheck, test, build and the two harnesses, so "verified locally" stops depending on someone remembering
-- [ ] **Backups and one rehearsed restore** — currently *not done*, and the single most important gap
-- [x] **Component tests for the React UI**: the landing page and the realtime client now run in jsdom, so the web coverage number is no longer carried by the harnesses alone
-- [ ] **Accessibility and performance budgets** — an axe/WCAG 2.2 AA pass and a Lighthouse budget checked in CI
+- [ ] **Backups and one rehearsed restore** — currently *not done*, and the single most important gap: nothing dumps the database, and no restore has ever been rehearsed
+- [ ] **A WCAG 2.2 AA audit and a Lighthouse budget** — everything a rule engine can decide is already enforced on every push (the colour measurements, the `axe-core` audit, the byte ceilings); what is still missing is a person with a screen reader, a keyboard-only pass over every signed-in screen, and a Lighthouse run against the deployment with the sign-in flow scripted — which is why [Lighthouse](#lighthouse) is empty rather than filled with a number nobody can reproduce
 - [ ] **A visual builder and logic editor** — the JSON editor is complete; the drag-and-drop surface is not
 
 ### 🧭 Longer horizon
@@ -2020,7 +2021,7 @@ collection with conflict retention, exports in three formats, live analytics, an
 between two accounts.
 
 What is missing before you would run a serious multi-week survey: **backups and a rehearsed restore**
-(the biggest gap), CI, file uploads, `.sav` and `.dta`, an accessibility audit, and a rate limiter that
+(the biggest gap), file uploads, `.sav` and `.dta`, a WCAG 2.2 AA audit, and a rate limiter that
 survives more than one instance. All of it is in the [roadmap](#-roadmap) with reasons.
 
 </details>
