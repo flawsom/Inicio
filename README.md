@@ -1264,7 +1264,8 @@ than leaving its absence ambiguous.
 ### Measured on the live deployment
 
 Method: 12 sequential requests per path from a single VM over the public internet, 0.6 s apart,
-`time_starttransfer` in milliseconds, 13 October 2026. Reproduce it:
+`time_starttransfer` in milliseconds, 13 October 2026, against the deployment this work produced.
+Reproduce it:
 
 ```bash
 for i in $(seq 1 12); do
@@ -1275,21 +1276,22 @@ done
 
 | Path | What it measures | Median | p95 | Notes |
 |---|---|---:|---:|---|
-| `/` (HTML shell) | Edge cache and static shell | **99 ms** | 111 ms | max 114 ms |
-| `/assets/index-*.js` | The console: 214.75 kB, **67.85 kB over the wire** | **100 ms** | 153 ms | max 200 ms |
-| `/assets/landing-*.js` | The landing page, after first paint: 16.20 kB, **5.56 kB over the wire** | **96 ms** | 103 ms | max 111 ms |
-| `/assets/instrument-*.js` | three.js, the landing page only: 533.48 kB, **135.76 kB over the wire** | **101 ms** | 107 ms | max 120 ms |
-| `/api/v1/legal/terms` | Function, **no database round trip** | **98 ms** | 169 ms | max 183 ms |
-| `/api/v1/public/summary` | Function **with** a database round trip, never cached | **396 ms** | 410 ms | one cold start at 1 753 ms in this sample |
-| `/health` | Function **with** a database round trip | **392 ms** | 437 ms | one cold start at 1 780 ms in this sample |
+| `/` (HTML shell) | Edge cache and static shell | **91 ms** | 110 ms | max 160 ms |
+| `/assets/index-*.js` | The whole app: 222.88 kB, **70.87 kB over the wire** | **93 ms** | 113 ms | max 162 ms |
+| `/assets/landing-*.js` | The landing page, after first paint: 16.20 kB, **5.56 kB over the wire** | **92 ms** | 102 ms | max 105 ms |
+| `/assets/instrument-*.js` | three.js, the landing page only: 533.48 kB, **135.76 kB over the wire** | **92 ms** | 100 ms | max 100 ms |
+| `/api/v1/legal/terms` | Function, **no database round trip** | **92 ms** | 99 ms | max 171 ms |
+| `/api/v1/public/summary` | Function **with** a database round trip, never cached | **395 ms** | 471 ms | one cold start at 1 780 ms in this sample |
+| `/health` | Function **with** a database round trip | **393 ms** | 412 ms | max 420 ms |
 
-**The honest reading of that table:** the gap is not between static assets — 214.75 kB of console and
-533.51 kB of three.js cross the wire in the same ~100 ms, because they are served from the edge and the
-network is not the constraint. It is between the static rows and the last three, and it is geography
-rather than code: the serverless function's round trip to PostgreSQL. Co-locating the function region
-with the database region is the single largest latency win available on this deployment, and it is a
-hosting setting rather than a code change. Everything else is already inside the noise of a
-transatlantic HTTP request.
+**The honest reading of that table:** the gap is not between static assets — 222.88 kB of app and
+533.48 kB of three.js cross the wire in the same ~92 ms, because they are served from the edge and the
+network is not the constraint. It is between the static rows and the last two, and it is geography
+rather than code: the serverless function's round trip to PostgreSQL, which is 300 ms of the 395. That
+is also the number that matters most for feel: the ambient field and every entrance animation run on the
+device, but nothing that reads the database can appear before its round trip, so the function region and
+the database region being co-located is the single largest perceived-speed win available here, and it is
+a hosting setting rather than a code change.
 
 <sub>⚠️ A sustained burst from one address eventually trips the hosting provider's own bot mitigation
 (I measured this the hard way). Browsers pass that checkpoint transparently; scripted benchmarks
