@@ -28,6 +28,15 @@ export default tseslint.config(
     },
   },
   {
+    // The screenshot script is a Node program whose `page.evaluate` callbacks are
+    // serialised and run *inside* the browser: `window` and `document` there are the
+    // page's, not undefined variables. The Node globals above still apply.
+    files: ['scripts/screenshots.mjs'],
+    languageOptions: {
+      globals: { window: 'readonly', document: 'readonly' },
+    },
+  },
+  {
     // The service worker runs in its own global scope: `self`, `caches` and
     // `fetch` are the platform it is written against, not undefined variables.
     files: ['apps/web/public/sw.js'],

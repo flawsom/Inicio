@@ -229,6 +229,14 @@ what changed and why.
   `MIGRATION_DATABASE_URL` and `APP_DATABASE_URL`. `APP_DATABASE_URL` *decides* which connection the
   application uses; `DATABASE_URL` must still exist, exactly as the environment table says. The job now
   sets both, so the migration, the owner bootstrap, the stack and the two harnesses all run.
+- **Every visit to the deployed page carried a 404, and the tab had no icon.** `apps/web/index.html`
+  declared an Apple touch icon and a manifest but no `rel="icon"`, so each browser asked for
+  `/favicon.ico` on its own — a file this project does not ship, and which `vercel.json` excludes from
+  the SPA catch-all — and was answered `404`. Neither the test suite nor the first browser pass could
+  see it: the request is made by the browser rather than by the page, so it never appears as a page
+  response. The icons the build already ships are declared for the tab now, and `scripts/screenshots.mjs`
+  reads the network through the protocol instead, failing on any `4xx` other than the `401` an
+  anonymous visitor always gets — so the check that found this keeps it from coming back.
 - **Every question in the respondent's form was an invisible, unclickable layer.** The ambient light
   field behind the signed-in app is a fixed, full-viewport, `z-index: -1`, `pointer-events: none` layer,
   and a question in a form is a block inside a card — and both were called `.field`. On every collection

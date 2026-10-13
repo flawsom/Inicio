@@ -10,6 +10,14 @@
     <meta name="color-scheme" content="dark" />
     <meta name="theme-color" content="#05070d" />
     <link rel="manifest" href="/manifest.webmanifest" />
+    <!--
+      The tab icon. Without a declared `icon`, every browser asks for `/favicon.ico`
+      whether or not it exists — this deployment has no such file, so the console
+      carried a 404 on every visit and the tab showed a blank page glyph. The
+      manifest's icons are for installs, not for the tab; these are for the tab.
+    -->
+    <link rel="icon" href="/icon-192.png" sizes="192x192" type="image/png" />
+    <link rel="icon" href="/icon-512.png" sizes="512x512" type="image/png" />
     <!-- iOS ignores the web manifest; these are its equivalents. -->
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

@@ -378,7 +378,70 @@ standing, rather than showing the definition they used to have.
 
 ## 📸 Screenshots
 
-<div align="center"><sub>The illustrations below are vector renderings of the running interface — committed as SVG, so they stay sharp at any zoom and cost a few kilobytes. They are pictures of the product, not mockups of a different product.</sub></div>
+<div align="center"><sub><b>Captured, not drawn.</b> The images in this first table are photographs of the running product — headless Chromium against <a href="https://inicio-prjct.vercel.app">the live deployment</a> at 1440×1000 (desktop) and 390×844 (phone), with nothing staged: the figures on the page are the ones <code>GET /api/v1/public/summary</code> returned in that request, and the light field is the real WebGL scene. The further screens are vector renderings of the same interface, committed as SVG so they stay sharp at any zoom and cost a few kilobytes; they exist because the documentation pipeline has no signed-in session to photograph, not because the screens are imagined.<br /><br />They are taken by <code>scripts/screenshots.mjs</code>, which asserts four things a picture cannot show — the page read its figures from the API in that request, the WebGL scene drew a frame, the call to action reaches <code>/login</code> on desktop and on a phone, and nothing 4xx'd except the signed-out <code>401</code> — and then writes both the images and <code>docs/assets/screenshots/capture-report.json</code>. That check is what found the missing tab icon: a browser's own request for <code>/favicon.ico</code> never appears as a page response.</sub></div>
+
+<br />
+
+<table>
+<tr>
+<td colspan="2" align="center">
+
+<img src="./docs/assets/screenshots/landing-hero.jpg" alt="The live landing page: the headline, the invitation-only note and the light field behind them, captured from the deployment" width="100%" />
+
+**🌐 The landing page — captured from production**
+<br /><sub>Every figure read from the API in that request · the scene is the real WebGL field · 1440×1000</sub>
+
+</td>
+</tr>
+<tr>
+<td valign="top" width="50%" align="center">
+
+<img src="./docs/assets/screenshots/landing-scene.jpg" alt="The light field arranged by scroll: nodes and filaments drawn from the product's own data model" width="100%" />
+
+**✨ The light field, scrolled**
+<br /><sub>One path and five fills per frame, rearranged as the page is scrolled</sub>
+
+</td>
+<td valign="top" width="50%" align="center">
+
+<img src="./docs/assets/screenshots/landing-capabilities.jpg" alt="The capabilities section: each claim links to the file that implements it" width="100%" />
+
+**🧭 Capabilities, claim by claim**
+<br /><sub>Each claim carries a link to the file that implements it</sub>
+
+</td>
+</tr>
+<tr>
+<td valign="top" width="50%" align="center">
+
+<img src="./docs/assets/screenshots/landing-templates.jpg" alt="The template library, summarised by walking the real definitions" width="100%" />
+
+**🏫 The template library**
+<br /><sub>Summarised by walking the real definitions, not from a declared list</sub>
+
+</td>
+<td valign="top" width="50%" align="center">
+
+<img src="./docs/assets/screenshots/login-mobile.jpg" alt="Sign in with a one-time code on a phone: invitation only, and what the page never reveals" width="100%" />
+
+**🔐 Sign-in — phone**
+<br /><sub>The same route the landing's button reaches, at 390×844</sub>
+
+</td>
+</tr>
+<tr>
+<td colspan="2" align="center">
+
+<img src="./docs/assets/screenshots/landing-mobile.jpg" alt="The landing page on a phone: the same figures, the same claims, the cheaper scene tier" width="100%" style="max-width:420px" />
+
+**📱 The landing page — phone**
+<br /><sub>A cheaper scene tier under 900 px, and nothing else about the page changes</sub>
+
+</td>
+</tr>
+</table>
+
+<div align="center"><sub><b>Rendered from the real markup</b> — the signed-in and collection surfaces, drawn as SVG.</sub></div>
 
 <br />
 
@@ -422,9 +485,9 @@ standing, rather than showing the definition they used to have.
 <tr>
 <td valign="top" width="50%" align="center">
 
-<img src="./docs/assets/auth.svg" alt="Sign in with a one-time code: what a code request answers and what it never reveals" width="100%" />
+<img src="./docs/assets/screenshots/login-desktop.jpg" alt="Sign in with a one-time code, captured from the deployment: what a code request answers and what it never reveals" width="100%" />
 
-**🔐 Authentication**
+**🔐 Authentication — captured from production**
 <br /><sub>One-time codes, invitation gate, no account creation from outside</sub>
 
 </td>
