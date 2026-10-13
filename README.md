@@ -368,7 +368,7 @@ standing, rather than showing the definition they used to have.
 | 🏫 **A real template** | The 2026 school ranking survey — the project this platform grew out of — ships as template #1, not as the product. |
 | 📶 **Honest connection state** | "No connection. Your answers are saved on this device and will be sent automatically", plus a **Send now** button and the timestamp the server has everything up to. |
 | 🐳 **A self-hosted profile** | Compose brings up PostgreSQL 16, Valkey, MinIO, ClamAV and Mailpit, with Caddy in front. |
-| 🧪 **Two live harnesses** | 33 end-to-end consumer checks and 28 offline-sync checks drive a real database through the same origin the browser uses. |
+| 🧪 **Two live harnesses** | 35 end-to-end consumer checks and 28 offline-sync checks drive a real database through the same origin the browser uses. Each harness prints its own pass/fail line and reports the count it actually ran. |
 | 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 253 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
 | ⚖️ **Budgets, not intentions** | The build fails if the critical path grows past 80 kB gzipped, if any chunk passes 150 kB, if the WebGL scene *or the XLSForm writer* leaks out of its lazy chunk, if a measured colour pair drops under 4.5:1, or if `axe-core` finds a violation on the public page or the consent gate. |
 
@@ -505,8 +505,8 @@ one is: they drive sign-in, authoring, publishing, respondent submissions, confl
 and the PWA through a real database, and print a pass/fail line for every check.
 
 ```bash
-# 33 end-to-end consumer checks + 28 offline-sync checks, against the running stack
-pnpm e2e:consumer    # 33 checks: the whole consumer journey
+# 35 end-to-end consumer checks + 28 offline-sync checks, against the running stack
+pnpm e2e:consumer    # 35 checks: the whole consumer journey
 pnpm e2e:offline     # 28 checks: the offline sync contract
 ```
 
@@ -1523,7 +1523,7 @@ pnpm budgets      # the built bundle, gzipped, against its ceilings
 lockfile, starts a real PostgreSQL 16 service, and runs lint, typecheck, the whole suite, the build and
 `pnpm budgets`. `harnesses` then migrates a database, creates the first owner, starts the API and the web
 server, waits for both to answer, and runs both end-to-end harnesses over the same origin a browser uses —
-so the route from a build to 33 consumer checks and 28 offline-sync checks is exercised on every push,
+so the route from a build to 35 consumer checks and 28 offline-sync checks is exercised on every push,
 with the API and web logs printed when a step fails.
 
 | Check | Fails the build when |
@@ -1564,7 +1564,7 @@ through the same origin the browser uses (`:3000`, which proxies `/api/v1`). Bot
 organisation and delete it afterwards, leaving the database exactly as they found it.
 
 ```bash
-pnpm e2e:consumer    # 33 checks: invitation gate, publish, submissions, exports, enforcement
+pnpm e2e:consumer    # 35 checks: invitation gate, publish, submissions, exports, enforcement
 pnpm e2e:offline     # 28 checks: offline contract, conflict retention, PWA, live reads
 ```
 
@@ -1611,6 +1611,29 @@ vercel --prod
 | 3 · Deploy | push to `main` — the connected project builds and deploys automatically |
 | 4 · Verify | `/health` returns a real `dbTime`; protected routes `401`; the SPA renders; **static files come back with the right content type** |
 | 5 · Verify the boundary | sign in as two accounts: the second must get `404` on the first's forms, responses, analytics and exports |
+
+### What the live deployment is right now, measured
+
+`https://inicio-prjct.vercel.app` is this repository, deployed from `main`, and every line below was
+read from the running service rather than from a dashboard:
+
+| Read | Answer | What it means |
+|---|---|---|
+| `GET /health` | `200 {"status":"ok","dbTime":…}` | The function reaches the database and runs a real query |
+| `GET /api/v1/public/summary` | `"migrationsApplied": 9, "latestMigration": "0009_collection_sync.sql"` | **The production database is one migration behind the code.** `0010_api_keys_webhooks_flags.sql` has not been applied there |
+| `/assets/studio-*.js` | contains *"What the respondent opens"*, *"The workbook"*, *"Nothing typed here is sent or stored"* | The three-panel studio **is** deployed and reachable |
+| `/sw.js`, `/manifest.webmanifest` | `application/javascript`, `application/manifest+json` | The static-asset trap below is genuinely fixed in production, not just locally |
+| `/api/v1/api-scopes`, `/api/v1/flag-kinds` | `401` | The routes ship; without migration `0010` their tables do not exist, so they answer `500` for a signed-in caller |
+
+The gap is one command, run with the production owner connection — not a code change:
+
+```bash
+MIGRATION_DATABASE_URL='postgres://…' pnpm --filter @inicio/api db:migrate
+```
+
+Until it runs, the API-key, webhook and quality-flag surfaces, and the Quality and Integrations screens
+that read them, are deployed but not *usable* in production — which is the same class of quiet lie as a
+`sent` for a mail that never left, so it is written down here instead of being left to a dashboard.
 
 <details>
 <summary><b>⚠️ The deployment trap this project actually hit</b></summary>
@@ -1744,7 +1767,7 @@ to review and harder to revert.
 The two live harnesses are the fastest way to find out whether you broke the product end to end:
 
 ```bash
-pnpm e2e:consumer      # 33 checks over HTTP against the running stack
+pnpm e2e:consumer      # 35 checks over HTTP against the running stack
 pnpm e2e:offline       # 28 checks, including the offline sync contract
 ```
 

@@ -186,8 +186,9 @@ what changed and why.
 - **CI on every push.** `.github/workflows/ci.yml` runs on a push to `main` and on every pull request.
   `verify` installs from the lockfile and runs lint, typecheck, the whole suite against a real PostgreSQL
   16 service, the build and the budgets. `harnesses` then migrates a database, bootstraps an owner, starts
-  the API and the web server, waits for both to answer, and drives the 33-check consumer and 28-check
-  offline harnesses over the same origin a browser uses. The first run of the typecheck step found a
+  the API and the web server, waits for both to answer, and drives the 35-check consumer and 28-check
+  offline harnesses over the same origin a browser uses. Each harness prints the count it actually ran,
+  because a number in a document is a claim and the harness's own line is evidence. The first run of the typecheck step found a
   `TS7022` in a test file that the working tree's own build does not compile, which is the argument for
   having this in one command rather than in a habit.
 
