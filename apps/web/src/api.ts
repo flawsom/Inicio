@@ -75,6 +75,8 @@ export interface Definition {
     name: string;
     type: string;
     label: Record<string, string>;
+    /** Shown under the label, in the respondent's own language. */
+    hint?: Record<string, string>;
     groupId?: string | null;
     required?: boolean | string;
     choices?: { listName?: string; inline?: Array<{ value: string; label: Record<string, string> }> } | null;
@@ -193,6 +195,92 @@ export interface FormAnalytics {
   /** Responses where a device and the server disagreed about an answer. */
   conflicts: number;
   generatedAt: string;
+}
+
+/**
+ * Integrations and quality control.
+ *
+ * Two facts shape these types. An API key's secret and a webhook's signing secret
+ * are returned by the *create* calls and by nothing else — there is no read that
+ * can produce them again, so a screen must show them once and say so. And a flag's
+ * `detail` is whatever the detector recorded, so it is rendered as evidence rather
+ * than as a fixed shape.
+ */
+export interface ApiScope {
+  scope: string;
+  detail: string;
+  /**
+   * Whether a route declares this scope today. The vocabulary is wider than the
+   * machine surface on purpose, and this is what stops the console offering a
+   * capability that would produce a key able to call nothing.
+   */
+  enforced: boolean;
+}
+
+export interface ApiKey {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  createdAt: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdBy: string | null;
+  active: boolean;
+}
+
+export interface WebhookEndpoint {
+  id: string;
+  url: string;
+  description: string | null;
+  events: string[];
+  active: boolean;
+  createdAt: string;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  failureCount: number;
+  disabledAt: string | null;
+  /** Why it is not sending, in words, when it has disabled itself. */
+  reason: string | null;
+  pending?: number;
+  failed?: number;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  event: string;
+  status: string;
+  attempts: number;
+  response_status: number | null;
+  error: string | null;
+  created_at: string;
+  delivered_at: string | null;
+  next_attempt_at: string;
+  payload: unknown;
+}
+
+export interface QualityFlag {
+  id: string;
+  formId: string;
+  formName: string;
+  responseId: string;
+  questionId: string | null;
+  kind: string;
+  /** What the kind means, in words, from the server's own vocabulary. */
+  kindDetail: string;
+  severity: string;
+  detail: Record<string, unknown>;
+  status: string;
+  note: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+}
+
+export interface FlagQueue {
+  flags: QualityFlag[];
+  summary: { byStatus: Record<string, number>; byKind: Record<string, number>; open: number };
 }
 
 export const api = {
@@ -334,6 +422,79 @@ export const api = {
       answers,
       base,
     }),
+
+  // ---------------------------------------------------------------- integrations
+
+  /** The scope vocabulary, read from the server so the console cannot drift from it. */
+  apiScopes: () => request<{ scopes: ApiScope[] }>('GET', '/api-scopes'),
+  apiKeys: (orgId: string) => request<{ keys: ApiKey[] }>('GET', `/orgs/${orgId}/api-keys`),
+  createApiKey: (orgId: string, payload: { name: string; scopes: string[]; expiresInDays?: number }) =>
+    request<{ key: ApiKey; secret: string }>('POST', `/orgs/${orgId}/api-keys`, payload),
+  revokeApiKey: (orgId: string, keyId: string) =>
+    request<void>('DELETE', `/orgs/${orgId}/api-keys/${keyId}`),
+
+  webhookEvents: () => request<{ events: Array<{ event: string; detail: string }> }>('GET', '/webhook-events'),
+  webhooks: (orgId: string) => request<{ endpoints: WebhookEndpoint[] }>('GET', `/orgs/${orgId}/webhooks`),
+  createWebhook: (orgId: string, payload: { url: string; events: string[]; description?: string }) =>
+    request<{ endpoint: WebhookEndpoint; secret: string }>('POST', `/orgs/${orgId}/webhooks`, payload),
+  updateWebhook: (
+    orgId: string,
+    endpointId: string,
+    payload: { url?: string; events?: string[]; description?: string; active?: boolean },
+  ) => request<{ endpoint: WebhookEndpoint }>('PATCH', `/orgs/${orgId}/webhooks/${endpointId}`, payload),
+  deleteWebhook: (orgId: string, endpointId: string) =>
+    request<void>('DELETE', `/orgs/${orgId}/webhooks/${endpointId}`),
+  webhookDeliveries: (orgId: string, endpointId: string, limit = 50) =>
+    request<{ deliveries: WebhookDelivery[] }>(
+      'GET',
+      `/orgs/${orgId}/webhooks/${endpointId}/deliveries?limit=${limit}`,
+    ),
+  /** Signs and sends a synthetic event now, and reports the receiver's real answer. */
+  testWebhook: (orgId: string, endpointId: string) =>
+    request<{
+      delivered: boolean;
+      status: number | null;
+      responseBody: string | null;
+      error: string | null;
+      deliveryId: string;
+    }>('POST', `/orgs/${orgId}/webhooks/${endpointId}/test`),
+  retryWebhookDelivery: (orgId: string, deliveryId: string) =>
+    request<{ deliveryId: string; drained: { attempted: number; delivered: number; failed: number; retrying: number } }>(
+      'POST',
+      `/orgs/${orgId}/webhooks/deliveries/${deliveryId}/retry`,
+    ),
+
+  // --------------------------------------------------------------- quality queue
+
+  flagKinds: () =>
+    request<{
+      kinds: Array<{ kind: string; detail: string }>;
+      thresholds: { speeding: string; straightLining: string };
+    }>('GET', '/flag-kinds'),
+  flags: (orgId: string, options: { status?: string; formId?: string; limit?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (options.status) params.set('status', options.status);
+    if (options.formId) params.set('formId', options.formId);
+    if (options.limit) params.set('limit', String(options.limit));
+    const query = params.toString();
+    return request<FlagQueue>('GET', `/orgs/${orgId}/flags${query ? `?${query}` : ''}`);
+  },
+  resolveFlag: (orgId: string, flagId: string, payload: { status: 'resolved' | 'dismissed'; note?: string }) =>
+    request<{ flag: QualityFlag }>('PATCH', `/orgs/${orgId}/flags/${flagId}`, payload),
+  /** The whole-form detector: exact duplicate submissions. Idempotent. */
+  scanFlags: (orgId: string, formId: string) =>
+    request<{ flagged: number }>('POST', `/orgs/${orgId}/forms/${formId}/flags/scan`),
+  raiseFlag: (
+    orgId: string,
+    formId: string,
+    responseId: string,
+    payload: { questionId?: string; severity: 'info' | 'warn' | 'severe'; note: string },
+  ) =>
+    request<{ queued: boolean; reason?: string }>(
+      'POST',
+      `/orgs/${orgId}/forms/${formId}/responses/${responseId}/flags`,
+      payload,
+    ),
 };
 
 export function apiUrl(path: string): string {

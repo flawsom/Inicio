@@ -1,7 +1,7 @@
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { exportXlsForm, importXlsForm } from '../src/adapters/xlsform.js';
-import { writeWorkbook } from '../src/adapters/xlsx.js';
+import { exportXlsForm, importXlsForm, xlsFormSheets } from '../src/adapters/xlsform.js';
+import { readWorkbook, writeWorkbook, type OutSheet } from '../src/adapters/xlsx.js';
 import type { FormDefinition } from '../src/types.js';
 import { validateForm } from '../src/validate.js';
 
@@ -176,6 +176,39 @@ describe('xlsform import', () => {
     let def = importXlsForm(workbookBytes()).definition;
     for (let i = 0; i < 3; i++) def = importXlsForm(exportXlsForm(def).bytes).definition;
     expect(def).toEqual(importXlsForm(exportXlsForm(importXlsForm(workbookBytes()).definition).bytes).definition);
+  });
+
+  /**
+   * A trailing empty cell is not a thing a spreadsheet can store, so a sheet that
+   * round-tripped through the file comes back one cell narrower on some rows. It
+   * carries no information, which is why this comparison is made modulo it.
+   */
+  const withoutTrailingBlanks = (sheets: OutSheet[]): OutSheet[] =>
+    sheets.map((sheet) => ({
+      name: sheet.name,
+      rows: sheet.rows.map((row) => {
+        const trimmed = [...row];
+        while (trimmed.length > 0 && trimmed[trimmed.length - 1] === '') trimmed.pop();
+        return trimmed;
+      }),
+    }));
+
+  it('hands the viewer the same rows the file is zipped from', () => {
+    const def = importXlsForm(workbookBytes()).definition;
+    const { sheets, notes } = xlsFormSheets(def);
+    const exported = exportXlsForm(def);
+
+    // The viewer is not a second implementation of the export: it *is* the export,
+    // minus the zip. Comparing it against the parsed file is what keeps that true —
+    // a screen that agreed with the download by coincidence would eventually stop.
+    expect(withoutTrailingBlanks(readWorkbook(exported.bytes).sheets)).toEqual(withoutTrailingBlanks(sheets));
+    expect(sheets.map((sheet) => sheet.name)).toEqual(['survey', 'choices', 'settings']);
+    expect(notes).toEqual(exported.notes);
+
+    // And the rows are the form's own questions, not a placeholder table.
+    const survey = sheets.find((sheet) => sheet.name === 'survey');
+    const names = (survey?.rows ?? []).slice(1).map((row) => row[1]);
+    for (const question of def.questions) expect(names).toContain(question.name);
   });
 
   it('reads inline strings, sparse rows and self-closing cells', () => {

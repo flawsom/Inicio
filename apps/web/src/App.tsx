@@ -3,12 +3,13 @@ import {
   ApiError,
   api,
   download,
+  type ApiScope,
   type FormSummary,
   type MailDelivery,
   type PublicMailStatus,
   type Organisation,
   type TermsStatus,
-  type VersionSummary,
+  type WebhookDelivery,
 } from './api';
 import { Collect } from './collect';
 import { AdminView } from './admin';
@@ -27,6 +28,16 @@ import { navigate } from './router';
 const Landing = lazy(() => import('./landing').then((module) => ({ default: module.Landing })));
 
 /**
+ * The definition studio, in its own chunk.
+ *
+ * It is three live panels over one definition — the JSON source, the XLSForm sheets
+ * that `Download .xlsx` zips, and the form a respondent opens — and it carries the
+ * XLSForm writer with it. Nobody reading a table of responses should pay for an
+ * authoring tool, so it arrives when somebody opens a form instead.
+ */
+const Studio = lazy(() => import('./studio').then((module) => ({ default: module.DefinitionStudio })));
+
+/**
  * The workspace shell: sign in, pick an organisation, author a form, publish it,
  * collect responses, watch the numbers arrive, export.
  *
@@ -37,7 +48,9 @@ const Landing = lazy(() => import('./landing').then((module) => ({ default: modu
  * The reads are driven by the push channel (`./realtime`), not by timers. While the
  * stream for the open form is up, the server says which aggregate moved and the
  * screen refetches only that one; a timer runs only as a fallback while the stream
- * is down, and the header says which of the two is happening.
+ * is down, and each screen that reads on a signal renders the pill that says which of
+ * the two is happening (`DataTab`, `DistributeTab`, `QualityTab`, `IntegrationsView`)
+ * — the form header itself only reports whether the form is collecting.
  */
 
 interface Me {
@@ -231,7 +244,7 @@ function ImmersiveChrome(): JSX.Element {
 
   return (
     <>
-      <div className="field" aria-hidden="true">
+      <div className="ambient" aria-hidden="true">
         <canvas ref={canvasRef} />
       </div>
       <div className="vignette" aria-hidden="true" />
@@ -409,7 +422,10 @@ function Login({ onSignedIn }: { onSignedIn: () => void }): JSX.Element {
   return (
     <div className="auth card">
       <h1>Inicio</h1>
-      <p className="muted">Multi-tenant survey and data-collection platform. Any email works.</p>
+      <p className="muted">
+        Multi-tenant survey and data-collection platform. Accounts are invitation only: sign in with the address your
+        invitation was sent to.
+      </p>
       {mail && !mail.reachable && mail.basis !== 'none' && (
         <p className="warn small">
           {/* Production wording. The relay, the transport and the reason are
@@ -443,111 +459,12 @@ function Login({ onSignedIn }: { onSignedIn: () => void }): JSX.Element {
   );
 }
 
-function DefinitionEditor({
-  formId,
-  version,
-  revision,
-}: {
-  formId: string;
-  version: VersionSummary;
-  /** Bumped by the parent when the server-side definition changed (an import, say). */
-  revision: number;
-}): JSX.Element {
-  const [text, setText] = useState('');
-  const [report, setReport] = useState<{ errors: string[]; warnings: string[] } | null>(null);
-  const [loadedVersion, setLoadedVersion] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  // Unsaved keystrokes must never be clobbered by a background refresh.
-  const dirty = useRef(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await api.version(formId, version.id);
-        if (cancelled || dirty.current) return;
-        setText(JSON.stringify(res.version.definition, null, 2));
-        setReport(null);
-        setLoadedVersion(version.id);
-      } catch {
-        // The parent surfaces the error; the editor keeps whatever it has.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // `revision` and the question count are what change when an import rewrites
-    // this same version in place. Without them the JSON below went stale while
-    // the stored definition had already moved on.
-  }, [formId, version.id, version.question_count, revision]);
-
-  const save = async (): Promise<void> => {
-    setBusy(true);
-    try {
-      const parsed: unknown = JSON.parse(text);
-      const res = await api.saveVersion(formId, version.id, parsed);
-      // Show exactly what was stored (the server canonicalises), so the preview
-      // is a fact about the database rather than a fact about the textarea.
-      if (res.version?.definition) setText(JSON.stringify(res.version.definition, null, 2));
-      dirty.current = false;
-      setReport({ errors: res.errors, warnings: res.warnings });
-    } catch (err) {
-      setReport({ errors: [err instanceof ApiError ? (err.message ?? 'could not save') : 'That is not valid JSON.'], warnings: [] });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const immutable = version.status === 'published';
-
-  return (
-    <div className="stack">
-      <p className="muted small">
-        The form definition is JSON: the same model the XLSForm importer produces, so a spreadsheet and this editor
-        are two views of one thing. Publishing runs the analyser below.
-      </p>
-      {immutable && (
-        <p className="warn small">
-          This version is published and cannot be edited: responses already record it. Use{' '}
-          <strong>New draft from published</strong> to make changes.
-        </p>
-      )}
-      {loadedVersion !== version.id && <p className="muted">Loading...</p>}
-      <textarea
-        value={text}
-        onChange={(e) => {
-          dirty.current = true;
-          setText(e.target.value);
-        }}
-        spellCheck={false}
-        rows={22}
-      />
-      <div className="row">
-        <button type="button" onClick={() => void save()} disabled={busy || immutable}>
-          {busy ? 'Saving…' : immutable ? 'Published (immutable)' : 'Save draft'}
-        </button>
-        <button type="button" className="ghost" onClick={() => void download(`/forms/${formId}/xlsform?versionId=${version.id}`, 'form.xlsx')}>
-          Download .xlsx
-        </button>
-      </div>
-      {report && (
-        <div className={report.errors.length > 0 ? 'card error' : 'card ok'}>
-          {report.errors.length === 0 ? <p>No publish-blocking problems.</p> : null}
-          {report.errors.map((message) => (
-            <p key={message} className="small">
-              ✕ {message}
-            </p>
-          ))}
-          {report.warnings.map((message) => (
-            <p key={message} className="small muted">
-              ! {message}
-            </p>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+/*
+ * The definition editor used to live here as a textarea and a save button. It is
+ * now `./studio`, loaded lazily above: three live panels over one definition — the
+ * JSON source, the XLSForm sheets the download writes, and the form a respondent
+ * opens — with the analyser running on every keystroke rather than on save.
+ */
 
 /** Resolve a stored question name to the label the author wrote. */
 function questionLabel(
@@ -566,7 +483,15 @@ function formatTally(value: unknown): string {
   return String(value);
 }
 
-function DataTab({ formId, publishedVersion }: { formId: string; publishedVersion: number | null }): JSX.Element {
+export function DataTab({
+  formId,
+  orgId,
+  publishedVersion,
+}: {
+  formId: string;
+  orgId: string;
+  publishedVersion: number | null;
+}): JSX.Element {
   const { data, error, reload, status, live } = useLive(() => api.responses(formId), {
     formId,
     aggregate: 'responses',
@@ -586,6 +511,44 @@ function DataTab({ formId, publishedVersion }: { formId: string; publishedVersio
   // An export descends from a published version, so there is nothing to export
   // until one exists. Saying why up front beats a failed download.
   const canExport = publishedVersion !== null;
+
+  // Raising a finding by hand. The response id is the thing the API needs, so the
+  // form opens on the row it belongs to rather than in a panel somebody has to
+  // match up with a table elsewhere on the screen.
+  const [flagging, setFlagging] = useState<string | null>(null);
+  const [flagSeverity, setFlagSeverity] = useState<'info' | 'warn' | 'severe'>('warn');
+  const [flagNote, setFlagNote] = useState('');
+  const [flagBusy, setFlagBusy] = useState(false);
+  const [flagError, setFlagError] = useState<string | null>(null);
+  const [flagNotice, setFlagNotice] = useState<string | null>(null);
+
+  const raiseFlag = async (responseId: string): Promise<void> => {
+    setFlagBusy(true);
+    setFlagError(null);
+    setFlagNotice(null);
+    try {
+      const res = await api.raiseFlag(orgId, formId, responseId, {
+        severity: flagSeverity,
+        note: flagNote.trim(),
+      });
+      // Two honest outcomes, and they are not the same message. A unique index
+      // refuses a second identical finding for the same response, and the API says
+      // so (`queued: false, reason: 'already_recorded'`) — collapsing that into
+      // "raised" would report a write that did not happen, and the person would
+      // believe a complaint had been recorded when it was dropped.
+      setFlagNotice(
+        res.queued
+          ? `Raised a ${flagSeverity} finding for ${responseId.slice(0, 8)}. It is in the Quality tab.`
+          : `A finding raised by hand for ${responseId.slice(0, 8)} is already in the queue, so nothing new was recorded. The existing one keeps the note it was raised with.`,
+      );
+      setFlagging(null);
+      setFlagNote('');
+    } catch (err) {
+      setFlagError(err instanceof ApiError ? (err.message ?? err.code) : 'the finding was not recorded');
+    } finally {
+      setFlagBusy(false);
+    }
+  };
 
   const tally = useMemo(() => {
     const counts = new Map<string, number>();
@@ -647,6 +610,12 @@ function DataTab({ formId, publishedVersion }: { formId: string; publishedVersio
       </p>
       {downloadError && <p className="error small">{downloadError}</p>}
       {error && <p className="error small">{error}</p>}
+      {flagError && <p className="error small">{flagError}</p>}
+      {flagNotice && (
+        <p className="small muted" role="status">
+          {flagNotice}
+        </p>
+      )}
 
       <div className="card">
         <div className="row wrap">
@@ -705,6 +674,7 @@ function DataTab({ formId, publishedVersion }: { formId: string; publishedVersio
             <th>Started</th>
             <th>Answers</th>
             <th>Sync conflicts</th>
+            <th>Flag</th>
           </tr>
         </thead>
         <tbody>
@@ -722,11 +692,71 @@ function DataTab({ formId, publishedVersion }: { formId: string; publishedVersio
                   <span className="muted">—</span>
                 )}
               </td>
+              <td>
+                {flagging === row.id ? (
+                  <div className="stack tight">
+                    <div className="choices">
+                      {(['info', 'warn', 'severe'] as const).map((level) => (
+                        <label key={level} className="choice">
+                          <input
+                            type="radio"
+                            name={`severity-${row.id}`}
+                            checked={flagSeverity === level}
+                            onChange={() => setFlagSeverity(level)}
+                          />
+                          <span className="small">{level}</span>
+                        </label>
+                      ))}
+                    </div>
+                    <input
+                      placeholder="Why? kept with the finding"
+                      value={flagNote}
+                      onChange={(e) => setFlagNote(e.target.value)}
+                    />
+                    <div className="row">
+                      <button
+                        type="button"
+                        onClick={() => void raiseFlag(row.id)}
+                        // A note is what makes a raised finding worth anything
+                        // later, and the API rejects an empty one — so the button
+                        // waits for one rather than letting a 400 explain it.
+                        disabled={flagBusy || flagNote.trim().length < 3}
+                      >
+                        Raise
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => {
+                          setFlagging(null);
+                          setFlagNote('');
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => {
+                      setFlagging(row.id);
+                      setFlagSeverity('warn');
+                      setFlagNote('');
+                      setFlagError(null);
+                      setFlagNotice(null);
+                    }}
+                  >
+                    Flag
+                  </button>
+                )}
+              </td>
             </tr>
           ))}
           {(data?.responses ?? []).length === 0 && (
             <tr>
-              <td colSpan={6} className="muted">
+              <td colSpan={7} className="muted">
                 {canExport
                   ? 'No responses yet. Create a link in the Distribute tab.'
                   : 'No responses yet, and none can arrive until this form is published.'}
@@ -854,7 +884,7 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
     fallbackMs: 60_000,
     deps: [form.id],
   });
-  const [tab, setTab] = useState<'builder' | 'data' | 'distribute'>('builder');
+  const [tab, setTab] = useState<'builder' | 'data' | 'quality' | 'distribute'>('builder');
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Bumped whenever the server rewrites the selected version in place, so the
@@ -965,9 +995,15 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
       </div>
 
       <nav className="tabs">
-        {(['builder', 'data', 'distribute'] as const).map((name) => (
+        {(['builder', 'data', 'quality', 'distribute'] as const).map((name) => (
           <button key={name} type="button" className={tab === name ? 'tab active' : 'tab'} onClick={() => setTab(name)}>
-            {name === 'builder' ? 'Builder' : name === 'data' ? 'Responses & exports' : 'Distribute'}
+            {name === 'builder'
+              ? 'Builder'
+              : name === 'data'
+                ? 'Responses & exports'
+                : name === 'quality'
+                  ? 'Quality'
+                  : 'Distribute'}
           </button>
         ))}
       </nav>
@@ -1020,12 +1056,706 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
             ))}
           </ul>
 
-          {selected && <DefinitionEditor formId={form.id} version={selected} revision={editorRevision} />}
+          {selected && (
+            <Suspense fallback={<p className="muted">Opening the studio…</p>}>
+              <Studio formId={form.id} version={selected} revision={editorRevision} />
+            </Suspense>
+          )}
         </div>
       )}
 
-      {tab === 'data' && <DataTab formId={form.id} publishedVersion={published?.version ?? null} />}
+      {tab === 'data' && (
+        <DataTab formId={form.id} orgId={form.org_id} publishedVersion={published?.version ?? null} />
+      )}
+      {tab === 'quality' && <QualityTab formId={form.id} orgId={form.org_id} />}
       {tab === 'distribute' && <DistributeTab formId={form.id} publishedVersion={published?.version ?? null} />}
+    </div>
+  );
+}
+
+/** A flag's `detail` is evidence, so it is shown as named facts rather than as raw JSON. */
+function formatDetail(detail: Record<string, unknown>): string[] {
+  return Object.entries(detail).map(([key, value]) => {
+    if (Array.isArray(value)) {
+      return `${key}: ${value.length > 0 ? value.map((item) => String(item)).join(', ') : '(none)'}`;
+    }
+    if (value !== null && typeof value === 'object') return `${key}: ${JSON.stringify(value)}`;
+    return `${key}: ${String(value)}`;
+  });
+}
+
+/** Severity is the first thing a reviewer scans for, so it gets a real colour. */
+function severityClass(severity: string): string {
+  if (severity === 'severe') return 'pill bad';
+  if (severity === 'warn') return 'pill warn';
+  return 'pill';
+}
+
+/**
+ * The quality queue: what a reviewer actually does with a finding.
+ *
+ * Two things make this different from a quality score in a dashboard. Every row
+ * carries the evidence the detector recorded — the duration, the value that
+ * repeated, the response it duplicates — so somebody can disagree with the rule on
+ * the evidence instead of taking its word for it. And the decision is recorded:
+ * who, when and why, with a note, because dismissing a finding is a legitimate
+ * answer that still has to leave a trace.
+ *
+ * The duplicate scan lives here rather than at submission time on purpose. A
+ * respondent's transaction may only see its own response — that is exactly what
+ * stops a public link reading other people's data — so finding duplicates is an
+ * organiser's act, and it is presented as one: a button that says what it does.
+ */
+export function QualityTab({ formId, orgId }: { formId: string; orgId: string }): JSX.Element {
+  const [status, setStatus] = useState<'open' | 'resolved' | 'dismissed' | 'all'>('open');
+  const queue = useLive(() => api.flags(orgId, { formId, status, limit: 100 }), {
+    fallbackMs: 30_000,
+    deps: [orgId, formId, status],
+  });
+  const [reviewing, setReviewing] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const flags = queue.data?.flags ?? [];
+  const summary = queue.data?.summary ?? null;
+
+  const decide = async (flagId: string, next: 'resolved' | 'dismissed'): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await api.resolveFlag(orgId, flagId, { status: next, ...(note.trim() ? { note: note.trim() } : {}) });
+      setReviewing(null);
+      setNote('');
+      setNotice(`Recorded as ${next}, with your note.`);
+      queue.reload();
+    } catch (err) {
+      setError(err instanceof ApiError ? (err.message ?? err.code) : 'that did not work');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const scan = async (): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await api.scanFlags(orgId, formId);
+      setNotice(
+        res.flagged === 0
+          ? 'No new duplicates. The scan is idempotent: a finding is recorded once, however often you look.'
+          : `${res.flagged} duplicate response${res.flagged === 1 ? '' : 's'} flagged.`,
+      );
+      queue.reload();
+    } catch (err) {
+      setError(err instanceof ApiError ? (err.message ?? err.code) : 'the scan did not run');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="stack grow">
+      <div className="row wrap">
+        {(['open', 'resolved', 'dismissed', 'all'] as const).map((name) => (
+          <button
+            key={name}
+            type="button"
+            className={status === name ? 'tab active' : 'tab'}
+            onClick={() => setStatus(name)}
+          >
+            {name}
+          </button>
+        ))}
+        <span className="grow" />
+        {summary && <span className="muted small">{summary.open} open</span>}
+        <button type="button" className="ghost" onClick={() => void scan()} disabled={busy}>
+          Scan for duplicates
+        </button>
+      </div>
+
+      {error && <p className="error small">{error}</p>}
+      {notice && <p className="small muted">{notice}</p>}
+
+      <p className="muted small">
+        Speeding and straight-lining are detected as a response is submitted; duplicates need the whole form, so they
+        appear when you scan. Every threshold is stated: see the Quality tab&rsquo;s legend in the API
+        (<code>GET /api/v1/flag-kinds</code>).
+      </p>
+
+      <div className="card">
+        {flags.length === 0 ? (
+          <p className="muted small">
+            Nothing {status === 'all' ? 'recorded' : status} for this form yet.
+          </p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Finding</th>
+                <th>Evidence</th>
+                <th>Response</th>
+                <th>Decision</th>
+              </tr>
+            </thead>
+            <tbody>
+              {flags.map((flag) => (
+                <tr key={flag.id}>
+                  <td>
+                    <span className={severityClass(flag.severity)}>{flag.severity}</span>
+                    <div>
+                      <strong>{flag.kind.replace('_', ' ')}</strong>
+                    </div>
+                    <div className="muted small">{flag.kindDetail}</div>
+                    {flag.note && <div className="small">note: {flag.note}</div>}
+                  </td>
+                  <td>
+                    <ul className="small muted">
+                      {formatDetail(flag.detail).map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </td>
+                  <td className="small muted">
+                    <code>{flag.responseId.slice(0, 8)}</code>
+                    <div>{new Date(flag.createdAt).toLocaleString()}</div>
+                  </td>
+                  <td>
+                    {flag.status !== 'open' ? (
+                      <span className="small muted">
+                        {flag.status}
+                        {flag.resolvedBy ? ` by ${flag.resolvedBy}` : ''}
+                        {flag.resolvedAt ? ` \u00b7 ${new Date(flag.resolvedAt).toLocaleDateString()}` : ''}
+                      </span>
+                    ) : reviewing === flag.id ? (
+                      <div className="stack tight">
+                        <input
+                          placeholder="Why? kept as the record"
+                          value={note}
+                          onChange={(e) => setNote(e.target.value)}
+                        />
+                        <div className="row">
+                          <button type="button" onClick={() => void decide(flag.id, 'resolved')} disabled={busy}>
+                            Resolve
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={() => void decide(flag.id, 'dismissed')}
+                            disabled={busy}
+                          >
+                            Dismiss
+                          </button>
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={() => {
+                              setReviewing(null);
+                              setNote('');
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => {
+                          setReviewing(flag.id);
+                          setNote('');
+                        }}
+                      >
+                        Review
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * API keys and webhooks: the machine surface of one organisation.
+ *
+ * Two things here are deliberate. A secret is shown once, in a panel that says so,
+ * because the server stores only a hash of an API key and never returns a signing
+ * secret again: a screen that let someone come back for them later would be lying
+ * about what the database holds. And every control that changes where an
+ * organisation's data goes is hidden from a member who cannot use it, while the API
+ * refuses the same calls independently: hiding a button is a courtesy, not a control.
+ */
+export function IntegrationsView({ orgId, canAdminister }: { orgId: string; canAdminister: boolean }): JSX.Element {
+  const keys = useLive(() => api.apiKeys(orgId), { fallbackMs: 60_000, deps: [orgId] });
+  const endpoints = useLive(() => api.webhooks(orgId), { fallbackMs: 60_000, deps: [orgId] });
+
+  const [scopeCatalogue, setScopeCatalogue] = useState<ApiScope[]>([]);
+  const [eventCatalogue, setEventCatalogue] = useState<Array<{ event: string; detail: string }>>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [revealed, setRevealed] = useState<{ label: string; value: string; hint: string } | null>(null);
+
+  const [keyName, setKeyName] = useState('');
+  const [keyScopes, setKeyScopes] = useState<string[]>(['flags:read']);
+  const [keyDays, setKeyDays] = useState('');
+
+  const [hookUrl, setHookUrl] = useState('');
+  const [hookEvents, setHookEvents] = useState<string[]>(['response.submitted']);
+  const [hookNote, setHookNote] = useState('');
+
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [deliveries, setDeliveries] = useState<WebhookDelivery[] | null>(null);
+  const [testResult, setTestResult] = useState<string | null>(null);
+
+  // The vocabularies come from the server, so the console cannot drift from what
+  // the API will actually accept.
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .apiScopes()
+      .then((res) => {
+        if (!cancelled) setScopeCatalogue(res.scopes);
+      })
+      .catch(() => undefined);
+    void api
+      .webhookEvents()
+      .then((res) => {
+        if (!cancelled) setEventCatalogue(res.events);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const run = async (action: () => Promise<string | void>, after?: () => void): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const message = await action();
+      if (typeof message === 'string') setNotice(message);
+      after?.();
+    } catch (err) {
+      setError(err instanceof ApiError ? (err.message ?? err.code) : 'that did not work');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createKey = async (): Promise<void> => {
+    const days = Number(keyDays);
+    await run(
+      async () => {
+        const res = await api.createApiKey(orgId, {
+          name: keyName.trim(),
+          scopes: keyScopes,
+          ...(Number.isInteger(days) && days > 0 ? { expiresInDays: days } : {}),
+        });
+        setRevealed({
+          label: `API key "${res.key.name}"`,
+          value: res.secret,
+          hint: `Send it as Authorization: Bearer <key>. Its prefix is ${res.key.prefix}; that is all you will see of it later.`,
+        });
+        setKeyName('');
+        setKeyDays('');
+        return `Created "${res.key.name}". Copy the secret now.`;
+      },
+      keys.reload,
+    );
+  };
+
+  const toggleScope = (current: string[], scope: string, on: boolean): string[] =>
+    on ? [...current, scope] : current.filter((item) => item !== scope);
+
+  const loadDeliveries = async (endpointId: string): Promise<void> => {
+    await run(async () => {
+      const res = await api.webhookDeliveries(orgId, endpointId);
+      setDeliveries(res.deliveries);
+    });
+  };
+
+  const keyList = keys.data?.keys ?? [];
+  const hookList = endpoints.data?.endpoints ?? [];
+
+  return (
+    <div className="stack grow">
+      <div className="screen-head">
+        <div>
+          <span className="eyebrow">Integrations</span>
+          <h1>API keys and webhooks</h1>
+          <p>
+            A key is a restricted session for its creator: it can only call the endpoints that declare one of its
+            scopes, only inside this organisation, and it stops working the moment that person leaves the team.
+          </p>
+        </div>
+      </div>
+
+      {error && <p className="error small">{error}</p>}
+      {notice && <p className="small muted">{notice}</p>}
+
+      {revealed && (
+        <div className="card ok">
+          <strong>{revealed.label}: this is the only time it is shown.</strong>
+          <div className="row" style={{ marginTop: 'var(--sp-3)' }}>
+            <input readOnly value={revealed.value} className="grow" onFocus={(e) => e.target.select()} />
+            <button type="button" className="ghost" onClick={() => void navigator.clipboard?.writeText(revealed.value)}>
+              Copy
+            </button>
+            <button type="button" className="ghost" onClick={() => setRevealed(null)}>
+              Done
+            </button>
+          </div>
+          <p className="small muted">{revealed.hint}</p>
+        </div>
+      )}
+
+      <div className="card">
+        <div className="row wrap">
+          <strong>API keys</strong>
+          <span className="muted small">{keyList.filter((key) => key.active).length} active</span>
+        </div>
+        {canAdminister ? (
+          <div className="stack" style={{ marginTop: 'var(--sp-4)' }}>
+            <div className="row wrap">
+              <input
+                placeholder="Name, for example: nightly export"
+                value={keyName}
+                onChange={(e) => setKeyName(e.target.value)}
+                className="grow"
+              />
+              <input
+                placeholder="Expires in days (optional)"
+                value={keyDays}
+                onChange={(e) => setKeyDays(e.target.value.replace(/[^0-9]/g, ''))}
+                style={{ width: '210px' }}
+              />
+            </div>
+            <div className="choices">
+              {scopeCatalogue.map((entry) => (
+                <label key={entry.scope} className="choice">
+                  <input
+                    type="checkbox"
+                    checked={keyScopes.includes(entry.scope)}
+                    disabled={!entry.enforced}
+                    onChange={(e) => setKeyScopes((current) => toggleScope(current, entry.scope, e.target.checked))}
+                  />
+                  <span>
+                    <code>{entry.scope}</code>{' '}
+                    <span className="muted small">
+                      {entry.detail}
+                      {entry.enforced ? null : ' No route declares this scope yet, so a key cannot be granted it.'}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="row wrap">
+              <button type="button" onClick={() => void createKey()} disabled={busy || keyName.trim().length < 2}>
+                Create key
+              </button>
+              <span className="muted small">A key with no scope can authenticate and do nothing.</span>
+            </div>
+          </div>
+        ) : (
+          <p className="muted small">Only an owner or an admin can issue or revoke a key.</p>
+        )}
+
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Prefix</th>
+              <th>Scopes</th>
+              <th>Created</th>
+              <th>Last used</th>
+              <th>Expires</th>
+              <th>State</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {keyList.map((key) => (
+              <tr key={key.id}>
+                <td>{key.name}</td>
+                <td className="mono small">{key.prefix}</td>
+                <td className="small">
+                  {key.scopes.length > 0 ? key.scopes.map((scope) => <code key={scope}>{scope}</code>) : <span className="muted">none</span>}
+                </td>
+                <td className="small">{new Date(key.createdAt).toLocaleDateString()}</td>
+                <td className="small">{key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleString() : 'never'}</td>
+                <td className="small">{key.expiresAt ? new Date(key.expiresAt).toLocaleDateString() : 'no expiry'}</td>
+                <td>
+                  <span className={key.active ? 'pill ok' : 'pill'}>{key.active ? 'active' : 'revoked'}</span>
+                </td>
+                <td>
+                  {canAdminister && key.active && (
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={busy}
+                      onClick={() => {
+                        if (!window.confirm(`Revoke "${key.name}"? Anything using it stops working immediately. This cannot be undone.`)) return;
+                        void run(async () => {
+                          await api.revokeApiKey(orgId, key.id);
+                          return `Revoked "${key.name}".`;
+                        }, keys.reload);
+                      }}
+                    >
+                      Revoke
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {keyList.length === 0 && (
+              <tr>
+                <td colSpan={8} className="muted">
+                  No API keys yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="card">
+        <div className="row wrap">
+          <strong>Webhooks</strong>
+          <span className="muted small">
+            Signed with HMAC-SHA256 over the timestamp and the body, so a receiver can prove the request is ours.
+          </span>
+        </div>
+
+        {canAdminister && (
+          <div className="stack" style={{ marginTop: 'var(--sp-4)' }}>
+            <input
+              placeholder="https://example.org/hooks/inicio"
+              value={hookUrl}
+              onChange={(e) => setHookUrl(e.target.value)}
+            />
+            <p className="muted small">
+              HTTPS only: a signature sent over plaintext proves nothing. The URL is checked again by the database.
+            </p>
+            <div className="choices">
+              {eventCatalogue.map((entry) => (
+                <label key={entry.event} className="choice">
+                  <input
+                    type="checkbox"
+                    checked={hookEvents.includes(entry.event)}
+                    onChange={(e) => setHookEvents((current) => toggleScope(current, entry.event, e.target.checked))}
+                  />
+                  <span>
+                    <code>{entry.event}</code> <span className="muted small">{entry.detail}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="row wrap">
+              <input
+                placeholder="Description (optional)"
+                value={hookNote}
+                onChange={(e) => setHookNote(e.target.value)}
+                className="grow"
+              />
+              <button
+                type="button"
+                disabled={busy || !/^https:\/\/.+/.test(hookUrl) || hookEvents.length === 0}
+                onClick={() =>
+                  void run(
+                    async () => {
+                      const res = await api.createWebhook(orgId, {
+                        url: hookUrl.trim(),
+                        events: hookEvents,
+                        ...(hookNote.trim() ? { description: hookNote.trim() } : {}),
+                      });
+                      setRevealed({
+                        label: 'Signing secret',
+                        value: res.secret,
+                        hint: 'Every delivery carries X-Inicio-Signature: sha256=<HMAC of timestamp.body> with this secret. Store it on your receiver; we cannot show it again.',
+                      });
+                      setHookUrl('');
+                      setHookNote('');
+                      return 'Endpoint created. Copy the signing secret now.';
+                    },
+                    endpoints.reload,
+                  )
+                }
+              >
+                Add endpoint
+              </button>
+            </div>
+          </div>
+        )}
+
+        {hookList.map((endpoint) => (
+          <div key={endpoint.id} className="invitebox">
+            <div className="row wrap">
+              <span className={endpoint.active ? 'pill ok' : 'pill bad'}>{endpoint.active ? 'sending' : 'disabled'}</span>
+              <span className="mono small grow">{endpoint.url}</span>
+              <span className="muted small">
+                {endpoint.pending ?? 0} pending, {endpoint.failed ?? 0} failed
+              </span>
+            </div>
+            {endpoint.description && <p className="small muted">{endpoint.description}</p>}
+            {endpoint.reason && <p className="warn small">{endpoint.reason}</p>}
+            <p className="small muted">
+              {endpoint.events.map((event) => (
+                <code key={event}>{event}</code>
+              ))}
+            </p>
+            <p className="small muted">
+              Last success: {endpoint.lastSuccessAt ? new Date(endpoint.lastSuccessAt).toLocaleString() : 'never'}. Last
+              failure: {endpoint.lastFailureAt ? new Date(endpoint.lastFailureAt).toLocaleString() : 'never'}.
+            </p>
+            <div className="row wrap">
+              <button
+                type="button"
+                className="ghost"
+                disabled={busy}
+                onClick={() => {
+                  setTestResult(null);
+                  void run(async () => {
+                    const res = await api.testWebhook(orgId, endpoint.id);
+                    setTestResult(
+                      res.delivered
+                        ? `Test delivered. The receiver answered ${res.status ?? 200}${res.responseBody ? `: ${res.responseBody.slice(0, 200)}` : '.'}`
+                        : `Test not delivered${res.status ? ` (HTTP ${res.status})` : ''}: ${res.error ?? 'no answer'}`,
+                    );
+                  }, endpoints.reload);
+                }}
+              >
+                Send test
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  if (openId === endpoint.id) {
+                    setOpenId(null);
+                    setDeliveries(null);
+                    return;
+                  }
+                  setOpenId(endpoint.id);
+                  setDeliveries(null);
+                  setTestResult(null);
+                  void loadDeliveries(endpoint.id);
+                }}
+              >
+                {openId === endpoint.id ? 'Hide deliveries' : 'Deliveries'}
+              </button>
+              {canAdminister && (
+                <>
+                  <button
+                    type="button"
+                    className="ghost"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        await api.updateWebhook(orgId, endpoint.id, { active: !endpoint.active });
+                        return endpoint.active ? 'Endpoint paused.' : 'Endpoint re-enabled.';
+                      }, endpoints.reload)
+                    }
+                  >
+                    {endpoint.active ? 'Pause' : 'Re-enable'}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost"
+                    disabled={busy}
+                    onClick={() => {
+                      if (!window.confirm(`Delete the endpoint ${endpoint.url} and its delivery history?`)) return;
+                      void run(async () => {
+                        await api.deleteWebhook(orgId, endpoint.id);
+                        if (openId === endpoint.id) {
+                          setOpenId(null);
+                          setDeliveries(null);
+                        }
+                        return 'Endpoint deleted.';
+                      }, endpoints.reload);
+                    }}
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
+            </div>
+
+            {testResult && <p className="small">{testResult}</p>}
+
+            {openId === endpoint.id && (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Event</th>
+                    <th>State</th>
+                    <th>Tries</th>
+                    <th>Receiver</th>
+                    <th>When</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {(deliveries ?? []).map((delivery) => (
+                    <tr key={delivery.id}>
+                      <td className="mono small">{delivery.event}</td>
+                      <td>
+                        <span className={delivery.status === 'delivered' ? 'pill ok' : delivery.status === 'failed' ? 'pill bad' : 'pill warn'}>
+                          {delivery.status}
+                        </span>
+                      </td>
+                      <td>{delivery.attempts}</td>
+                      <td className="small">
+                        {delivery.response_status ?? '-'}
+                        {delivery.error && <span className="error small"> {delivery.error}</span>}
+                      </td>
+                      <td className="small">{new Date(delivery.created_at).toLocaleString()}</td>
+                      <td>
+                        {canAdminister && delivery.status !== 'delivered' && (
+                          <button
+                            type="button"
+                            className="ghost"
+                            disabled={busy}
+                            onClick={() =>
+                              void run(async () => {
+                                await api.retryWebhookDelivery(orgId, delivery.id);
+                                const res = await api.webhookDeliveries(orgId, endpoint.id);
+                                setDeliveries(res.deliveries);
+                                return 'Retried.';
+                              }, endpoints.reload)
+                            }
+                          >
+                            Retry
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {deliveries !== null && deliveries.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="muted">
+                        Nothing has been sent to this endpoint yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ))}
+
+        {hookList.length === 0 && <p className="muted small">No endpoints yet.</p>}
+      </div>
     </div>
   );
 }
@@ -1041,6 +1771,9 @@ function Workspace({ me, onSignedOut }: { me: Me; onSignedOut: () => void }): JS
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const [showAdmin, setShowAdmin] = useState(false);
+  // Integrations is readable by any member (the API allows it) and only writable by
+  // an owner or admin, which the view enforces by hiding the controls it cannot use.
+  const [showIntegrations, setShowIntegrations] = useState(false);
   const currentOrg = orgs.find((o) => o.id === orgId) ?? null;
   // The menu entry is hidden for members and viewers, and the server refuses the
   // same calls independently. Hiding a button is a courtesy, not a control.
@@ -1140,10 +1873,11 @@ function Workspace({ me, onSignedOut }: { me: Me; onSignedOut: () => void }): JS
             <li key={form.id}>
               <button
                 type="button"
-                className={form.id === formId && !showAdmin ? 'tab active' : 'tab'}
+                className={form.id === formId && !showAdmin && !showIntegrations ? 'tab active' : 'tab'}
                 onClick={() => {
                   setFormId(form.id);
                   setShowAdmin(false);
+                  setShowIntegrations(false);
                 }}
               >
                 {form.name}
@@ -1191,17 +1925,31 @@ function Workspace({ me, onSignedOut }: { me: Me; onSignedOut: () => void }): JS
             className={showAdmin ? 'tab active' : 'tab'}
             onClick={() => {
               setShowAdmin(true);
+              setShowIntegrations(false);
               setFormId(null);
             }}
           >
             People and invitations
           </button>
         )}
+        <button
+          type="button"
+          className={showIntegrations ? 'tab active' : 'tab'}
+          onClick={() => {
+            setShowIntegrations(true);
+            setShowAdmin(false);
+            setFormId(null);
+          }}
+        >
+          API keys and webhooks
+        </button>
 
       </aside>
 
       <main className="main">
-        {showAdmin && orgId ? (
+        {showIntegrations && orgId ? (
+          <IntegrationsView orgId={orgId} canAdminister={canAdminister} />
+        ) : showAdmin && orgId ? (
           <AdminView orgId={orgId} canAdminister={canAdminister} />
         ) : selectedForm ? (
           <FormView form={selectedForm} onBack={() => setFormId(null)} />

@@ -15,7 +15,9 @@ import { sha256Hex } from '../lib/crypto.js';
 import { HttpError, withUser } from './db.js';
 import { audit } from './guards.js';
 import { requireAcceptedTerms } from './terms.js';
+import { assertActorOrg, requireActor } from './actors.js';
 import { TEMPLATES, findTemplate } from './templates.js';
+import { emitWebhook } from './webhooks/dispatch.js';
 
 /**
  * Forms, versions, responses, exports and distribution links.
@@ -23,6 +25,14 @@ import { TEMPLATES, findTemplate } from './templates.js';
  * These routes run with only `app.user_id` set and let RLS decide what exists.
  * There is deliberately no `:orgId` in most paths to get wrong: a form belonging to
  * somebody else is not a row, so it is a 404 rather than a permission argument.
+ *
+ * The **reads** also accept an API key, each naming the scope it needs, because
+ * pulling responses and exports is most of what an integration is for. The writes do
+ * not: a machine credential that can publish a form or move a distribution link is a
+ * different risk from one that can read, and the deny-by-default rule in
+ * `actors.ts` makes that a property of the route table rather than a promise. A key
+ * additionally has to be pointed at the organisation it was issued for, checked with
+ * `assertActorOrg` once the form's organisation is known.
  */
 
 const slugify = (value: string): string =>
@@ -115,8 +125,12 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/forms', async (req: FastifyRequest<{ Querystring: { includeArchived?: string } }>, reply: FastifyReply) => {
-    const identity = await requireAcceptedTerms(req);
-    const forms = await withUser(identity.userId, async (client) => {
+    const actor = await requireActor(req, { scope: 'forms:read' });
+    // A key sees one organisation's forms; a session sees every organisation it
+    // belongs to. The narrowing happens in SQL rather than after the read, so the
+    // answer is the query's rather than a filter somebody could forget.
+    const onlyOrg = actor.via === 'api_key' ? actor.orgId : null;
+    const forms = await withUser(actor.userId, async (client) => {
       const { rows } = await client.query(
         `SELECT f.id, f.name, f.slug, f.org_id, f.project_id, f.archived_at, f.created_at, f.updated_at,
                 o.name AS organisation,
@@ -130,8 +144,9 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
            LEFT JOIN form_version pv ON pv.form_id = f.id AND pv.status = 'published'
            LEFT JOIN form_version dv ON dv.form_id = f.id AND dv.status = 'draft'
           WHERE ($1::boolean OR f.archived_at IS NULL)
+            AND ($2::uuid IS NULL OR f.org_id = $2)
           ORDER BY f.updated_at DESC`,
-        [req.query.includeArchived === 'true'],
+        [req.query.includeArchived === 'true', onlyOrg ?? null],
       );
       return rows;
     });
@@ -195,9 +210,10 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/forms/:formId', async (req: FastifyRequest<{ Params: { formId: string } }>, reply: FastifyReply) => {
-    const identity = await requireAcceptedTerms(req);
-    const payload = await withUser(identity.userId, async (client) => {
+    const actor = await requireActor(req, { scope: 'forms:read' });
+    const payload = await withUser(actor.userId, async (client) => {
       const form = await loadForm(client, req.params.formId);
+      assertActorOrg(actor, form.org_id);
       const { rows: versions } = await client.query(
         `SELECT id, version, status, title, based_on, created_by, published_at, created_at,
                 jsonb_array_length(coalesce(definition->'questions', '[]'::jsonb)) AS question_count
@@ -299,9 +315,10 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     '/forms/:formId/versions/:versionId',
     async (req: FastifyRequest<{ Params: { formId: string; versionId: string } }>, reply: FastifyReply) => {
-      const identity = await requireAcceptedTerms(req);
-      const version = await withUser(identity.userId, async (client) => {
-        await loadForm(client, req.params.formId);
+      const actor = await requireActor(req, { scope: 'forms:read' });
+      const version = await withUser(actor.userId, async (client) => {
+        const form = await loadForm(client, req.params.formId);
+        assertActorOrg(actor, form.org_id);
         const { rows } = await client.query(
           `SELECT id, form_id, version, status, title, definition, based_on, published_at, created_at
              FROM form_version WHERE id = $1 AND form_id = $2`,
@@ -360,8 +377,13 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
       const identity = await requireAcceptedTerms(req);
       const result = await withUser(identity.userId, async (client) => {
         const form = await loadForm(client, req.params.formId);
-        const { rows: found } = await client.query<{ id: string; status: string; definition: FormDefinition }>(
-          `SELECT id, status, definition FROM form_version WHERE id = $1 AND form_id = $2`,
+        const { rows: found } = await client.query<{
+          id: string;
+          status: string;
+          definition: FormDefinition;
+          org_id: string;
+        }>(
+          `SELECT id, status, definition, org_id FROM form_version WHERE id = $1 AND form_id = $2`,
           [req.params.versionId, req.params.formId],
         );
         const version = found[0];
@@ -391,6 +413,14 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
           form.id,
           req.params.versionId,
         ]);
+        // Enqueued in the same transaction as the publish, so an integration is
+        // told about exactly the publishes that committed. Delivery itself runs
+        // after this request (see webhooks/dispatch.ts).
+        await emitWebhook(client, version.org_id, 'form.published', {
+          formId: form.id,
+          versionId: req.params.versionId,
+          version: (rows[0] as { version?: number } | undefined)?.version ?? null,
+        });
         return { version: rows[0], report, alreadyPublished: false };
       });
 
@@ -482,9 +512,10 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     '/forms/:formId/xlsform',
     async (req: FastifyRequest<{ Params: { formId: string }; Querystring: { versionId?: string } }>, reply: FastifyReply) => {
-      const identity = await requireAcceptedTerms(req);
-      const result = await withUser(identity.userId, async (client) => {
+      const actor = await requireActor(req, { scope: 'forms:read' });
+      const result = await withUser(actor.userId, async (client) => {
         const form = await loadForm(client, req.params.formId);
+        assertActorOrg(actor, form.org_id);
         const { rows } = req.query.versionId
           ? await client.query<{ definition: FormDefinition }>(
               `SELECT definition FROM form_version WHERE id = $1 AND form_id = $2`,
@@ -517,13 +548,14 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
       req: FastifyRequest<{ Params: { formId: string }; Querystring: { status?: string; limit?: string; offset?: string } }>,
       reply: FastifyReply,
     ) => {
-      const identity = await requireAcceptedTerms(req);
+      const actor = await requireActor(req, { scope: 'responses:read' });
       const limit = Math.min(Math.max(Number(req.query.limit ?? 50) || 50, 1), 500);
       const offset = Math.max(Number(req.query.offset ?? 0) || 0, 0);
       const statuses = req.query.status ? req.query.status.split(',').filter(Boolean) : null;
 
-      const payload = await withUser(identity.userId, async (client) => {
+      const payload = await withUser(actor.userId, async (client) => {
         const form = await loadForm(client, req.params.formId);
+        assertActorOrg(actor, form.org_id);
         const { rows: responses } = await client.query(
           `SELECT r.id, r.form_version_id, r.status, r.started_at, r.submitted_at, r.updated_at,
                   v.version AS form_version,
@@ -554,9 +586,10 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
   /* ------------------------------------------- live analytics (never cached) */
 
   app.get('/forms/:formId/analytics', async (req: FastifyRequest<{ Params: { formId: string } }>, reply: FastifyReply) => {
-    const identity = await requireAcceptedTerms(req);
-    const payload = await withUser(identity.userId, async (client) => {
+    const actor = await requireActor(req, { scope: 'analytics:read' });
+    const payload = await withUser(actor.userId, async (client) => {
       const form = await loadForm(client, req.params.formId);
+      assertActorOrg(actor, form.org_id);
       const published = await publishedVersion(client, form.id);
       const { rows: counts } = await client.query(
         `SELECT status, count(*)::int AS count FROM response WHERE form_id = $1 GROUP BY status`,
@@ -614,7 +647,7 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
       }>,
       reply: FastifyReply,
     ) => {
-      const identity = await requireAcceptedTerms(req);
+      const actor = await requireActor(req, { scope: 'responses:export' });
       const format = (req.query.format ?? 'csv').toLowerCase();
       if (!['csv', 'xlsx', 'json', 'sav', 'dta'].includes(format)) {
         return reply.code(400).send({ error: 'unknown_format', format });
@@ -629,8 +662,9 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const payload = await withUser(identity.userId, async (client) => {
+      const payload = await withUser(actor.userId, async (client) => {
         const form = await loadForm(client, req.params.formId);
+        assertActorOrg(actor, form.org_id);
         const published = await publishedVersion(client, form.id);
         if (!published) throw new HttpError(409, 'not_published', 'Publish a version in the Builder tab before exporting responses.');
 

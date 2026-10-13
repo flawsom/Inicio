@@ -1,8 +1,13 @@
 DO $$
 DECLARE
-  ua uuid; ub uuid; oa uuid; ob uuid; fa uuid; fv uuid; r1 uuid; r2 uuid; n bigint;
+  ua uuid; ub uuid; oa uuid; ob uuid; fa uuid; fv uuid; r1 uuid; r2 uuid; w1 uuid; n bigint;
+  -- Every table that carries a tenant's data, which is every table with FORCE ROW
+  -- LEVEL SECURITY. A new one that is missing here is a table whose isolation is
+  -- claimed rather than proved, so this list is the checklist for adding one.
   TABLES text[] := ARRAY['project','form','form_version','response','response_answer',
-                         'response_attachment','dist_link','dist_invite','quota'];
+                         'response_attachment','dist_link','dist_invite','quota',
+                         'response_conflict','response_flag',
+                         'api_key','webhook','webhook_delivery'];
   t text;
 BEGIN
   -- A. identity -----------------------------------------------------------
@@ -37,6 +42,18 @@ BEGIN
   INSERT INTO dist_link (org_id,form_id,kind) VALUES (oa,fa,'anonymous');
   INSERT INTO quota (org_id,form_id,name,target) VALUES (oa,fa,'main',100);
   INSERT INTO dist_invite (org_id,form_id,email) VALUES (oa,fa,'respondent@example.org');
+  INSERT INTO response_conflict (org_id,response_id,question_id,server_value,device_value)
+    VALUES (oa,r1,'q1','"server"'::jsonb,'"device"'::jsonb);
+  INSERT INTO response_flag (org_id,form_id,response_id,kind,detail)
+    VALUES (oa,fa,r1,'manual','{"by":"rls test"}'::jsonb);
+  -- The credentials and the egress channel are tenant data too: a key says who may
+  -- act as this organisation and an endpoint says where its events go.
+  INSERT INTO api_key (org_id,user_id,prefix,label,key_hash,scopes,active)
+    VALUES (oa,ua,'ik_rls','rls key',repeat('0',64),ARRAY['forms:read'],true);
+  INSERT INTO webhook (org_id,url,secret,events)
+    VALUES (oa,'https://example.org/hooks/inicio','rls-secret',ARRAY['form.published']) RETURNING id INTO w1;
+  INSERT INTO webhook_delivery (org_id,webhook_id,event,payload,idempotency_key)
+    VALUES (oa,w1,'form.published','{"formId":"x"}'::jsonb,'rls-event-1');
   FOREACH t IN ARRAY TABLES LOOP
     EXECUTE format('SELECT count(*) FROM %I', t) INTO n;
     IF n <> (CASE WHEN t = 'response' THEN 2 ELSE 1 END) THEN

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { evaluateForm, filterChoices, type FormDefinition, type Question } from '@inicio/engine';
 import { ApiError, api, type Definition } from './api';
+import { RespondentForm } from './respondent';
 import { pendingCount, resolveResume, syncLabel, timeOf } from './offline/core';
 import { openStore, type OfflineStore } from './offline/store';
 import {
@@ -17,10 +17,11 @@ import type { StoredDraft, SyncOutcome } from './offline/types';
 /**
  * The collection renderer, offline-first.
  *
- * Logic is evaluated with the *same* engine the server uses, so what a respondent
- * sees here and what the server stores cannot disagree: hidden questions disappear,
- * cascading selects filter, required questions block submission. The server still
- * re-checks all of it on submit: this is the ergonomics, not the authority.
+ * The form itself is rendered by `./respondent`, the same component the console's
+ * studio preview uses — so "what the respondent gets" is not a description that can
+ * drift, it is one component. What lives here is everything around it: the definition
+ * cache, the draft in IndexedDB, the durable outbox, and the header that says whether
+ * the server has the answers or only this device does.
  *
  * Every answer is written to IndexedDB the moment it is typed, and a small durable
  * queue sends it on. With no network the form still renders (the published
@@ -29,8 +30,6 @@ import type { StoredDraft, SyncOutcome } from './offline/types';
  * or only this device does. Nothing is ever dropped silently.
  */
 
-const UPLOAD_TYPES = new Set(['image', 'audio', 'video', 'file']);
-const GEO_TYPES = new Set(['geopoint', 'geotrace', 'geoshape']);
 const AUTOSAVE_MS = 120_000;
 
 /**
@@ -263,9 +262,6 @@ export function Collect({ token }: { token: string }): JSX.Element {
     return () => window.clearInterval(id);
   }, [flush]);
 
-  const form = definition as unknown as FormDefinition | null;
-  const evaluation = useMemo(() => (form ? evaluateForm(form, answers) : null), [form, answers]);
-
   /* ------------------------------------------------------------------- writing */
 
   const update = (name: string, value: unknown): void => {
@@ -312,7 +308,6 @@ export function Collect({ token }: { token: string }): JSX.Element {
     if (!online) return <Offline hasDraft={Boolean(draft && Object.keys(draft.answers).length > 0)} />;
     return <div className="card">Loading…</div>;
   }
-  if (!form || !evaluation) return <div className="card">Loading…</div>;
 
   if (status && status !== 'in_progress') {
     const labels: Record<string, string> = {
@@ -331,132 +326,25 @@ export function Collect({ token }: { token: string }): JSX.Element {
     );
   }
 
-  const label = (question: Question): string =>
-    question.label?.[definition.defaultLanguage] ?? Object.values(question.label ?? {})[0] ?? question.name;
-
-  const questionInput = (question: Question): JSX.Element => {
-    const value = evaluation.states[question.name]?.value;
-    const disabled = evaluation.states[question.name]?.enabled === false || evaluation.states[question.name]?.computed === true;
-
-    if (question.type === 'note') return <p className="muted">{label(question)}</p>;
-
-    if (question.type === 'calculate') {
-      return <output className="computed">{String(value ?? '')}</output>;
-    }
-
-    if (UPLOAD_TYPES.has(question.type)) {
-      return <input type="file" disabled />;
-    }
-
-    if (GEO_TYPES.has(question.type)) {
-      return (
-        <div className="row">
-          <input
-            placeholder="latitude longitude"
-            value={typeof value === 'string' ? value : ''}
-            onChange={(e) => update(question.name, e.target.value)}
-            onBlur={() => void flush()}
-          />
-          <button
-            type="button"
-            className="ghost"
-            onClick={() =>
-              navigator.geolocation?.getCurrentPosition((pos) =>
-                update(question.name, `${pos.coords.latitude} ${pos.coords.longitude}`),
-              )
-            }
-          >
-            Use my location
-          </button>
-        </div>
-      );
-    }
-
-    if (question.type === 'select_one' || question.type === 'yesno') {
-      const options =
-        question.type === 'yesno'
-          ? [{ value: 'yes', label: { en: 'Yes' } }, { value: 'no', label: { en: 'No' } }]
-          : filterChoices(form, question, answers).map((c) => ({ value: c.value, label: c.label }));
-      return (
-        <select
-          value={typeof value === 'string' ? value : ''}
-          disabled={disabled}
-          onChange={(e) => update(question.name, e.target.value)}
-          onBlur={() => void flush()}
-        >
-          <option value="">- choose -</option>
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label?.[definition.defaultLanguage] ?? Object.values(option.label ?? {})[0] ?? option.value}
-            </option>
-          ))}
-        </select>
-      );
-    }
-
-    if (question.type === 'select_multiple' || question.type === 'rank') {
-      const options = filterChoices(form, question, answers);
-      const selected = Array.isArray(value) ? value.map(String) : [];
-      return (
-        <div className="choices">
-          {options.map((option) => (
-            <label key={option.value} className="choice">
-              <input
-                type="checkbox"
-                checked={selected.includes(option.value)}
-                onChange={(e) =>
-                  update(
-                    question.name,
-                    e.target.checked ? [...selected, option.value] : selected.filter((v) => v !== option.value),
-                  )
-                }
-                onBlur={() => void flush()}
-              />
-              {option.label?.[definition.defaultLanguage] ?? Object.values(option.label ?? {})[0] ?? option.value}
-            </label>
-          ))}
-        </div>
-      );
-    }
-
-    const numeric = question.type === 'integer' || question.type === 'decimal';
-    const isDate = question.type === 'date' || question.type === 'datetime' || question.type === 'time';
-    return (
-      <input
-        type={numeric ? 'number' : isDate ? (question.type === 'time' ? 'time' : question.type === 'date' ? 'date' : 'datetime-local') : 'text'}
-        value={value === null || value === undefined ? '' : String(value)}
-        disabled={disabled}
-        onChange={(e) => update(question.name, numeric ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value)}
-        onBlur={() => void flush()}
-      />
-    );
-  };
-
-  const sections: Array<{ key: string; title: string; questions: Question[] }> = [];
-  for (const group of form.groups ?? []) {
-    const questions = form.questions.filter((q) => q.groupId === group.id && evaluation.states[q.name]?.visible);
-    if (questions.length === 0) continue;
-    sections.push({ key: group.id, title: group.label?.[definition.defaultLanguage] ?? group.name, questions });
-  }
-  const topLevel = form.questions.filter((q) => !q.groupId && evaluation.states[q.name]?.visible);
-  if (topLevel.length > 0) sections.push({ key: 'ungrouped', title: definition.title, questions: topLevel });
-
   const waiting = draft ? pendingCount(draft.outbox) : 0;
   const savedAt = timeOf(draft?.updatedAt ?? null);
   const syncedAt = timeOf(draft?.syncedAt ?? null);
 
   return (
-    <div className="collect">
-      <header className="screen-head">
-        <div>
-          <span className="eyebrow">Survey</span>
-          <h1>{definition.title}</h1>
-          <p className="muted small">
-            {savedAt && <>Saved on this device at {savedAt}. </>}
-            {syncedAt ? <>The server has everything up to {syncedAt}.</> : <>Not sent to the server yet.</>}
-          </p>
-        </div>
-        <div className="stack tight">
+    <RespondentForm
+      definition={definition}
+      answers={answers}
+      onChange={update}
+      onFlush={() => void flush()}
+      problems={problems}
+      subtitle={
+        <>
+          {savedAt && <>Saved on this device at {savedAt}. </>}
+          {syncedAt ? <>The server has everything up to {syncedAt}.</> : <>Not sent to the server yet.</>}
+        </>
+      }
+      status={
+        <>
           <span className={online ? 'pill ok' : 'pill warn'} role="status" aria-live="polite">
             {draft ? syncLabel(draft, online, syncing) : 'Loading…'}
           </span>
@@ -465,44 +353,21 @@ export function Collect({ token }: { token: string }): JSX.Element {
               {online ? 'Send now' : 'Waiting for a connection'}
             </button>
           )}
-        </div>
-      </header>
-
-      {sections.map((section) => (
-        <section key={section.key} className="card">
-          {form.groups.length > 0 && <h2>{section.title}</h2>}
-          {section.questions.map((question) => (
-            <div key={question.id} className="field">
-              <label>
-                {label(question)}
-                {question.required === true && <span className="req"> *</span>}
-              </label>
-              {question.hint && <p className="muted small">{question.hint[definition.defaultLanguage]}</p>}
-              {questionInput(question)}
-              {problems.missing.includes(question.name) && <p className="error small">This answer is required.</p>}
-              {problems.invalid.includes(question.name) && (
-                <p className="error small">
-                  {question.validation?.message?.[definition.defaultLanguage] ?? 'This answer is not valid.'}
-                </p>
-              )}
-            </div>
-          ))}
-        </section>
-      ))}
-
-      {error && <div className="card error">{error}</div>}
-      <div className="card row wrap">
-        <button type="button" onClick={() => void submit()} disabled={busy}>
-          {busy ? 'Submitting…' : 'Submit'}
-        </button>
-        {problems.missing.length > 0 && (
-          <span className="stat">
-            <strong>{problems.missing.length}</strong>
-            {` required answer(s) still missing`}
-          </span>
-        )}
-        {!online && <span className="muted">Your answers are safe on this device and will be sent automatically.</span>}
-      </div>
-    </div>
+        </>
+      }
+      notice={error ? <div className="card error">{error}</div> : null}
+      submit={{ label: busy ? 'Submitting…' : 'Submit', busy, onClick: () => void submit() }}
+      footer={
+        <>
+          {problems.missing.length > 0 && (
+            <span className="stat">
+              <strong>{problems.missing.length}</strong>
+              {` required answer(s) still missing`}
+            </span>
+          )}
+          {!online && <span className="muted">Your answers are safe on this device and will be sent automatically.</span>}
+        </>
+      }
+    />
   );
 }

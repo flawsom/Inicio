@@ -410,7 +410,7 @@ function LiveBand({ summary, readAt, failed }: { summary: Summary | null; readAt
   {
     title: 'Tenancy the database enforces',
     body:
-      'Nine tenant tables carry ENABLE and FORCE row level security, and the organisation is a parameter of the transaction. The API refuses to start in production on a connection that can bypass it.',
+      'Fourteen tenant tables carry ENABLE and FORCE row level security, and the organisation is a parameter of the transaction. The API refuses to start in production on a connection that can bypass it.',
     evidence: 'apps/api/src/db/pool.ts',
     href: `${REPOSITORY}/blob/main/apps/api/src/db/pool.ts`,
   },

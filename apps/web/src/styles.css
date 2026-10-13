@@ -77,6 +77,15 @@
   --panel-solid: #101018;
   --line: rgba(243, 242, 238, 0.13);
   --line-strong: rgba(243, 242, 238, 0.24);
+  /*
+   * The boundary of something you can type in.
+   *
+   * WCAG 1.4.11 asks a control's boundary to reach 3:1 against what is behind it,
+   * and a hairline chosen for looks does not: `--line` at 13% is about 1.6:1 against
+   * this ground. A field also has a fill, but the fill alone is under 1.5:1 either,
+   * so the boundary is doing the work and it has to be strong enough to do it.
+   */
+  --line-control: rgba(243, 242, 238, 0.5);
   --text: var(--pearl);
   --muted: var(--ink-muted);
   --accent: #6f95ff;
@@ -113,11 +122,12 @@
     --panel-solid: #ffffff;
     --line: rgba(10, 10, 11, 0.14);
     --line-strong: rgba(10, 10, 11, 0.28);
+    --line-control: rgba(10, 10, 11, 0.5);
     --text: var(--ink);
     --muted: var(--pearl-muted);
     --accent: var(--blue);
     --accent-2: #5b32d6;
-    --live: #0d8f9c;
+    --live: #0a6a75;
     --ok: #1f7a52;
     --bad: #c4343a;
     --warn-fg: #6b4c12;
@@ -169,8 +179,14 @@ body {
  * than as glass. It is fixed, it is behind everything, it is never interactive, and
  * it stops drawing when the tab is hidden. With no WebGL, or with JavaScript not
  * running, the gradient underneath it is what shows, so the page never depends on it.
+ *
+ * The class is `ambient` and not `field` for a reason worth keeping: `.field` is the
+ * question block inside a form card, and while the two shared the name every question
+ * a respondent saw was `position: fixed; inset: 0; z-index: -1; pointer-events: none`
+ * — a full-viewport, invisible, unclickable layer. The markup was correct and no unit
+ * test could see it. `shell.test.ts` is what stops the two names meeting again.
  */
-.field {
+.ambient {
   position: fixed;
   inset: 0;
   z-index: -1;
@@ -181,7 +197,7 @@ body {
     radial-gradient(50% 40% at 50% 50%, rgba(28, 199, 208, 0.05), transparent 70%);
 }
 
-.field canvas {
+.ambient canvas {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -191,7 +207,7 @@ body {
   transition: opacity 1.6s ease;
 }
 
-.field.ready canvas {
+.ambient.ready canvas {
   opacity: 1;
 }
 
@@ -424,7 +440,6 @@ code {
 .ok { color: var(--ok); }
 .req { color: var(--bad); }
 .grow { flex: 1; }
-.measure { max-width: var(--measure); }
 
 /* --------------------------------------------------------------- controls */
 
@@ -443,7 +458,7 @@ button {
   font: inherit;
   color: var(--text);
   background: var(--panel-2);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-control);
   border-radius: var(--radius-sm);
   padding: 11px 13px;
   transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
@@ -458,7 +473,7 @@ textarea::placeholder { color: color-mix(in srgb, var(--muted) 80%, transparent)
 
 input:hover:not(:disabled),
 select:hover:not(:disabled),
-textarea:hover:not(:disabled) { border-color: var(--line-strong); }
+textarea:hover:not(:disabled) { border-color: var(--text); }
 
 input:focus,
 select:focus,
@@ -510,7 +525,7 @@ button.ghost {
   color: var(--text);
   font-weight: 500;
   background: var(--panel);
-  border-color: var(--line);
+  border-color: var(--line-control);
   box-shadow: none;
   backdrop-filter: blur(14px);
 }
@@ -538,10 +553,13 @@ button.ghost:hover:not(:disabled) {
  *
  * Every surface in the product is this one object at a different size: a
  * translucent pane with a hairline, a soft inner highlight along its top edge and a
- * lift on hover. `.card` is kept as the name the whole codebase already uses.
+ * lift on hover.
+ *
+ * One class, not two. `.card` and a `.gunit` alias both lived here, and the alias was
+ * never rendered anywhere: a second name for the same object is how a stylesheet grows
+ * a surface nobody can find the component for.
  */
-.card,
-.gunit {
+.card {
   position: relative;
   background: var(--panel);
   border: 1px solid var(--line);
@@ -553,8 +571,7 @@ button.ghost:hover:not(:disabled) {
   overflow: hidden;
 }
 
-.card::before,
-.gunit::before {
+.card::before {
   content: '';
   position: absolute;
   inset: 0 0 auto 0;
@@ -568,15 +585,6 @@ button.ghost:hover:not(:disabled) {
 
 .card h2,
 .card h3 { margin-top: 0; }
-
-.frame {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--panel);
-  backdrop-filter: blur(22px) saturate(1.1);
-  box-shadow: var(--shadow);
-  overflow: hidden;
-}
 
 /*
  * The connection state, in words.
@@ -734,9 +742,7 @@ button.ghost:hover:not(:disabled) {
 }
 
 .card,
-.frame,
-.metric,
-.metrics,
+.studio-panel,
 .screen-head {
   animation: card-in 0.52s cubic-bezier(0.22, 0.8, 0.24, 1) both;
 }
@@ -754,9 +760,7 @@ button.ghost:hover:not(:disabled) {
   .sidebar,
   .main,
   .card,
-  .frame,
-  .metric,
-  .metrics,
+  .studio-panel,
   .screen-head { animation: none; }
 }
 
@@ -856,7 +860,7 @@ button.ghost:hover:not(:disabled) {
 .tab.active {
   color: var(--text);
   background: var(--panel-2);
-  border-color: var(--line-strong);
+  border-color: var(--line-control);
 }
 
 /* ------------------------------------------------------------------ tables */
@@ -924,49 +928,6 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
   color: var(--text);
 }
 
-.metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 1px;
-  margin: 0 0 var(--sp-5);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: var(--line);
-}
-
-.metric {
-  padding: var(--sp-5);
-  background: var(--scrim);
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
-  backdrop-filter: blur(18px);
-}
-
-.metric dt {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: var(--label-tracking);
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.metric dd {
-  margin: var(--sp-3) 0 0;
-  font-size: clamp(28px, 3.4vw, 40px);
-  font-weight: 800;
-  line-height: 1.02;
-  letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums;
-}
-
-.metric dd .unit {
-  margin-left: 6px;
-  font-size: var(--text-sm);
-  font-weight: 500;
-  letter-spacing: 0;
-  color: var(--muted);
-}
-
 /* -------------------------------------------------------------------- boot */
 
 /* The first thing anybody sees: a hairline that fills, not a spinner. */
@@ -1029,18 +990,6 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
 
 /* --------------------------------------------------------------------- otp */
 
-.codebox { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); margin: var(--sp-3) 0 var(--sp-4); }
-
-.code {
-  padding: 8px 14px;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: 0.26em;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--panel-2);
-}
-
 /* Six-box OTP entry: one digit per box, no autofill surface. */
 .otprow {
   display: flex;
@@ -1056,7 +1005,7 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
   font-size: 24px;
   font-weight: 700;
   caret-color: var(--accent);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-control);
   border-radius: var(--radius-sm);
   background: var(--panel-2);
 }
@@ -1179,15 +1128,176 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
 
 @media (max-width: 640px) {
   .card,
-  .gunit,
+  .studio-panel,
   .sidebar,
   .auth { backdrop-filter: blur(10px); }
+}
+
+/* -------------------------------------------------------------- the studio */
+
+/*
+ * Three panels, one definition.
+ *
+ * The studio is the centre of the authoring surface: the JSON somebody edits, the
+ * XLSForm sheets the download writes, and the form as it opens from a link, side by
+ * side and simultaneous. Three columns on a wide screen, because the whole point is
+ * watching all three move together as the definition changes. They collapse to a
+ * stack rather than to a tab bar on smaller screens for the same reason: a stack a
+ * person scrolls is still three live views, while tabs would let two of them be
+ * forgotten.
+ */
+.studio {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-4);
+  align-items: start;
+}
+
+.studio-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  backdrop-filter: blur(18px);
+}
+
+.studio-head {
+  padding: var(--sp-4) var(--sp-4) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.studio-head h2 {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--text-lg);
+}
+
+.studio-head .eyebrow { margin-bottom: var(--sp-2); }
+.studio-head p { margin: 0; }
+
+.studio-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-4);
+}
+
+/* The source panel is a code surface: the monospace face and a real line height. */
+.studio-body textarea {
+  min-height: 320px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+/*
+ * Liveness, as a dot.
+ *
+ * The colour is the glance and the sentence beside it is the fact, which is the same
+ * rule the rest of the product follows: a state is never signalled by colour alone.
+ */
+.studio-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--bad);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--bad) 70%, transparent);
+}
+
+.studio-dot[data-state='ok'] {
+  background: var(--ok);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ok) 70%, transparent);
+}
+
+/* A survey sheet is seventeen columns wide and must not stretch the page. */
+.sheet-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.sheet {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sheet th,
+.sheet td {
+  padding: 7px 10px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+
+.sheet th {
+  position: sticky;
+  top: 0;
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--panel-solid);
+}
+
+.sheet td {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.sheet tbody tr:last-child td { border-bottom: 0; }
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * The preview's frame.
+ *
+ * The markup inside it is the respondent's own — `.collect` and everything under it
+ * comes from the component the collection page renders — so the only thing this rule
+ * changes is the container it sits in: the collection page centres an 820px column
+ * on a phone-sized viewport, and a panel is neither.
+ */
+.preview-frame {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-deep);
+}
+
+.preview-frame .collect {
+  width: 100%;
+  padding: var(--sp-5);
+}
+
+.preview-frame .collect h1 { font-size: clamp(20px, 2.6vw, 28px); }
+.preview-frame .collect .card { padding: var(--sp-4); }
+
+@media (max-width: 1240px) {
+  .studio { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+
+  /* The form goes under both, full width: it is the one that needs the room. */
+  .studio-panel:last-child { grid-column: 1 / -1; }
 }
 
 /* ---------------------------------------------------------------- responsive */
 
 @media (max-width: 1040px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
+
+  .studio { grid-template-columns: minmax(0, 1fr); }
+  .studio-panel:last-child { grid-column: auto; }
 
   .sidebar {
     position: static;
@@ -1201,7 +1311,7 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
 
   .appbar { padding: var(--sp-3) var(--gutter); }
   .screen-head { gap: var(--sp-4); }
-  .metrics { grid-template-columns: 1fr 1fr; }
-  .metric { padding: var(--sp-4); }
+  /* The studio is a stack by now, so its panels lose the padding a wide column has. */
+  .studio-body { padding: var(--sp-3); }
   th, td { padding: 10px 10px; }
 }

@@ -18,7 +18,8 @@ there is no signal** — and exporting data that is ready for analysis rather th
 [![Version](https://img.shields.io/badge/version-0.1.0-38bdf8?style=flat-square&labelColor=0f172a)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-34d399?style=flat-square&labelColor=0f172a)](LICENSE)
 [![Build](https://img.shields.io/badge/build-clean-34d399?style=flat-square&labelColor=0f172a)](#-testing)
-[![Tests](https://img.shields.io/badge/tests-169%20passing-34d399?style=flat-square&labelColor=0f172a)](#-testing)
+[![CI](https://img.shields.io/badge/CI-lint_·_types_·_tests_·_budgets-34d399?style=flat-square&labelColor=0f172a)](#enforced-on-every-push)
+[![Tests](https://img.shields.io/badge/tests-253%20passing-34d399?style=flat-square&labelColor=0f172a)](#-testing)
 [![Typecheck](https://img.shields.io/badge/typecheck-0%20errors-38bdf8?style=flat-square&labelColor=0f172a)](#-testing)
 [![Lint](https://img.shields.io/badge/lint-0%20errors-a78bfa?style=flat-square&labelColor=0f172a)](#-testing)
 [![Production](https://img.shields.io/badge/production-live-22c55e?style=flat-square&labelColor=0f172a&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app/health)
@@ -194,7 +195,7 @@ server value, retains the device value in `device_value`, and records `device_se
 <td valign="top" width="50%">
 
 ### 🔐 Multi-tenancy PostgreSQL can defend
-Least-privilege `app_role`, `FORCE ROW LEVEL SECURITY` on nine tenant tables, tenant context set with
+Least-privilege `app_role`, `FORCE ROW LEVEL SECURITY` on fourteen tenant tables, tenant context set with
 `set_config('app.org_id', …, true)` inside the transaction. The API **refuses to start in production**
 on a connection that can bypass RLS.
 
@@ -256,7 +257,96 @@ cache to go stale and no nightly job to wait for.
 
 </td>
 </tr>
+<tr>
+<td valign="top" width="50%">
+
+### 🧭 Quality you can argue with
+Speeders, straight-liners, duplicate submissions and a flag a person raises by hand all land in one
+queue — each row carrying the **evidence** the detector recorded (the duration against the threshold,
+the value that repeated, the response it duplicates) and the decision that closed it, with who made
+it, when and why. The duplicate scan is an organiser's act rather than a submission-time one,
+because a respondent's transaction may only see its own response.
+
+<sub>`response_flag` · `GET /orgs/:orgId/flags` · `PATCH …/flags/:flagId` · `POST …/flags/scan`</sub>
+
+</td>
+<td valign="top" width="50%">
+
+### 🔌 A machine surface that denies by default
+An API key is a restricted session for the person who minted it, so it inherits the tenant boundary the
+database already enforces and dies with their membership. It reaches a route only when that route
+*declares* the capability it needs, which makes the machine surface a list you can read. Webhooks are
+enqueued in the same transaction as the event they describe and signed over a timestamp and the body,
+so a receiver can prove a delivery is ours and cannot be replayed.
+
+<sub>`Authorization: Bearer ik_…` · `POST /orgs/:orgId/api-keys` · `POST /orgs/:orgId/webhooks` · `X-Inicio-Signature`</sub>
+
+</td>
+<td valign="top" width="50%">
+
+### 🧪 One definition, three live views
+Open a form and the studio shows the same definition three ways at once: the JSON the API stores,
+the XLSForm sheets that `Download .xlsx` writes, and the form a respondent opens from a
+distribution link. Type a character and all three move, because all three read one parsed object —
+no round trip, no cache, nothing to go stale.
+
+<sub>`apps/web/src/studio.tsx` · `xlsFormSheets` · `validateForm` · `evaluateForm`</sub>
+
+</td>
+</tr>
+<tr>
+<td valign="top" width="50%">
+
+### 🎯 The preview is the form, not a picture of it
+The panel on the right is rendered by `apps/web/src/respondent.tsx` — the component the collection
+page uses — over the same definition, evaluated by the same engine the server re-checks a
+submission with. A question a relevance rule hides is hidden in the preview for the same reason it
+is hidden on the phone, and a test asserts the two render *field-for-field identical markup*, so
+this cannot quietly become a lookalike.
+
+<sub>`respondent.tsx` · shared by `collect.tsx` and `studio.tsx`</sub>
+
+</td>
+<td valign="top" width="50%">
+
+### 🧩 The workbook on screen is the workbook you download
+The middle panel does not re-derive an XLSForm from the definition: it calls `xlsFormSheets`, the
+function `exportXlsForm` zips, and shows those rows with their own headings, sheet by sheet, plus
+everything the adapter had to normalise. A test holds the panel's rows to the rows inside the
+written file, so what is on screen and what a spreadsheet opens cannot drift apart.
+
+<sub>`packages/engine/src/adapters/xlsform.ts` · asserted in `xlsform.test.ts`</sub>
+
+</td>
+</tr>
 </table>
+
+### How the three panels are wired
+
+```
+                    ┌─────────────────────────────┐
+                    │  the definition (JSON text) │
+                    └──────────────┬──────────────┘
+                          JSON.parse │  per keystroke
+                    ┌──────────────┴──────────────┐
+                    │      one parsed definition   │
+                    └──┬───────────┬────────────┬──┘
+        xlsFormSheets  │           │ validateForm│  evaluateForm(form, answers)
+                       ▼           ▼            ▼
+              ┌─────────────┐ ┌───────────┐ ┌──────────────────┐
+              │ XLSForm      │ │ analyser  │ │ the respondent's │
+              │ sheets       │ │ findings  │ │ form (preview)   │
+              └─────────────┘ └───────────┘ └──────────────────┘
+                       │                             │
+        the same rows the .xlsx is zipped from       the same component the
+        (`Download .xlsx` writes them verbatim)       collection page renders
+```
+
+Nothing in that picture is a server call, a cache or a fixture. The definition in the middle is the
+text in the left panel, parsed in the browser by the engine module the API also runs; the only
+request the screen makes is the one that loaded the version it is showing. When the JSON is half
+typed the panels say what it is — "not valid JSON", "`questions` is not an array" — and keep
+standing, rather than showing the definition they used to have.
 
 <details>
 <summary><b>Also in the box</b> — the smaller things that make it usable</summary>
@@ -268,14 +358,19 @@ cache to go stale and no nightly job to wait for.
 | 🚪 **One origin by default** | The SPA and the API ship as one Vercel project, so the session cookie is host-only and there is no cross-site login story to debug. Netlify mirrors the SPA and proxies the API to the same origin. |
 | 🧾 **Consent with evidence** | `terms_acceptance` stores policy version, text hash, timestamp, IP and user agent, append-only and tenant-scoped. |
 | 🕵️ **Audit trail** | Material writes (membership, role, invitation, publish, import, export) are recorded as org-scoped audit rows. |
-| 🖥️ **Live analyser** | The console validates the definition as you type and reports errors and warnings with the question name in them. |
+| 🖥️ **Live analyser** | The studio validates the definition on every keystroke — not on save — and reports errors and warnings with the question name in them, in the panel you are typing into. |
 | 📡 **An honest live indicator** | The console header says whether the push channel is connected, and the screens fall back to a timer only when it is not. "Live" is a claim about the connection, not a style. |
+| 🔌 **An integration surface, not a token** | An API key is a restricted session for its creator: same tenant boundary, narrower reach, dead the moment they leave the team. Revocation is not a second mechanism that can drift. |
+| 🔔 **Webhooks that survive a bad receiver** | Enqueued in the publishing transaction, signed over a timestamp and the body, retried with backoff, and self-disabling with a stated reason after five consecutive failures — plus a **Send test** button that reports what the receiver actually answered. |
+| 🧾 **A quality queue, not a score** | Speeding, straight-lining, duplicates and findings raised by hand, each row showing the evidence behind it and recording who decided what, when and why. |
 | 🌌 **A public surface with nothing invented on it** | Every figure on the landing page is read in that request from `GET /api/v1/public/summary`, and the scene is decoration: it is `aria-hidden`, it stops when the tab is hidden or the stage has scrolled past, and the page is complete with no WebGL at all. |
 | 🪞 **One world, not two** | The signed-in app wears the same palette, the same type scale and the same glass as the landing page, over an ambient light field drawn from the product's own node-and-filament structure. Every figure on a console screen is live, every panel arrives with the same entrance, and the whole shell is complete with no canvas and under `prefers-reduced-motion`. |
 | 🏫 **A real template** | The 2026 school ranking survey — the project this platform grew out of — ships as template #1, not as the product. |
 | 📶 **Honest connection state** | "No connection. Your answers are saved on this device and will be sent automatically", plus a **Send now** button and the timestamp the server has everything up to. |
 | 🐳 **A self-hosted profile** | Compose brings up PostgreSQL 16, Valkey, MinIO, ClamAV and Mailpit, with Caddy in front. |
 | 🧪 **Two live harnesses** | 33 end-to-end consumer checks and 28 offline-sync checks drive a real database through the same origin the browser uses. |
+| 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 253 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
+| ⚖️ **Budgets, not intentions** | The build fails if the critical path grows past 80 kB gzipped, if any chunk passes 150 kB, if the WebGL scene *or the XLSForm writer* leaks out of its lazy chunk, if a measured colour pair drops under 4.5:1, or if `axe-core` finds a violation on the public page or the consent gate. |
 
 </details>
 
@@ -291,10 +386,10 @@ cache to go stale and no nightly job to wait for.
 <tr>
 <td valign="top" width="50%" align="center">
 
-<img src="./docs/assets/shell-console.svg" alt="The Inicio console: forms list, JSON definition editor, live analyser findings and version status" width="100%" />
+<img src="./docs/assets/shell-console.svg" alt="The Inicio console: forms list, and the three-panel studio — the JSON definition, the XLSForm sheets a download writes, and the respondent's form as a live preview" width="100%" />
 
-**🖥️ Authoring console — desktop**
-<br /><sub>Forms list, definition editor, live analyser, version state, distribution actions</sub>
+**🖥️ Authoring studio — desktop**
+<br /><sub>One definition, three live views: JSON, the workbook, and the form a respondent opens</sub>
 
 </td>
 <td valign="top" width="50%" align="center">
@@ -343,6 +438,14 @@ cache to go stale and no nightly job to wait for.
 </td>
 </tr>
 </table>
+
+<br />
+
+<div align="center">
+<img src="./docs/assets/studio-flow.svg" alt="One definition read three ways with no server round trip and no cache: xlsFormSheets builds the workbook the download writes, validateForm produces the analyser's findings, and evaluateForm runs the respondent's form in the same component the collection page renders" width="100%" />
+</div>
+
+<div align="center"><sub><b>How the studio is wired.</b> The three panels are not three screens and not three requests: they are one parsed definition read three ways, in the browser, as it is typed. The arrows are function calls from <code>@inicio/engine</code> — the same module the API runs — which is why the preview cannot disagree with the server and the sheet viewer cannot disagree with the file.</sub></div>
 
 <details>
 <summary><b>One more screen: XLSForm import</b></summary>
@@ -577,8 +680,8 @@ Three consequences worth stating plainly:
 <br />
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL_16-4169e1?style=flat-square&labelColor=0f172a&logo=postgresql&logoColor=white)
 ![Row level security](https://img.shields.io/badge/row_level_security-enforced-34d399?style=flat-square&labelColor=0f172a)
-![Migrations](https://img.shields.io/badge/migrations-0001_to_0009-94a3b8?style=flat-square&labelColor=0f172a)
-<br /><sub>Nine forward-only SQL migrations. No ORM: typed repository functions, parameterised queries, and RLS underneath all of them.</sub>
+![Migrations](https://img.shields.io/badge/migrations-0001_to_0010-94a3b8?style=flat-square&labelColor=0f172a)
+<br /><sub>Ten forward-only SQL migrations. No ORM: typed repository functions, parameterised queries, and RLS underneath all of them.</sub>
 
 **☁️ Cloud & delivery**
 <br />
@@ -730,9 +833,10 @@ Open **http://localhost:3000**, request a one-time code, read it in Mailpit, and
 ```bash
 pnpm lint        # ESLint 9, flat config
 pnpm typecheck   # tsc across four workspace packages
-pnpm test        # 169 tests
+pnpm test        # 253 tests
 pnpm coverage    # v8 coverage, per package
 pnpm build       # engine -> api -> web
+pnpm budgets     # the built bundle, gzipped, against its ceilings
 ```
 
 </td>
@@ -822,16 +926,18 @@ Inicio
 │   │   ├── scripts/bootstrap-owner.ts   the first owner of an organisation
 │   │   └── test                     API tests, including the sync-contract suite
 │   └── web                          React 18 + Vite 6 client
-│       ├── src/App.tsx              the console: forms, builder, responses, admin
+│       ├── src/App.tsx              the console: forms, builder, responses, quality, admin
+│       ├── src/studio.tsx           the three-panel studio, in its own chunk (JSON · XLSForm · preview)
+│       ├── src/respondent.tsx       the respondent's form, rendered once for the collection page and the studio
 │       ├── src/landing.tsx          the public page: live figures, claims with evidence
 │       ├── src/immersive/instrument.ts   the WebGL scene, its own chunk and its own quality tiers
 │       ├── src/realtime.ts          EventSource client: coalescing, backoff, the offline verdict
 │       ├── src/router.ts            the whole router: six paths and popstate
-│       ├── src/collect.tsx          the respondent renderer (offline-first)
+│       ├── src/collect.tsx          the collection page: definition cache, drafts, outbox (offline-first)
 │       ├── src/offline              IndexedDB store, outbox queue, pure sync core
 │       ├── public/sw.js             service worker: cache the shell, never the data
 │       ├── public/manifest.webmanifest and icons   installable app
-│       └── test                     offline core, service worker, realtime client and landing page tests
+│       └── test                     offline core, service worker, realtime, studio, contrast and landing tests
 ├── packages
 │   ├── engine                       canonical form model and everything derived from it
 │   │   ├── src/expression.ts        parser and validator for the expression grammar
@@ -941,7 +1047,9 @@ http://localhost:3001/api/v1               # local API
 http://localhost:3000/api/v1               # through the Vite proxy — the same origin the browser uses
 ```
 
-The contract lives in [`specs/openapi.yaml`](specs/openapi.yaml).
+The contract lives in [`specs/openapi.yaml`](specs/openapi.yaml), and it is **held to the code**:
+`apps/api/test/openapi.test.ts` parses it, reads the route registrations out of the source, and fails
+the suite for a route with no entry *and* for an entry whose route is gone.
 
 ### Authentication
 
@@ -949,20 +1057,33 @@ The contract lives in [`specs/openapi.yaml`](specs/openapi.yaml).
 |---|---|---|
 | Console (authoring, admin, exports) | `sid` session cookie | Obtained from a one-time code. `httpOnly`, `Secure`, `SameSite=Lax`, host-only — which is why the SPA and the API share an origin. |
 | Collection (respondents) | Opaque token in the path | `POST /collect/:token/responses`. The token is 32 CSPRNG bytes returned **once** and stored only as a hash. No account, no cookie. |
-| Everything else | — | There is no API-key surface yet; programmatic keys are on the [roadmap](#-roadmap). |
+| Machine clients (an export job, a QC pipeline, a house dashboard) | `Authorization: Bearer ik_…` | An API key is a **restricted session for its creator**: it acts only inside the organisation it was issued for, only at a route that declares one of its scopes, and it stops working the moment that person leaves the team. The secret is 32 random bytes, returned once by the create call and stored only as `sha256(secret)`. |
 
 **Status vocabulary** — errors are machine-readable and stable, not prose:
 
 | Code | Errors |
 |---|---|
 | `400` | `invalid_request`, `unknown_format`, `acceptance_required` |
-| `401` | `unauthenticated`, `invalid_otp` (`expired`, `mismatch`, `attempts_exceeded`) |
-| `403` | `forbidden`, `read_only_role`, `terms_required` |
+| `401` | `unauthenticated`, `invalid_api_key` (unknown, expired or revoked), `invalid_otp` (`expired`, `mismatch`, `attempts_exceeded`) |
+| `403` | `forbidden`, `read_only_role`, `terms_required`, `key_not_permitted` (this route is session-only), `insufficient_scope` (naming the scope the key lacks), `key_org_mismatch` (a key pointed at another organisation) |
 | `404` | `not_found`, `link_not_found`, `unknown_template` — **a non-member gets `404`, not `403`**, because whether an organisation exists is not a member's business to probe |
 | `409` | `already_submitted`, `client_id_conflict`, `not_published`, `version_immutable`, `version_archived`, `last_owner` |
 | `410` | `link_expired`, `link_already_used`, `link_exhausted`, `link_inactive` |
 | `422` | `invalid_definition` — publication is where authoring errors become a blocked publish instead of a broken form mid-interview |
 | `501` | Export formats that are deliberately not implemented yet (`.sav`, `.dta`), returned **with a reason** |
+
+**Machine access is deny-by-default, and that is the design.** A key reaches a route only when that route *declares* the capability it needs, so the machine surface is a list you can read rather than the absence of a check you cannot see. The scopes, and what each one buys:
+
+| Scope | Routes it opens |
+|---|---|
+| `forms:read` | `GET /forms`, `GET /forms/:formId`, `GET /forms/:formId/versions/:versionId`, `GET /forms/:formId/xlsform` |
+| `responses:read` | `GET /forms/:formId/responses` |
+| `analytics:read` | `GET /forms/:formId/analytics` |
+| `responses:export` | `GET /forms/:formId/responses/export` |
+| `flags:read` | `GET /orgs/:orgId/flags` |
+| `flags:write` | `PATCH /orgs/:orgId/flags/:flagId`, `POST …/flags/scan`, `POST …/responses/:responseId/flags` |
+
+`GET /api-scopes` marks each scope with whether a route declares it today, and the console will not offer one that no route declares — because a key granted only vocabulary is a key that can call nothing. Three consequences worth stating, because each one is a property of the route table rather than a promise: a key can never mint or revoke another key; it can never publish a form or move a distribution link; and it can never change where an organisation's data is sent. It also only ever reads its own organisation — a key for A is `403 key_org_mismatch` against B's form even when its creator is a member of both, and `GET /forms` is narrowed to that organisation in SQL rather than filtered afterwards.
 
 ### Endpoints
 
@@ -1012,14 +1133,14 @@ The contract lives in [`specs/openapi.yaml`](specs/openapi.yaml).
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| `GET` / `POST` | `/forms` | cookie + role | List forms (with published version and response state), or create one |
-| `GET` / `PATCH` | `/forms/:formId` | cookie + role | Read a form with its versions, or update it |
+| `GET` / `POST` | `/forms` | cookie + role · key `forms:read` (GET only, own organisation only) | List forms (with published version and response state), or create one |
+| `GET` / `PATCH` | `/forms/:formId` | cookie + role · key `forms:read` (GET only) | Read a form with its versions, or update it |
 | `POST` | `/forms/:formId/versions` | member+ | Create a new draft version |
-| `GET` / `PUT` | `/forms/:formId/versions/:versionId` | member+ | Read or replace a **draft** definition |
+| `GET` / `PUT` | `/forms/:formId/versions/:versionId` | member+ · key `forms:read` (GET only) | Read or replace a **draft** definition |
 | `POST` | `/forms/:formId/versions/:versionId/publish` | admin+ | Publish — validated first, then frozen |
 | `POST` | `/forms/:formId/versions/:versionId/restore` | admin+ | Fork an old version into a **new** draft |
 | `POST` | `/forms/:formId/import` | member+ | Compile an XLSForm workbook and report what it could not carry |
-| `GET` | `/forms/:formId/xlsform` | member+ | Export the form back to XLSForm |
+| `GET` | `/forms/:formId/xlsform` | member+ · key `forms:read` | Export the form back to XLSForm |
 | `GET` | `/templates` | cookie | Template library (the school ranking survey is #1) |
 
 </details>
@@ -1037,10 +1158,36 @@ The contract lives in [`specs/openapi.yaml`](specs/openapi.yaml).
 | `POST` | `/collect/:token/responses` | token | **Start or resume by device UUID.** `201` when created, `200` with the same id when retried |
 | `GET` / `PATCH` | `/collect/:token/responses/:responseId` | token | Read or sync answers (`{ answers, base }`) |
 | `POST` | `/collect/:token/responses/:responseId/submit` | token | Submit; a retry answers `409 already_submitted` |
-| `GET` | `/forms/:formId/responses` | cookie + role | Response list with per-response conflict counts |
-| `GET` | `/forms/:formId/analytics` | cookie + role | Live tallies, status counts, conflicts, daily activity |
-| `GET` | `/forms/:formId/events` | cookie + role | The push channel: a server-sent event stream naming the aggregates that changed, coalesced per tick |
-| `GET` | `/forms/:formId/responses/export?format=csv\|xlsx\|json` | cookie + role | Exports; `csv` returns a zip bundle with data, codebook, value labels and missing codes |
+| `GET` | `/forms/:formId/responses` | cookie + role · key `responses:read` | Response list with per-response conflict counts |
+| `GET` | `/forms/:formId/analytics` | cookie + role · key `analytics:read` | Live tallies, status counts, conflicts, daily activity |
+| `GET` | `/forms/:formId/events` | cookie + role | The push channel: a server-sent event stream naming the aggregates that changed, coalesced per tick. Session-only, because `EventSource` cannot send an `Authorization` header |
+| `GET` | `/forms/:formId/responses/export?format=csv\|xlsx\|json` | cookie + role · key `responses:export` | Exports; `csv` returns a zip bundle with data, codebook, value labels and missing codes |
+
+</details>
+
+<details>
+<summary><b>Integrations: API keys, webhooks and the quality queue</b></summary>
+
+<br />
+
+| Method | Path | Credential | Scope | Purpose |
+|---|---|---|---|---|
+| `GET` | `/api-scopes` | cookie | — | The scope vocabulary, with a flag on each saying whether a route declares it today |
+| `GET` / `POST` | `/orgs/:orgId/api-keys` | cookie | — | List keys (**never** a secret), or mint one: the secret is in the create response and nowhere else, because only its hash exists |
+| `DELETE` | `/orgs/:orgId/api-keys/:keyId` | cookie | — | Revoke. The next request with it answers `401 invalid_api_key`; the second revoke answers `404` |
+| `GET` | `/webhook-events` | cookie | — | The event catalogue and what each event means |
+| `GET` / `POST` | `/orgs/:orgId/webhooks` | cookie | — | List endpoints with their pending and failed counts, or create one — **HTTPS only**, enforced by a database constraint, with a signing secret returned once |
+| `PATCH` / `DELETE` | `/orgs/:orgId/webhooks/:endpointId` | cookie | — | Change, pause, re-enable or delete an endpoint (and its history) |
+| `GET` | `/orgs/:orgId/webhooks/:endpointId/deliveries` | cookie | — | Delivery history: status, attempts, the receiver's status, the error |
+| `POST` | `/orgs/:orgId/webhooks/:endpointId/test` | cookie | — | Sign and send a synthetic event **now** and report the receiver's real answer, including its failure status |
+| `POST` | `/orgs/:orgId/webhooks/deliveries/:deliveryId/retry` | cookie | — | Requeue one delivery and drain, so "did it work this time" is the reply |
+| `GET` | `/flag-kinds` | cookie or key | — | The flag vocabulary and the thresholds, in words |
+| `GET` | `/orgs/:orgId/flags` | cookie or key | `flags:read` | The queue (`status`, `formId`, `limit`) with counts by status and by kind |
+| `PATCH` | `/orgs/:orgId/flags/:flagId` | cookie or key | `flags:write` | Resolve or dismiss, with the note that records **why** |
+| `POST` | `/orgs/:orgId/forms/:formId/flags/scan` | cookie or key | `flags:write` | Detect exact duplicate submissions. Idempotent: a finding is recorded once, however often you scan |
+| `POST` | `/orgs/:orgId/forms/:formId/responses/:responseId/flags` | cookie or key | `flags:write` | Raise a flag by hand, with a severity and a note |
+
+A webhook delivery carries `X-Inicio-Timestamp` and `X-Inicio-Signature: sha256=<HMAC-SHA256 of "${timestamp}.${body}">`, signed with the endpoint's own secret — the construction Stripe and GitHub use, and for the same reason: the timestamp is inside the signed material, so a captured request cannot be replayed later. Verify it against the raw body, before parsing. Deliveries are enqueued **in the same transaction as the event they describe**, which is what makes an event exactly-once with the data: a publish that committed has delivery rows and a publish that rolled back has none. Delivery itself is at-least-once against a stable delivery id, and after five consecutive failures an endpoint disables itself and says why, because an endpoint that has failed two dozen times is usually a deleted receiver.
 
 </details>
 
@@ -1277,12 +1424,17 @@ done
 | Path | What it measures | Median | p95 | Notes |
 |---|---|---:|---:|---|
 | `/` (HTML shell) | Edge cache and static shell | **91 ms** | 110 ms | max 160 ms |
-| `/assets/index-*.js` | The whole app: 222.88 kB, **70.87 kB over the wire** | **93 ms** | 113 ms | max 162 ms |
+| `/assets/index-*.js` | The whole app: 222.88 kB, **70.87 kB over the wire**¹ | **93 ms** | 113 ms | max 162 ms |
 | `/assets/landing-*.js` | The landing page, after first paint: 16.20 kB, **5.56 kB over the wire** | **92 ms** | 102 ms | max 105 ms |
 | `/assets/instrument-*.js` | three.js, the landing page only: 533.48 kB, **135.76 kB over the wire** | **92 ms** | 100 ms | max 100 ms |
 | `/api/v1/legal/terms` | Function, **no database round trip** | **92 ms** | 99 ms | max 171 ms |
 | `/api/v1/public/summary` | Function **with** a database round trip, never cached | **395 ms** | 471 ms | one cold start at 1 780 ms in this sample |
 | `/health` | Function **with** a database round trip | **393 ms** | 412 ms | max 420 ms |
+
+<sub>¹ The three asset rows measure the build that was deployed, which predates the integration and
+quality screens; the current tree compiles to 234.8 kB of app and 73.6 kB over the wire (see
+[Bundle size](#bundle-size)), and the *latency* is a property of the host and the request, not of a
+particular hash.</sub>
 
 **The honest reading of that table:** the gap is not between static assets — 222.88 kB of app and
 533.48 kB of three.js cross the wire in the same ~92 ms, because they are served from the edge and the
@@ -1304,17 +1456,21 @@ Generated by `pnpm build` — the entire frontend, with no framework runtime bey
 The console and the landing page are separate chunks, and that separation is the point: three.js is
 only ever fetched by a reader who is looking at the landing page.
 
-| Asset | Raw | Gzip | Loaded by |
-|---|---:|---:|---|
-| `index.html` | 1.74 kB | 0.84 kB | everyone |
-| `index-*.css` (the whole app) | 19.18 kB | 4.87 kB | everyone |
-| `index-*.js` (console, collection, admin, legal) | **222.88 kB** | **70.87 kB** | everyone |
-| `landing-*.css` | 12.39 kB | 3.51 kB | the landing page |
-| `landing-*.js` | 16.20 kB | 5.56 kB | the landing page |
-| `instrument-*.js` (three.js) | 533.48 kB | 135.76 kB | the landing page, after first paint |
+`pnpm budgets` measures every one of these against a ceiling and fails the build when one is crossed, so
+the table below is a budget rather than a report:
 
-The console bundle is 222.88 kB raw, which carries the push channel, the console and the ambient light
-field that makes the signed-in app the same world as the landing page. There is no charting library, no
+| Asset | Raw | Gzip | Budget | Loaded by |
+|---|---:|---:|---:|---|
+| `index.html` | 1.74 kB | 0.84 kB | — | everyone |
+| `index-*.css` (the whole app) | 18.8 kB | 4.8 kB | 7 kB | everyone |
+| `index-*.js` (console, collection, admin, legal) | **234.8 kB** | **73.6 kB** | 80 kB | everyone |
+| `landing-*.css` | 12.1 kB | 3.4 kB | 6 kB | the landing page |
+| `landing-*.js` | 15.8 kB | 5.4 kB | 8 kB | the landing page |
+| `instrument-*.js` (three.js) | 521.0 kB | 132.6 kB | 150 kB | the landing page, after first paint |
+
+The console bundle is 234.8 kB raw, which carries the push channel, the console — including the
+integration, quality and raise-a-finding screens — and the ambient light field that makes the signed-in app the same
+world as the landing page. There is no charting library, no
 UI kit, no state manager and no icon package: the console is hand-built React with CSS custom
 properties, which is why the whole app is smaller than a typical component library's stylesheet. The
 scene is in its own dynamically imported chunk, so a signed-in user heading for the console never
@@ -1327,8 +1483,8 @@ of responses should not be paying for a 3D engine to look at a background.
 
 | Metric | Value |
 |---|---|
-| Migrations | 9, forward-only, `0001` to `0009` |
-| Tables under `FORCE ROW LEVEL SECURITY` | 9 tenant tables, with per-table policies generated at migration time |
+| Migrations | 10, forward-only, `0001` to `0010` |
+| Tables under `FORCE ROW LEVEL SECURITY` | 14 tenant tables, with per-table policies generated at migration time, and the forged-`org_id` isolation test enumerating every one of them |
 | Tenant context | `set_config('app.user_id' \| 'app.org_id', …, true)` — transaction-local, no pooling leak |
 | Production | Neon Postgres, free tier; the app connects as `app_role`, never the owner |
 
@@ -1347,18 +1503,37 @@ than pretending the score is 100. What can be verified today is verifiable: the 
 ```bash
 pnpm lint         # ESLint 9, flat config — 0 errors
 pnpm typecheck    # tsc across engine, api, web and the serverless entry
-pnpm test         # 152 tests
+pnpm test         # 253 tests
 pnpm coverage     # v8 coverage, per package
 pnpm build        # engine -> api -> web
+pnpm budgets      # the built bundle, gzipped, against its ceilings
 ```
 
-### What the 169 tests actually cover
+### What the 253 tests actually cover
 
 | Suite | Tests | Focus |
 |---|---:|---|
-| `packages/engine` | **54** | Expression parsing and evaluation, validation, XLSForm round-trip fixpoint, XLSX read/write, dataset and codebook assembly, every export writer |
-| `apps/api` | **70** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers, and **the push channel over a real socket**: `ready` first, silence while nothing changes, then one coalesced event naming the aggregate that moved, with a 404 and no stream for a form the caller cannot see, plus the public summary: read live, and asserted key by key to carry no tenant data |
-| `apps/web` | **45** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request) and **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure) |
+| `packages/engine` | **55** | Expression parsing and evaluation, validation, XLSForm round-trip fixpoint, XLSX read/write, dataset and codebook assembly, every export writer, and **the workbook the studio shows**: `xlsFormSheets` asserted row by row against the file `exportXlsForm` zips, so the viewer and the download cannot drift |
+| `apps/api` | **103** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers, and **the push channel over a real socket**: `ready` first, silence while nothing changes, then one coalesced event naming the aggregate that moved, with a 404 and no stream for a form the caller cannot see, plus the public summary: read live, and asserted key by key to carry no tenant data, **and the integration surface**: a key whose secret is shown once and stored as a hash, its scope enforced at the route that declares it and *named* when it is missing, a key refused across organisations even though its creator belongs to both, revocation effective on the very next request, an endpoint that disables itself after five consecutive failures, a delivery signature checked against an independent HMAC in the test, a duplicate scan that refuses to record the same finding twice, and **the read scopes**: a key granted `forms:read` reaches the forms list *narrowed to its own organisation*, is `403 key_org_mismatch` on another organisation's form even though its creator belongs to both, and is told it is missing `responses:export` when it tries to export with only `responses:read` |
+| `apps/web` | **95** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request), **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure), **23 measured contrast pairs** taken from the stylesheets themselves, **`axe-core` audits** of the two public surfaces, **the quality queue** (the evidence behind each finding is on the row, a decision carries the reason typed with it and re-reads the list it just changed, dismissing is asserted to be a different outcome from resolving, and a second scan is reported as finding nothing new rather than as doing nothing) and **the integration screen** (the scope catalogue's `enforced` flag genuinely disables a scope no route declares, a key secret is shown once in a read-only field that carries a panel saying so, an `http://` endpoint cannot be added at all, and "send test" reports the receiver's real `500` rather than "sent"), **raising a finding by hand** from a response row (the raise waits for a reason, and "already in the queue" is asserted to read differently from "recorded"), **the definition studio** (the JSON panel is the server's own definition; its rows move the XLSForm sheets and the preview with no request at all, because all three read one object; the sheets are the workbook the download writes; the preview hides a question whose relevance rule says so, renders the two inline choices, sends nothing and stores nothing when it is typed into, and produces *field-for-field identical markup* to the component the collection page renders), and **the shell guard** that keeps the ambient layer and a form field from ever sharing a class name again |
+
+### Enforced on every push
+
+`.github/workflows/ci.yml` runs on a push to `main` and on every pull request. `verify` installs from the
+lockfile, starts a real PostgreSQL 16 service, and runs lint, typecheck, the whole suite, the build and
+`pnpm budgets`. `harnesses` then migrates a database, creates the first owner, starts the API and the web
+server, waits for both to answer, and runs both end-to-end harnesses over the same origin a browser uses —
+so the route from a build to 33 consumer checks and 28 offline-sync checks is exercised on every push,
+with the API and web logs printed when a step fails.
+
+| Check | Fails the build when |
+|---|---|
+| Critical-path JS / CSS | over **80 kB** / **7 kB** gzipped, for everything `index.html` references |
+| Landing JS / CSS | over **8 kB** / **6 kB** gzipped |
+| Any single chunk | over **150 kB** gzipped |
+| The renderer split | a critical chunk contains `WebGLRenderer` or `createInstrument` — what a stray static import of the scene would do |
+| Colour | any of the 23 measured pairs drops below 4.5:1 for text, or 3:1 for a control boundary or the live dot |
+| Accessibility | `axe-core` reports any violation on the landing page or the terms gate |
 
 ### Coverage
 
@@ -1370,8 +1545,8 @@ pnpm --filter @inicio/engine coverage      # one package
 | Package | Statements | Branches | Functions | Lines |
 |---|---:|---:|---:|---:|
 | `packages/engine` | 89.6 % | 81.4 % | 92.9 % | 89.6 % |
-| `apps/api` | 82.2 % | 74.6 % | 88.3 % | 82.2 % |
-| `apps/web` | 11.4 % *(the UI)* · 75.3 % *(the offline core)* | 68.4 % | 57.4 % | 11.4 % |
+| `apps/api` | 85.7 % | 79.9 % | 89.4 % | 85.7 % |
+| `apps/web` | 42.9 % *(the whole app)* · 75.3 % *(the offline core)* | 77.3 % | 52.3 % | 42.9 % |
 
 <sub>**Why the web number is low, stated plainly:** the React components are not unit-tested. They are
 covered by the two live harnesses below, which drive the real product through the same origin the
@@ -1546,7 +1721,9 @@ to review and harder to revert.
 
 ### Pull request process
 
-- [ ] `pnpm lint && pnpm typecheck && pnpm test && pnpm build` all pass locally
+- [ ] `pnpm lint && pnpm typecheck && pnpm test && pnpm build && pnpm budgets` all pass locally — which is
+      exactly what the `verify` job in `.github/workflows/ci.yml` runs, so the same answer arrives either
+      way
 - [ ] New behaviour has a test that fails without your change
 - [ ] `pnpm coverage` does not lower the number for the package you touched
 - [ ] A schema change ships as a new migration **and** a note about its ordering relative to the deploy
@@ -1594,6 +1771,8 @@ ceilings underneath — lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). This is t
 - [x] **Live analytics** recomputed per request, plus per-response conflict counts
 - [x] **Pushed, not polled**: one server-sent event stream per form, coalesced per aggregate, with an honest connection indicator and a timer that only starts when the stream is gone
 - [x] **An immersive public surface**: a WebGL landing page whose every figure is read live from the API, and which is complete and readable without the scene
+- [x] **Quality flags and a flag queue** — speeding, straight-lining, duplicates, and findings raised by hand, each with its evidence and its recorded decision
+- [x] **API keys with scopes, and webhooks** — deny-by-default machine access, HMAC-signed deliveries with retries, and a console screen that shows each secret exactly once
 - [x] **Consent with evidence**, and templates (the 2026 school ranking survey is #1)
 - [x] **A one-origin deployment** with verified tenancy on production
 
@@ -1601,12 +1780,10 @@ ceilings underneath — lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). This is t
 
 - [ ] **File uploads** — object storage with presigned URLs, type and size limits and a scan step; unblocks the honest `image` and `file` question types
 - [ ] **`.sav` / `.dta` export** — the Python `pyreadstat` worker that turns today's `501` into a real file
-- [ ] **Quality flags and a flag queue** — the rule set is specified, the surface is not built
 - [ ] **CI on every push** — lint, typecheck, test, build and the two harnesses, so "verified locally" stops depending on someone remembering
 - [ ] **Backups and one rehearsed restore** — currently *not done*, and the single most important gap
 - [x] **Component tests for the React UI**: the landing page and the realtime client now run in jsdom, so the web coverage number is no longer carried by the harnesses alone
 - [ ] **Accessibility and performance budgets** — an axe/WCAG 2.2 AA pass and a Lighthouse budget checked in CI
-- [ ] **API keys with scopes, and webhooks** — the programmatic integration surface
 - [ ] **A visual builder and logic editor** — the JSON editor is complete; the drag-and-drop surface is not
 
 ### 🧭 Longer horizon
@@ -1693,7 +1870,7 @@ Responses tab shows the count per response. Nothing is overwritten and nothing i
 
 <br />
 
-It is tested rather than asserted. Nine tenant tables carry `ENABLE` **and** `FORCE ROW LEVEL
+It is tested rather than asserted. Fourteen tenant tables carry `ENABLE` **and** `FORCE ROW LEVEL
 SECURITY`, the policies read `membership` rather than trusting a setting, and the test suite forges
 `app.org_id` as the non-superuser `app_role` and proves **zero rows** come back. A non-member gets
 `404` rather than `403` — whether an organisation exists is not a member's business to probe.
@@ -1813,6 +1990,7 @@ Standing on shoulders, in alphabetical order:
 | **Valkey, MinIO, ClamAV and Caddy** | The self-hosted compose profile: cache and queue, object storage, scanning and TLS. |
 | **Zod, `hash-wasm`, `fflate` and `pg`** | Validation, argon2id and SHA-256 in WASM (so there is no native build step), in-memory zip handling, and the PostgreSQL driver. |
 | **Vitest, ESLint and pnpm** | The test runner, the linter and the workspace manager. |
+| **jsdom, `axe-core` and `yaml`** | The test environment that mounts the public surfaces for real, the accessibility audit run against them, and the parser that reads the OpenAPI contract in the test which holds it to the mounted routes. |
 | **shields.io** | The badges in this README. |
 
 And the survey itself: the **2026 school ranking survey** this platform grew out of, whose

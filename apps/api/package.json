@@ -13,7 +13,8 @@
     "coverage": "vitest run --coverage",
     "db:migrate": "tsx src/db/migrate-cli.ts",
     "admin:create": "tsx src/admin/create.ts",
-    "bootstrap:owner": "tsx scripts/bootstrap-owner.ts"
+    "bootstrap:owner": "tsx scripts/bootstrap-owner.ts",
+    "webhooks:drain": "tsx scripts/webhooks-drain.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.1",
@@ -35,6 +36,7 @@
     "fflate": "^0.8.3",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "yaml": "^2.9.1"
   }
 }

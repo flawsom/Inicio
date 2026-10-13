@@ -6,6 +6,8 @@ import { evaluateForm, runExpression, truthy, type FormDefinition } from '@inici
 import { pool } from '../db/pool.js';
 import { sha256Hex } from '../lib/crypto.js';
 import { HttpError, withCollector, type ResolvedLink } from './db.js';
+import { flagSubmission } from './flags.js';
+import { drainAsCollector, emitWebhook } from './webhooks/dispatch.js';
 
 /**
  * Public collection. Nothing here requires a session — the bearer token *is* the
@@ -460,12 +462,43 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
           throw new HttpError(410, 'link_exhausted');
         }
 
-        await client.query(`UPDATE response SET status = $2, submitted_at = now() WHERE id = $1`, [
-          req.params.responseId,
-          status,
-        ]);
+        const { rows: stamped } = await client.query<{ started_at: Date; submitted_at: Date }>(
+          `UPDATE response SET status = $2, submitted_at = now() WHERE id = $1
+           RETURNING started_at, submitted_at`,
+          [req.params.responseId, status],
+        );
+
+        // Quality control runs here because this is the only moment the duration,
+        // the answers and the server's own clock are in one place. The detectors are
+        // ordinary reads of this response, so the collector policies still bound
+        // them: a public link can flag its own submission and nothing else.
+        const timing = stamped[0];
+        if (timing && status === 'submitted') {
+          await flagSubmission(client, {
+            orgId: link.org_id,
+            formId: link.form_id,
+            responseId: req.params.responseId,
+            startedAt: timing.started_at,
+            submittedAt: timing.submitted_at,
+          });
+          // Same transaction as the submission: a response that committed has its
+          // event rows, and a submission that rolled back has none.
+          await emitWebhook(client, link.org_id, 'response.submitted', {
+            formId: link.form_id,
+            responseId: req.params.responseId,
+            status,
+            answered: plan.entries.length,
+            conflicts: plan.conflicts,
+          });
+        }
         return { responseId: req.params.responseId, status, answered: plan.entries.length, conflicts: plan.conflicts };
       });
+
+      // Delivery happens after the response has been written and the respondent is
+      // gone: an integration must never be able to slow down or fail a submission.
+      // A sweep (scripts/webhooks-drain.ts) covers anything this misses, because a
+      // serverless instance may be frozen the moment its response is returned.
+      void drainAsCollector(link.org_id).catch(() => undefined);
 
       await pool.query(`UPDATE dist_invite SET status = 'finished' WHERE dist_link_id = $1 AND status <> 'finished'`, [
         link.id,

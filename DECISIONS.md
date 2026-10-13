@@ -574,3 +574,166 @@ production: the deployed API connects as `app_role` (not superuser, no `BYPASSRL
 account, one organisation, no forms, no responses, no conflicts — the harness removed everything it
 created, and the owner's own terms acceptance is still pending because accepting legal terms is the
 owner's action, not a script's.
+
+## D27 - Integrations and quality control: a key is a narrow session, and a flag is a queue
+
+**What shipped.** `0010_api_keys_webhooks_flags.sql` — API keys with a scope vocabulary, webhook
+endpoints with a durable delivery queue, and `response_flag` with a small explicit rule set. Two of
+those tables (`api_key`, `webhook`, `webhook_delivery`) already existed as **stubs** in `0001`: they
+had a `label`, a `key_hash`, a `url`, a `secret`, and no organisation, so nothing in them could be
+authorised. They are *extended* rather than duplicated, because two tables called "api key" is
+precisely how a schema ends up with two answers to "who may act as this tenant".
+
+**Why a key is bound to a person, not to an organisation.** Every policy in `0003` authorises through
+`membership`; a key that carried only an organisation id would need either a parallel policy branch —
+a second place to get tenancy wrong — or a way around RLS. Bound to its creator, a key inherits exactly
+the boundary a browser session has (same policies, same 404s for foreign rows), and removing that
+person from the team kills the key on the next request. Revocation is therefore not a second mechanism
+that can drift; it is the membership check that already exists. What an operator can inspect
+afterwards is the prefix (`ik_` + 11 characters), never the secret: only `sha256(secret)` exists.
+
+**Why the machine surface is deny-by-default.** `requireActor` refuses a key at any route that does
+not *declare* a scope, and the three refusals are deliberately different sentences: `key_not_permitted`
+("this route is not part of the machine API"), `insufficient_scope` naming the missing scope ("your
+key is real and too narrow"), and `key_org_mismatch` ("this key belongs to another organisation",
+including when its creator happens to be a member of both). "Your key cannot call this" and "your key
+is wrong" are different problems, and conflating them makes an integration undebuggable from outside.
+A consequence worth stating: a key can never mint another key and can never change where an
+organisation's data is sent, because those routes name no scope.
+
+**The scope vocabulary is wider than the surface, and that is now visible rather than implied.** A
+scope is a promise about a capability, not about a route that exists this week — but the console's own
+default was `forms:read` + `responses:read`, which **no route declares**, so the product's own UI was
+minting keys that could call nothing. `GET /api-scopes` now marks each scope with whether a route
+declares it (`ENFORCED_SCOPES`), the console disables the rest *with the reason printed*, and
+`api-keys.test.ts` asserts both the marking and that a key granted only `forms:read` still cannot call
+`/forms`. The gap is documented by a control, not by a sentence in a README that the next person
+edits away.
+
+**Why a delivery is written inside the event's own transaction.** A publish that committed has a
+delivery row per subscribed endpoint; a publish that rolled back has none. That is what makes an event
+exactly-once *with the data*, and it is a property no amount of retry logic can add afterwards.
+Delivery itself is at-least-once against a stable delivery id and an `idempotency_key` of
+`(event, endpoint)`, which is the only honest promise an HTTP client can make. `X-Inicio-Signature` is
+an HMAC over the timestamp and the raw body, so a captured request cannot be replayed, and the test
+verifies it with an **independent HMAC** plus a counter-assertion that a signature over the body alone
+does not match. Five consecutive failures disable the endpoint and record why in words: an endpoint
+that has failed two dozen times is usually a deleted receiver, and retrying it forever is how a queue
+turns into a backlog nobody looks at. HTTPS is a database constraint rather than a route's opinion,
+because the second route that creates an endpoint should not have to remember it.
+
+**Why a flag is a queue and not a score.** A score cannot be argued with, dismissed, or handed to
+somebody. The rule set is small and explicit (`speeding`, `straight_lining`, `duplicate`, `manual`),
+every row carries the evidence the detector recorded — the duration against the threshold, the value
+that repeated, the response it duplicates — and closing one records the decision, the person and the
+note. Dismissing is a distinct outcome from resolving, because "I looked and it is fine" is an answer
+that deserves to be recorded as itself. Speeding and straight-lining are decided in the respondent's
+own transaction, where the duration, the answers and the timestamp are all in one place; duplicates
+need the whole form, which a respondent's transaction may **not** see — the collector policies exist
+precisely to stop a public link reading other responses — so exact-duplicate detection is an organiser's
+`POST …/flags/scan`. A unique index on `(response_id, kind, coalesce(question_id, ''))` makes that
+scan idempotent rather than merely careful.
+
+**A small lie removed while testing it.** The manual-flag route answered `201 { queued: true }` even
+when the unique index refused the insert, so a second identical complaint was answered as if it had
+been recorded. It now returns the row count and answers `200 { queued: false, reason:
+'already_recorded' }`, with the audit row written only when something was actually written. This is the
+same shape as **D18** ("sent" must mean sent): the response said more than the write did, and no test
+was asserting the difference until one was written to.
+
+**The machine surface grew to the read API, which is what it was for.** The first cut of this feature
+wired `flags:*` and nothing else, so four scopes in the vocabulary were promises no route kept: an
+integrator could grant `responses:read` and find the key could not read a response. That is fixed by
+declaring a scope on the routes that already existed — `forms:read` for the form list, one form, a
+version's definition and the XLSForm export; `responses:read`; `analytics:read`; `responses:export` —
+and *not* on the writes. Publishing a form, moving a distribution link, minting another key or
+changing where data is sent all stay session-only, because a machine credential that can publish is a
+different risk from one that can read, and `requireActor` makes that difference a property of the
+route table rather than a habit. Two details are worth keeping: `GET /forms` is narrowed to the key's
+organisation **in SQL** rather than filtered after the read, and the reads whose organisation is only
+known once the row is loaded call `assertActorOrg` then — so a key issued for A is `403
+key_org_mismatch` against B's form even when its creator is a member of both. `GET /api-scopes` reports
+which scopes are live, the console refuses to grant one that is not, and the suite asserts the
+catalogue never runs ahead of the routes: the invariant is that a scope a person can select always
+names a route that checks it.
+
+**And the contract was rewritten, because a stale contract is an unearned claim.** `specs/openapi.yaml`
+described a questionnaire and `admin` surface that has not been mounted since Phase 1 — paths nobody
+can call, documented as though they were verified, and referenced from the README as "the contract".
+It now enumerates the routes `app.ts` actually registers, marks the Phase-1 `/auth` block
+`deprecated`, names the three credentials (session cookie, bearer key, distribution token) and exactly
+which operations each reaches, and states the error vocabulary. Where a handler assembles its response
+inline it says `type: object` rather than inventing fields, on the same principle as `.sav` returning
+`501`: an honest loose schema beats a precise wrong one. **And it is held to the code rather than to a
+memory of the code:** `apps/api/test/openapi.test.ts` reads the file (`yaml`, a dev dependency of the
+API), pulls the `app.<method>('<path>')` registrations out of the route sources with the prefixes
+`app.ts` and `platform/index.ts` actually mount, and compares the two sets *both ways* — a route added
+without an entry fails, and so does an entry kept after its route is gone. It caught two on the first
+run: the invitation routes were documented at `/api/v1/invite/…` while they are mounted at
+`/api/v1/auth/invite/…`. The same test pins the machine surface to the eleven operations a key may
+call, requires the scope each one needs to be *named in its description*, asserts the unauthenticated
+surface as an explicit list rather than a count, and refuses any scope-shaped token that `API_SCOPES`
+does not define. That is what makes "the contract" a claim the suite can lose rather than a document
+that ages quietly; deriving the schemas from Fastify's types would be the next step, and is not done.
+
+**The isolation proof now enumerates every tenant table.** `apps/api/test/sql/platform-rls.sql` forged
+`app.org_id` as the non-superuser `app_role` and asserted zero rows across the nine `0003` tables. The
+list now carries all **fourteen** — `response_conflict`, `response_flag`, `api_key`, `webhook`,
+`webhook_delivery` included — so a table whose isolation is claimed but not enumerated fails the suite
+instead of being forgotten. (The "9 tenant tables" figures in the phase-2 verification records above
+are historical and are left as they were measured.)
+
+## D28 - The studio: one definition, three readers, and the class name that broke a form
+
+**What shipped.** The Builder tab's definition editor was a textarea and a save button: the analyser ran
+when you pressed it, the XLSForm file was a download you could not read, and the form a respondent would
+open was not on the screen at all. It is now `apps/web/src/studio.tsx`, three panels over one definition —
+the JSON the API stores, the XLSForm sheets `Download .xlsx` writes, and the form a respondent opens from
+a distribution link — repainted on every keystroke, in a chunk of its own (5.5 kB gzipped).
+
+**Why the three panels are three readers of one object rather than three screens.** A JSON panel, a
+workbook viewer and a preview are only useful together at the moment they can disagree, and the thing that
+makes them disagree is a copy. So they are not copies: the text in the first panel is parsed once per
+keystroke and the other two read that value through the engine the API also runs (`xlsFormSheets` for the
+sheets, `validateForm` for the findings, `evaluateForm` for the form). The test asserts the property that
+follows from it — after editing the JSON, the request log contains **no request that is not a read** — which
+is a stronger statement than "the panels updated", because it is the statement that they updated without
+asking anybody. The analyser moved into that loop for the same reason: `validateForm` used to run on save,
+and a publish-blocking mistake is cheapest to fix at the keystroke that made it, not at the button that
+found it. Half-typed JSON is a normal state of a textarea, so the panels say what it is ("not valid JSON",
+"`questions` is not an array") and stay standing rather than blanking or, worse, showing the definition
+they used to have.
+
+**Why the preview is the respondent's component and not a picture of it.** The claim a preview makes is
+"this is what they will see". A second renderer that approximates the first is the most expensive way to
+be wrong, because it is checked against the wrong thing by the person best placed to catch the mistake. So
+the form was extracted from `collect.tsx` into `apps/web/src/respondent.tsx`, the collection page renders
+it, and the studio renders it — the only differences are props: the collection page passes the connection
+pill, the device's own saved-at line and a submit button that writes a response; the studio passes a
+`preview` pill and a submit button that is present and `disabled`, because a preview that can write a
+response is not a preview. `studio.test.tsx` mounts both ways and asserts the question blocks are
+**character-for-character identical**, so the day somebody adds a field to the preview and not to the form
+(or the reverse) the suite says so. That test is deliberately about markup rather than about a screenshot:
+markup is what the two call sites actually share.
+
+**Why the workbook viewer is the export minus the zip.** `exportXlsForm` built its three sheets inline and
+then zipped them, so showing a workbook in the browser meant importing the zip writer to draw a table.
+The body moved into `xlsFormSheets(def)` and `exportXlsForm` became a zip around it. Two consequences, both
+wanted: the panel and the file are the same rows by construction rather than by agreement (asserted against
+the written file in `xlsform.test.ts`, modulo the trailing blank cells a spreadsheet cannot store), and the
+console's critical path never sees `fflate` — which is why the studio is 5.5 kB gzipped and the budgets
+check can assert that no critical chunk contains `list_name`, `constraint_message` or `begin_repeat`.
+
+**And a class name broke the whole respondent form, which no existing test could see.** The ambient light
+field behind the signed-in app is a fixed, full-viewport, `z-index: -1`, `pointer-events: none` layer. A
+question in a form is a block inside a card. Both were called `.field`. Every question on every collection
+page was therefore `position: fixed; inset: 0; z-index: -1; pointer-events: none` — stacked at the origin,
+painted behind the card it belonged to, and unable to receive a click. The markup was correct, the API
+answered correctly, the API-level tests and both HTTP harnesses passed: the form a respondent opened was
+simply unusable, and the studios' preview would have shown exactly the same nothing. The lesson is that a
+thin global namespace (a bare class name) is a shared mutable resource between two components that have
+nothing to do with each other, and that a jsdom test cannot catch it because jsdom applies no stylesheet.
+The host is `.ambient` now, and `apps/web/test/shell.test.ts` asserts the *properties* rather than the names:
+the fixed layer keeps its `position: fixed`, and the class a question block wears may set nothing but
+margin — so a future rename on either side cannot put the two back together. It also asserts that the form
+still uses `.field`, because a guard that can be satisfied by renaming the form's class away is not a guard.

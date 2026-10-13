@@ -1,211 +1,2475 @@
+# The API contract, kept honest.
+#
+# Every path below is a route this repository actually registers, at the prefix
+# `apps/api/src/app.ts` mounts it under: `healthRoutes` at `/health`, the Phase-1
+# school auth at `/auth`, and the product (`apps/api/src/platform/*`) at `/api/v1`.
+# A path that is not mounted is not documented here — the previous revision of this
+# file described a questionnaire/admin surface that no longer exists, which is worse
+# than no contract at all, because it is a contract that reads as verified.
+#
+# Response bodies are described as precisely as the handlers allow. Where a handler
+# assembles an object inline and the shape is not fixed by a named type, the schema
+# is left as `type: object` on purpose: an honest loose schema beats a precise wrong
+# one.
 openapi: 3.1.0
+
 info:
-  title: Inicio School Ranking Survey API
-  version: 1.0.0
-servers: [{ url: https://api.inicio.example/v1 }]
-security: [{ sessionCookie: [] }]
-tags: [Auth, Questionnaire, Response, Attachment, Admin, Export]
+  title: Inicio platform API
+  version: 0.1.0
+  description: |
+    A multi-tenant survey platform: authoring, immutable versions, offline-first
+    collection, exports, a push channel, and an integration surface.
+
+    ## Credentials
+
+    There are three, and which one a route accepts is the whole authorisation story:
+
+    * **`cookieAuth`** — the console session (`sid`), obtained from a one-time code.
+      Everything a signed-in person calls uses it, and it is the default for every
+      operation that does not say otherwise.
+    * **`bearerApiKey`** — an API key, `Authorization: Bearer ik_…`. Machine access is
+      **deny-by-default**: a key reaches only the operations that declare a scope and
+      that list `bearerApiKey` in their `security`. Each of those states the scope it
+      needs (`forms:read`, `responses:read`, `responses:export`, `analytics:read`,
+      `flags:read`, `flags:write`). A key at a route that declares no scope is
+      `403 key_not_permitted`; a key missing a declared scope is `403
+      insufficient_scope`, with the missing scope named in the message; a key pointed
+      at another organisation is `403 key_org_mismatch`, even when its creator is a
+      member of both. A key can never mint another key and can never change where an
+      organisation's data is sent, because those routes name no scope.
+      `GET /api/v1/api-scopes` marks each scope with whether a route declares it today.
+    * **The distribution-link token** — the opaque `{token}` path parameter of the
+      `/api/v1/collect/...` operations. Those are `security: []` because the token *is*
+      the authorisation: 32 CSPRNG bytes, returned once when the link is created and
+      stored only as a hash. A collector can see its own response and nothing else, and
+      that boundary is enforced by row-level security rather than by the route.
+
+    ## Errors
+
+    Errors are machine-readable and stable, never prose to be parsed:
+
+    | Status | `error` values |
+    |---|---|
+    | `400` | `invalid_request`, `unknown_format`, `acceptance_required` |
+    | `401` | `unauthenticated`, `invalid_api_key`, `invalid_otp` (`expired`, `mismatch`, `attempts_exceeded`) |
+    | `403` | `forbidden`, `read_only_role`, `terms_required`, `key_not_permitted`, `insufficient_scope`, `key_org_mismatch` |
+    | `404` | `not_found`, `link_not_found`, `unknown_template` — a non-member gets `404`, not `403`, because whether an organisation exists is not a member's business to probe |
+    | `409` | `already_submitted`, `client_id_conflict`, `not_published`, `version_immutable`, `version_archived`, `last_owner`, `terms_version_changed` |
+    | `410` | `link_expired`, `link_already_used`, `link_exhausted`, `link_inactive` |
+    | `422` | `incomplete` (required or invalid answers block submission), `invalid_definition` (a bad publish) |
+    | `501` | `format_not_available` (`.sav`/`.dta`), returned **with a reason** rather than a file that is quietly wrong |
+
+    The terms gate applies to a person, not to a key: an account that has not accepted
+    the current documents can call the authentication, legal and acceptance routes and
+    nothing else (`403 terms_required`). A key can only exist because its creator had
+    accepted them when they minted it.
+
+servers:
+  - url: https://inicio-prjct.vercel.app
+    description: The live deployment. The SPA and the API share one origin, which is why the session cookie is host-only.
+  - url: http://localhost:3001
+    description: The local API (the SPA proxies to it through the same origin in development).
+
+tags:
+  - name: Health
+  - name: Authentication
+  - name: Authentication (Phase 1, legacy)
+  - name: Legal and consent
+  - name: Invitations
+  - name: Organisations and members
+  - name: Forms, versions and publishing
+  - name: Distribution
+  - name: Collection
+  - name: Responses and analytics
+  - name: Exports
+  - name: Integrations
+  - name: Quality
+  - name: Public
+
+security:
+  - cookieAuth: []
 
 paths:
+  /health:
+    get:
+      tags: [Health]
+      operationId: health
+      summary: Liveness, including a real database round trip
+      security: []
+      responses:
+        '200':
+          description: The process is up and the database answered.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: ok }
+                  dbTime: { type: [string, 'null'], format: date-time }
+                required: [status]
+
+  # ---------------------------------------------------------------------------
+  # Phase-1 school authentication. Kept mounted so nothing that was verified stops
+  # working; the platform surface below supersedes it. It is the only place where
+  # `school:` subjects still exist.
+  # ---------------------------------------------------------------------------
   /auth/otp/request:
     post:
-      tags: [Auth]
-      summary: Request OTP to a registered school email
+      tags: [Authentication (Phase 1, legacy)]
+      operationId: legacyRequestOtp
+      deprecated: true
+      summary: Request a one-time code for a registered school contact
+      security: []
       requestBody:
+        required: true
         content:
           application/json:
-            schema: { type: object, required: [email], properties: { email: { type: string, format: email } } }
+            schema:
+              type: object
+              properties: { email: { type: string, format: email } }
+              required: [email]
       responses:
-        '200': { description: OTP sent }
-        '404': { description: Email not invited }
-        '429': { description: Rate limited }
+        '200':
+          description: The code was handed to the mail relay, which is the only place it is.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string, const: sent } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
 
   /auth/otp/verify:
     post:
-      tags: [Auth]
-      summary: Verify OTP, issue session
+      tags: [Authentication (Phase 1, legacy)]
+      operationId: legacyVerifyOtp
+      deprecated: true
+      summary: Exchange a one-time code for a session cookie
+      security: []
       requestBody:
+        required: true
         content:
           application/json:
-            schema: { type: object, required: [email, code], properties: { email: { type: string }, code: { type: string, pattern: '^[0-9]{6}$' } } }
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+                code: { type: string, pattern: '^[0-9]{6}$' }
+              required: [email, code]
       responses:
         '200':
-          description: Session issued
+          description: Signed in. Sets the `sid` cookie.
           content:
             application/json:
-              schema: { type: object, properties: { subject: { type: string } } }
-        '401': { description: Invalid or expired OTP }
+              schema:
+                type: object
+                properties: { subject: { type: string, example: 'school:0f2c…' } }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
 
   /auth/logout:
-    post: { tags: [Auth], responses: { '204': { description: Logged out } } }
+    post:
+      tags: [Authentication (Phase 1, legacy)]
+      operationId: legacyLogout
+      deprecated: true
+      summary: Revoke the session and clear the cookie
+      security: []
+      responses:
+        '204': { description: Revoked. }
 
   /auth/me:
     get:
-      tags: [Auth]
-      summary: Current session subject (Phase 1 addition)
+      tags: [Authentication (Phase 1, legacy)]
+      operationId: legacyMe
+      deprecated: true
+      summary: The subject behind the current session
       responses:
         '200':
-          description: Signed in
+          description: The session subject.
           content:
             application/json:
-              schema: { type: object, properties: { subject: { type: string } } }
-        '401': { description: Not signed in }
+              schema:
+                type: object
+                properties: { subject: { type: string } }
+        '401': { $ref: '#/components/responses/Error' }
 
-  /questionnaire/active:
-    get:
-      tags: [Questionnaire]
-      summary: Active questionnaire config
+  # ---------------------------------------------------------------------------
+  # Platform authentication. Invitation only: an unknown address answers 404
+  # `not_invited` and no account is created.
+  # ---------------------------------------------------------------------------
+  /api/v1/auth/otp/request:
+    post:
+      tags: [Authentication]
+      operationId: requestOtp
+      summary: Request a one-time code
+      description: |
+        Always answers `200 { status }`; an address that cannot get in is a uniform
+        `404 not_invited`, so the route is not an account oracle. The code is delivered
+        by mail and never echoed in the response. `status` is `not_delivered` when the
+        relay refused, and the payload says what the relay said.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { email: { type: string, format: email } }
+              required: [email]
       responses:
         '200':
-          description: Config
+          description: What happened to the message, honestly.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Questionnaire' }
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [sent, not_delivered] }
+                  mail: { $ref: '#/components/schemas/MailStatus' }
+                  delivery: { type: object }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
 
-  /responses/me:
-    get:
-      tags: [Response]
-      summary: Current school's response set
+  /api/v1/auth/otp/verify:
+    post:
+      tags: [Authentication]
+      operationId: verifyOtp
+      summary: Exchange a one-time code for a session cookie
+      description: Only the newest code slot may be verified; an older one answers `invalid_otp expired`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+                code: { type: string, pattern: '^[0-9]{6}$' }
+              required: [email, code]
       responses:
-        '200': { description: Response set, content: { application/json: { schema: { $ref: '#/components/schemas/ResponseSet' } } } }
+        '200':
+          description: Signed in. Sets the `sid` cookie (`httpOnly`, `Secure`, `SameSite=Lax`).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { subject: { type: string, example: 'user:9a71…' } }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
 
-  /responses/me/answers:
+  /api/v1/auth/logout:
+    post:
+      tags: [Authentication]
+      operationId: logout
+      summary: Revoke the session and clear the cookie
+      responses:
+        '204': { description: Revoked. }
+
+  /api/v1/auth/me:
+    get:
+      tags: [Authentication]
+      operationId: me
+      summary: The signed-in account and the organisations it can see
+      responses:
+        '200':
+          description: Identity plus membership-scoped organisations.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      email: { type: string, format: email }
+                      displayName: { type: [string, 'null'] }
+                  organisations:
+                    type: array
+                    items: { $ref: '#/components/schemas/Organisation' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /api/v1/auth/session:
+    get:
+      tags: [Authentication]
+      operationId: session
+      summary: Whether the current session is valid, and who it is
+      responses:
+        '200':
+          description: The session is valid.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      email: { type: string, format: email }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /api/v1/auth/mail-status:
+    get:
+      tags: [Authentication]
+      operationId: mailStatus
+      summary: Whether this deployment can actually send a code
+      description: Public, so it carries only what a visitor can act on. The relay, the transport and the provider's own error text are operational detail and live behind the admin console.
+      security: []
+      responses:
+        '200':
+          description: The public view of mail health.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MailStatus' }
+
+  # ---------------------------------------------------------------------------
+  # Legal and consent. The documents are public: a reader must be able to open the
+  # exact text they are being asked to agree to, before any session exists.
+  # ---------------------------------------------------------------------------
+  /api/v1/legal/terms:
+    get:
+      tags: [Legal and consent]
+      operationId: legalTerms
+      summary: The exact terms text, with its version and hash
+      security: []
+      responses:
+        '200':
+          description: The document as served.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { document: { $ref: '#/components/schemas/LegalDocument' } }
+
+  /api/v1/legal/privacy:
+    get:
+      tags: [Legal and consent]
+      operationId: legalPrivacy
+      summary: The exact privacy text, with its version and hash
+      security: []
+      responses:
+        '200':
+          description: The document as served.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { document: { $ref: '#/components/schemas/LegalDocument' } }
+
+  /api/v1/legal/acceptance:
+    get:
+      tags: [Legal and consent]
+      operationId: legalAcceptance
+      summary: The versions, hashes and checkbox wording the client must display
+      security: []
+      responses:
+        '200':
+          description: What is being asked for, without asking anybody to accept it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  terms: { $ref: '#/components/schemas/DocumentVersion' }
+                  privacy: { $ref: '#/components/schemas/DocumentVersion' }
+                  checkboxText: { type: string }
+
+  /api/v1/auth/terms/status:
+    get:
+      tags: [Legal and consent]
+      operationId: termsStatus
+      summary: Whether this account still has to accept the current documents
+      responses:
+        '200':
+          description: The requirement, and what has been accepted so far.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  required: { type: boolean }
+                  currentVersion: { type: string }
+                  acceptedVersion: { type: [string, 'null'] }
+                  checkboxText: { type: string }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /api/v1/auth/terms/accept:
+    post:
+      tags: [Legal and consent]
+      operationId: acceptTerms
+      summary: Record acceptance, with evidence
+      description: |
+        `accepted` must be literally `true`: a record of acceptance must reflect a
+        deliberate act. The served versions must match what the server holds now, or
+        the answer is `409 terms_version_changed` — accepting a stale version would
+        record agreement to a text nobody is being shown.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                termsVersion: { type: string }
+                privacyVersion: { type: string }
+                accepted: { type: boolean, const: true }
+              required: [termsVersion, privacyVersion, accepted]
+      responses:
+        '200':
+          description: Recorded as an append-only event.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted: { type: boolean }
+                  termsVersion: { type: string }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------------------
+  # Invitations. Single-use, bound to one address and one role, and shown once.
+  # ---------------------------------------------------------------------------
+  /api/v1/auth/invite/{token}:
+    get:
+      tags: [Invitations]
+      operationId: peekInvite
+      summary: Look at an invitation without spending it
+      description: A GET must not consume the link — mail scanners and link previews fetch URLs before a human sees the mail. Used, revoked, expired and never-existed all answer the same way.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The invitation, if it is still pending.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invite:
+                    type: object
+                    properties:
+                      email: { type: string, format: email }
+                      role: { $ref: '#/components/schemas/Role' }
+                      organisation: { type: string }
+                      expiresAt: { type: string, format: date-time }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/auth/invite/redeem:
+    post:
+      tags: [Invitations]
+      operationId: redeemInvite
+      summary: Spend an invitation and join the organisation
+      description: One atomic step that consumes the link, joins with the role the invitation carries (never one supplied by the caller), and issues a fresh session.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { token: { type: string, minLength: 20, maxLength: 200 } }
+              required: [token]
+      responses:
+        '200':
+          description: Joined. Sets the `sid` cookie.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  subject: { type: string }
+                  organisation: { $ref: '#/components/schemas/Organisation' }
+                  role: { $ref: '#/components/schemas/Role' }
+                  termsRequired: { type: boolean }
+        '400': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------------------
+  # Organisations, members, invitations and mail health. Role checks run before the
+  # handler body, and membership is re-read on every request, so removing somebody
+  # takes effect immediately rather than at their next sign-in.
+  # ---------------------------------------------------------------------------
+  /api/v1/orgs:
+    get:
+      tags: [Organisations and members]
+      operationId: listOrganisations
+      summary: The organisations this account belongs to
+      responses:
+        '200':
+          description: Membership-scoped, with form and member counts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  organisations:
+                    type: array
+                    items: { $ref: '#/components/schemas/Organisation' }
+        '401': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Organisations and members]
+      operationId: createOrganisation
+      summary: Create an organisation (the creator becomes its owner)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                slug: { type: string, minLength: 1, maxLength: 60 }
+              required: [name]
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { organisation: { $ref: '#/components/schemas/Organisation' } }
+        '400': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}:
+    get:
+      tags: [Organisations and members]
+      operationId: getOrganisation
+      summary: Read one organisation
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: The organisation.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { organisation: { $ref: '#/components/schemas/Organisation' } }
+        '404': { $ref: '#/components/responses/Error' }
     patch:
-      tags: [Response]
-      summary: Upsert answers (draft save)
+      tags: [Organisations and members]
+      operationId: renameOrganisation
+      summary: Rename an organisation (owner or admin)
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
       requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { name: { type: string, minLength: 1, maxLength: 120 } }
+              required: [name]
+      responses:
+        '200':
+          description: Renamed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { organisation: { $ref: '#/components/schemas/Organisation' } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/members:
+    get:
+      tags: [Organisations and members]
+      operationId: listMembers
+      summary: The roster
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Members with their roles.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  members:
+                    type: array
+                    items: { $ref: '#/components/schemas/Member' }
+        '404': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Organisations and members]
+      operationId: addMember
+      summary: Add a member by email (owner or admin)
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
         content:
           application/json:
             schema:
               type: object
               properties:
-                sectionId: { type: string }
-                answers:
-                  type: array
-                  items: { type: object, properties: { questionId: { type: string }, value: {} } }
+                email: { type: string, format: email }
+                role: { $ref: '#/components/schemas/Role' }
+              required: [email]
       responses:
-        '200': { description: Saved, content: { application/json: { schema: { $ref: '#/components/schemas/ResponseSet' } } } }
+        '201':
+          description: Added.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId: { type: string, format: uuid }
+                  role: { $ref: '#/components/schemas/Role' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 
-  /responses/me/submit:
-    post:
-      tags: [Response]
-      summary: Final submit (validates, locks, emails)
-      responses:
-        '200': { description: Locked, content: { application/json: { schema: { type: object, properties: { uniqueSubmissionId: { type: string }, submittedAt: { type: string, format: date-time } } } } } }
-        '422': { description: Missing required, content: { application/json: { schema: { $ref: '#/components/schemas/ValidationError' } } } }
-
-  /responses/me/attachments:
-    post:
-      tags: [Attachment]
-      summary: Upload attachment (multipart)
+  /api/v1/orgs/{orgId}/members/{userId}:
+    patch:
+      tags: [Organisations and members]
+      operationId: changeMemberRole
+      summary: Change somebody's role (owner or admin)
+      description: Refuses to demote the last owner (`409 last_owner`) rather than leaving an organisation nobody can administer.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/UserId'
       requestBody:
+        required: true
         content:
-          multipart/form-data:
+          application/json:
             schema:
               type: object
-              properties:
-                questionId: { type: string }
-                file: { type: string, format: binary }
+              properties: { role: { $ref: '#/components/schemas/Role' } }
+              required: [role]
       responses:
-        '201': { description: Stored, content: { application/json: { schema: { $ref: '#/components/schemas/Attachment' } } } }
-        '413': { description: Too large }
-        '415': { description: Bad type }
-
-  /attachments/{id}:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  member:
+                    type: object
+                    properties:
+                      user_id: { type: string, format: uuid }
+                      role: { $ref: '#/components/schemas/Role' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
     delete:
-      tags: [Attachment]
-      parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
-      responses: { '204': { description: Deleted } }
+      tags: [Organisations and members]
+      operationId: removeMember
+      summary: Remove a member (owner or admin)
+      description: The last owner cannot be removed (`409 last_owner`).
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '204': { description: Removed. }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
 
-  /admin/schools:
+  /api/v1/orgs/{orgId}/invites:
     get:
-      tags: [Admin]
-      summary: List schools
-      responses: { '200': { description: Schools, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/School' } } } } } }
+      tags: [Invitations]
+      operationId: listInvites
+      summary: List invitations (owner or admin)
+      description: The token hash is never returned — a link exists in the response to its creation and nowhere else.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Invitations, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invites:
+                    type: array
+                    items: { $ref: '#/components/schemas/Invite' }
+        '403': { $ref: '#/components/responses/Error' }
     post:
-      tags: [Admin]
-      summary: Create/import school
+      tags: [Invitations]
+      operationId: createInvite
+      summary: Issue a single-use invitation (owner or admin)
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
       requestBody:
+        required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/School' }
-      responses: { '201': { description: Created } }
+            schema:
+              type: object
+              properties:
+                email: { type: string, format: email }
+                role: { $ref: '#/components/schemas/Role' }
+                expiresInDays: { type: integer, minimum: 1, maximum: 30, default: 7 }
+              required: [email]
+      responses:
+        '201':
+          description: Issued. The token appears here and never again.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invite: { $ref: '#/components/schemas/Invite' }
+                  path: { type: string, example: /invite/8Kd… }
+                  url: { type: string, format: uri }
+                  singleUse: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 
-  /admin/monitor:
+  /api/v1/orgs/{orgId}/invites/{inviteId}:
+    delete:
+      tags: [Invitations]
+      operationId: revokeInvite
+      summary: Revoke an invitation (owner or admin)
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: inviteId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Revoked, effective immediately.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  revoked:
+                    type: object
+                    properties: { id: { type: string, format: uuid } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/projects:
     get:
-      tags: [Admin]
-      summary: Live completion + attachment matrix
-      responses: { '200': { description: Stats, content: { application/json: { schema: { $ref: '#/components/schemas/Monitor' } } } } }
-
-  /admin/attachments/{schoolId}/zip:
-    get:
-      tags: [Admin]
-      summary: Bulk-download all attachments for a school
-      parameters: [{ name: schoolId, in: path, required: true, schema: { type: string, format: uuid } }]
-      responses: { '200': { description: ZIP, content: { application/zip: {} } } }
-
-  /admin/export:
+      tags: [Organisations and members]
+      operationId: listProjects
+      summary: Projects between the organisation and its forms
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Projects with their form counts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  projects:
+                    type: array
+                    items: { $ref: '#/components/schemas/Project' }
+        '404': { $ref: '#/components/responses/Error' }
     post:
-      tags: [Export]
-      summary: Queue an export
+      tags: [Organisations and members]
+      operationId: createProject
+      summary: Create a project
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
       requestBody:
+        required: true
         content:
           application/json:
-            schema: { type: object, properties: { format: { type: string, enum: [csv, xlsx, json, xml, sav, do, kml, geojson, pdf] }, scope: { type: string } } }
-      responses: { '202': { description: Queued, content: { application/json: { schema: { type: object, properties: { jobId: { type: string, format: uuid } } } } } } }
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                slug: { type: string, minLength: 1, maxLength: 60 }
+              required: [name]
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { project: { $ref: '#/components/schemas/Project' } }
+        '400': { $ref: '#/components/responses/Error' }
 
-  /admin/export/{jobId}:
+  /api/v1/orgs/{orgId}/diagnostics/mail:
     get:
-      tags: [Export]
-      parameters: [{ name: jobId, in: path, required: true, schema: { type: string, format: uuid } }]
-      responses: { '200': { description: Job status, content: { application/json: { schema: { type: object, properties: { status: { type: string }, url: { type: string } } } } } } }
+      tags: [Organisations and members]
+      operationId: mailDiagnostics
+      summary: Why mail is, or is not, flowing (owner or admin)
+      description: The technical detail lives here rather than on the login page — an administrator can act on it, an anonymous visitor should not be told which relay refused or why.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Transport status plus the last twenty delivery attempts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { $ref: '#/components/schemas/MailStatus' }
+                  recent:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        template: { type: string }
+                        status: { type: string }
+                        ts: { type: string, format: date-time }
+        '403': { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------------------
+  # Forms, versions and publishing. `forms:read` covers the four read operations
+  # below (including the XLSForm export, which is a definition read); everything
+  # that writes stays session-only.
+  # ---------------------------------------------------------------------------
+  /api/v1/templates:
+    get:
+      tags: [Forms, versions and publishing]
+      operationId: listTemplates
+      summary: The template library, summarised from the real definitions
+      responses:
+        '200':
+          description: Templates that ship with the source.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  templates:
+                    type: array
+                    items: { $ref: '#/components/schemas/Template' }
+
+  /api/v1/forms:
+    get:
+      tags: [Forms, versions and publishing]
+      operationId: listForms
+      summary: List forms, with their published version and response state
+      description: |
+        With an API key this returns only the forms of the key's own organisation.
+        Requires `forms:read` when called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
+      parameters:
+        - name: includeArchived
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+          description: Include archived forms (`includeArchived=true`).
+      responses:
+        '200':
+          description: Forms, newest edit first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  forms:
+                    type: array
+                    items: { $ref: '#/components/schemas/FormSummary' }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Forms, versions and publishing]
+      operationId: createForm
+      summary: Create a form, optionally from a template or a spreadsheet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                orgId: { type: string, format: uuid }
+                name: { type: string, minLength: 1 }
+                slug: { type: string }
+                projectId: { type: [string, 'null'], format: uuid }
+                title: { type: string }
+                definition: { type: object, description: A canonical form definition. }
+                templateId: { type: string, example: school-ranking-2026 }
+                xlsformBase64: { type: string, description: An XLSForm workbook, base64 encoded, compiled on the way in. }
+              required: [orgId, name]
+      responses:
+        '201':
+          description: Created with version 1 as a draft.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  form: { $ref: '#/components/schemas/FormSummary' }
+                  version: { $ref: '#/components/schemas/VersionSummary' }
+                  notes: { type: array, items: { type: object } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/forms/{formId}:
+    get:
+      tags: [Forms, versions and publishing]
+      operationId: getForm
+      summary: One form, with its versions and response counts
+      description: Requires `forms:read` when called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+      responses:
+        '200':
+          description: The form, its versions (newest first) and a count per response status.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  form: { $ref: '#/components/schemas/FormSummary' }
+                  versions:
+                    type: array
+                    items: { $ref: '#/components/schemas/VersionSummary' }
+                  responsesByStatus:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        status: { type: string }
+                        count: { type: integer }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Forms, versions and publishing]
+      operationId: updateForm
+      summary: Update a form
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                archived: { type: boolean }
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { form: { $ref: '#/components/schemas/FormSummary' } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/forms/{formId}/versions:
+    post:
+      tags: [Forms, versions and publishing]
+      operationId: createVersion
+      summary: Create a new draft version
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                definition: { type: object }
+                fromVersionId: { type: string, format: uuid }
+      responses:
+        '201':
+          description: The new draft.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { version: { $ref: '#/components/schemas/VersionSummary' } }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/forms/{formId}/versions/{versionId}:
+    get:
+      tags: [Forms, versions and publishing]
+      operationId: getVersion
+      summary: Read a version's definition
+      description: Requires `forms:read` when called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+        - $ref: '#/components/parameters/VersionId'
+      responses:
+        '200':
+          description: The version.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { version: { $ref: '#/components/schemas/VersionSummary' } }
+        '404': { $ref: '#/components/responses/Error' }
+    put:
+      tags: [Forms, versions and publishing]
+      operationId: replaceVersionDefinition
+      summary: Replace a draft definition
+      description: A published version is immutable (`409 version_immutable`) — edit by making a draft from it. Saving is allowed to be imperfect; errors come back so the builder can show them, and publishing is what enforces them.
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+        - $ref: '#/components/parameters/VersionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { definition: { type: object } }
+              required: [definition]
+      responses:
+        '200':
+          description: Saved, with the analyser's findings.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version: { $ref: '#/components/schemas/VersionSummary' }
+                  warnings: { type: array, items: { type: object } }
+                  errors: { type: array, items: { type: object } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /api/v1/forms/{formId}/versions/{versionId}/publish:
+    post:
+      tags: [Forms, versions and publishing]
+      operationId: publishVersion
+      summary: Publish a version (validated first, then frozen)
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+        - $ref: '#/components/parameters/VersionId'
+      responses:
+        '200':
+          description: Published.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { version: { $ref: '#/components/schemas/VersionSummary' } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '422':
+          description: The definition does not validate. Nothing was published.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/v1/forms/{formId}/versions/{versionId}/restore:
+    post:
+      tags: [Forms, versions and publishing]
+      operationId: restoreVersion
+      summary: Fork an old version into a new draft
+      description: Restoring forks a **new** draft rather than rewriting history.
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+        - $ref: '#/components/parameters/VersionId'
+      responses:
+        '201':
+          description: The new draft.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { version: { $ref: '#/components/schemas/VersionSummary' } }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/forms/{formId}/import:
+    post:
+      tags: [Forms, versions and publishing]
+      operationId: importXlsForm
+      summary: Compile an XLSForm workbook into a draft version
+      description: Reports what it could not carry rather than dropping it silently.
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                xlsformBase64: { type: string }
+                versionId: { type: string, format: uuid }
+              required: [xlsformBase64]
+      responses:
+        '201':
+          description: Imported, with notes.
+          content:
+            application/json:
+              schema: { type: object }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/forms/{formId}/xlsform:
+    get:
+      tags: [Forms, versions and publishing]
+      operationId: exportXlsForm
+      summary: Export a definition back to XLSForm
+      description: Requires `forms:read` when called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+        - name: versionId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+          description: Which version to export. Defaults to the draft if there is one, else the newest.
+      responses:
+        '200':
+          description: The workbook. `x-export-notes` counts what could not be carried.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/forms/{formId}/events:
+    get:
+      tags: [Forms, versions and publishing]
+      operationId: formEvents
+      summary: The push channel — one server-sent event stream per form
+      description: |
+        Session-only, and deliberately so: `EventSource` cannot send an
+        `Authorization` header, so a stream is not part of the machine API. The
+        server sends *which aggregate changed* (`responses`, `analytics`, `links`,
+        `versions`) rather than the data, coalesced per 1.5 s tick; a tick that finds
+        nothing new writes no event at all. The stream ends itself at 50 s with a
+        `recycle` event, inside the hosting function's 60 s cap, so `EventSource`
+        reconnects on a clean boundary.
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+      responses:
+        '200':
+          description: |
+            An event stream. Events are `ready` (the stream is live), `change`
+            (with `aggregates`), and `recycle` (the client should reconnect).
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '404': { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------------------
+  # Distribution links
+  # ---------------------------------------------------------------------------
+  /api/v1/forms/{formId}/links:
+    get:
+      tags: [Distribution]
+      operationId: listLinks
+      summary: The form's distribution links
+      description: 'Session-only: the tokens here are shareable credentials, so they are not part of the machine API.'
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+      responses:
+        '200':
+          description: Links, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  links:
+                    type: array
+                    items: { $ref: '#/components/schemas/DistributionLink' }
+        '404': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Distribution]
+      operationId: createLink
+      summary: Mint a distribution link (admin or owner)
+      description: The token is returned **once** and stored only as a hash.
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                kind: { type: string, enum: [anonymous, single_use, multiple, panel] }
+                label: { type: string }
+                maxUses: { type: [integer, 'null'] }
+                expiresInDays: { type: [integer, 'null'] }
+              required: [kind]
+      responses:
+        '201':
+          description: Created. The token appears here and never again.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  link: { $ref: '#/components/schemas/DistributionLink' }
+                  token: { type: string }
+                  url: { type: string, format: uri }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/forms/{formId}/links/{linkId}:
+    delete:
+      tags: [Distribution]
+      operationId: revokeLink
+      summary: Revoke a link (admin or owner)
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+        - name: linkId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Revoked.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  link: { $ref: '#/components/schemas/DistributionLink' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------------------
+  # Collection. No session: the token in the path is the authorisation, and every
+  # query is confined by the collector policies to one response in one organisation.
+  # ---------------------------------------------------------------------------
+  /api/v1/collect/{token}:
+    get:
+      tags: [Collection]
+      operationId: collectDefinition
+      summary: The published definition a respondent sees
+      description: Authorised by the link token itself, not by a session. Cached by the device for offline use.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CollectToken'
+      responses:
+        '200':
+          description: The link's kind and the published definition.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectDefinition' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
+
+  /api/v1/collect/{token}/responses:
+    post:
+      tags: [Collection]
+      operationId: startResponse
+      summary: Start or resume a response by device UUID
+      description: |
+        When the device supplies its own `clientId`, that id **is** the response id, so
+        a start retried after a dropped connection returns the existing response
+        instead of creating a second one: `201` when created, `200` with the same id
+        when retried. Syncing twice must not duplicate anything.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CollectToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clientId: { type: string, format: uuid, description: The device's stable id for this response. }
+                answers: { type: object, additionalProperties: true }
+                base: { type: object, additionalProperties: true, description: The last server-confirmed answers the device saw, for conflict detection. }
+                embedded: { type: object, additionalProperties: true, description: Opaque panel-link parameters. }
+      responses:
+        '200':
+          description: Resumed an existing response.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectStart' }
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectStart' }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
+
+  /api/v1/collect/{token}/responses/{responseId}:
+    get:
+      tags: [Collection]
+      operationId: resumeResponse
+      summary: Read the saved answers, so an abandoned interview is recoverable
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CollectToken'
+        - $ref: '#/components/parameters/ResponseId'
+      responses:
+        '200':
+          description: The response's status and answers.
+          content:
+            application/json:
+              schema: { type: object }
+        '404': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [Collection]
+      operationId: syncResponse
+      summary: Partial save with conflict detection
+      description: |
+        Decided per question against `base`: a device-only change wins, a server-only
+        change wins, and a diverging change stores the server's value **and** keeps the
+        device's value beside it in `device_value`, recording the disagreement. A hidden
+        question is stored as `null` rather than keeping a stale value. The reply's
+        `answers` are what the server actually holds, which is what the device adopts as
+        its new baseline.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CollectToken'
+        - $ref: '#/components/parameters/ResponseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                answers: { type: object, additionalProperties: true }
+                base: { type: object, additionalProperties: true }
+                embedded: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Saved, with what is still missing or invalid.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  saved: { type: integer }
+                  missing: { type: array, items: { type: string } }
+                  invalid: { type: array, items: { type: string } }
+                  answers: { type: object, additionalProperties: true }
+                  conflicts: { type: integer }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
+
+  /api/v1/collect/{token}/responses/{responseId}/submit:
+    post:
+      tags: [Collection]
+      operationId: submitResponse
+      summary: Submit, enforcing required answers and quotas
+      description: |
+        Answers are re-evaluated server-side with the same engine the browser uses: a
+        required-but-unanswered question blocks submission with `422 incomplete` and
+        **nothing is written**, so an invalid submission cannot leave half a response.
+        A retry answers `409 already_submitted`, which the client reads as success
+        rather than as loss. Quality detectors and the `response.submitted` webhook are
+        emitted in this transaction, so a response that committed has its event rows.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CollectToken'
+        - $ref: '#/components/parameters/ResponseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                answers: { type: object, additionalProperties: true }
+                base: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Submitted, screened out, or refused by a quota.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responseId: { type: string, format: uuid }
+                  status: { type: string, enum: [submitted, screened_out, quota_full] }
+                  answered: { type: integer }
+                  conflicts: { type: integer }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------------------
+  # Responses, analytics and exports. These are the operations an API key exists
+  # for: a QC pipeline pulls the queue, a warehouse pulls responses, a nightly job
+  # pulls an export — each with the narrowest scope that does the work.
+  # ---------------------------------------------------------------------------
+  /api/v1/forms/{formId}/responses:
+    get:
+      tags: [Responses and analytics]
+      operationId: listResponses
+      summary: The response list, with per-response conflict counts
+      description: Requires `responses:read` when called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+        - name: status
+          in: query
+          required: false
+          schema: { type: string }
+          description: Comma-separated statuses (`in_progress`, `submitted`, `screened_out`, `quota_full`).
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500, default: 50 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Responses with their answers and conflict counts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responses:
+                    type: array
+                    items: { $ref: '#/components/schemas/ResponseSummary' }
+                  counts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        status: { type: string }
+                        count: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/forms/{formId}/analytics:
+    get:
+      tags: [Responses and analytics]
+      operationId: getAnalytics
+      summary: Live tallies, timeline, conflicts and the published definition
+      description: Recomputed inside the tenant transaction on every request — no snapshot table and no cache to go stale. Requires `analytics:read` when called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+      responses:
+        '200':
+          description: Counts, tallies, a daily timeline, conflicts and the definition that produced them.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Analytics' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/forms/{formId}/responses/export:
+    get:
+      tags: [Exports]
+      operationId: exportResponses
+      summary: Export responses as a CSV bundle, XLSX or JSON
+      description: |
+        Generated from the **published** version that actually collected the data.
+        `csv` returns a zip bundle (data, codebook, value labels, missing codes and
+        metadata) rather than five separate downloads; `xlsx` and `json` return a
+        single file. `.sav` and `.dta` answer `501 format_not_available` with a reason,
+        because a file that only fails once a researcher imports it into SPSS is worse
+        than an honest refusal. Requires `responses:export` when called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+        - name: format
+          in: query
+          required: false
+          schema: { type: string, enum: [csv, xlsx, json, sav, dta], default: csv }
+        - name: multiSelect
+          in: query
+          required: false
+          schema: { type: string, enum: [dichotomous, slots], default: dichotomous }
+        - name: includeInProgress
+          in: query
+          required: false
+          schema: { type: boolean, default: true }
+        - name: language
+          in: query
+          required: false
+          schema: { type: string }
+          description: Which language's labels to write.
+      responses:
+        '200':
+          description: The file. CSV arrives as `application/zip`, XLSX as a spreadsheet, JSON as `application/json`.
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/json:
+              schema: { type: object }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409':
+          description: '`not_published`: publish a version before exporting responses.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '501':
+          description: A format that is deliberately not implemented yet, with a reason.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  # ---------------------------------------------------------------------------
+  # Integrations: the machine surface's own administration, plus webhooks.
+  #
+  # Every operation in this section is **session-only**: a key can never mint or
+  # revoke another key, and can never change where an organisation's data is sent.
+  # That is a property of the route table rather than a promise — none of these
+  # routes declares a scope, so a key that tries is `403 key_not_permitted`.
+  # ---------------------------------------------------------------------------
+  /api/v1/api-scopes:
+    get:
+      tags: [Integrations]
+      operationId: listApiScopes
+      summary: The scope vocabulary, and whether any route declares each scope
+      description: Session-only. `enforced` is false for a scope that exists in the vocabulary but no route checks yet, which is what stops the console offering a capability that would produce a key able to call nothing.
+      responses:
+        '200':
+          description: The vocabulary, read from the server so the console cannot drift from it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scopes:
+                    type: array
+                    items: { $ref: '#/components/schemas/ApiScope' }
+                  actor:
+                    type: object
+                    properties:
+                      via: { type: string, enum: [session, api_key] }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/api-keys:
+    get:
+      tags: [Integrations]
+      operationId: listApiKeys
+      summary: List an organisation's API keys (never a secret)
+      description: Any member may see that a key exists and what it may do. There is no read that can return a secret, because only `sha256(secret)` exists.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Keys, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items: { $ref: '#/components/schemas/ApiKey' }
+        '404': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Integrations]
+      operationId: createApiKey
+      summary: Mint an API key (owner or admin)
+      description: The secret is in this response and nowhere else, ever.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                scopes:
+                  type: array
+                  items: { $ref: '#/components/schemas/Scope' }
+                expiresInDays: { type: integer, minimum: 1, maximum: 730 }
+              required: [name]
+      responses:
+        '201':
+          description: Created. Copy the secret now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key: { $ref: '#/components/schemas/ApiKey' }
+                  secret:
+                    type: string
+                    description: '`ik_` plus 64 hex characters. Stored only as a hash, and returned by this call alone.'
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/api-keys/{keyId}:
+    delete:
+      tags: [Integrations]
+      operationId: revokeApiKey
+      summary: Revoke an API key (owner or admin)
+      description: The next request with it answers `401 invalid_api_key`. Revoking twice answers `404`, because the second call is about a key that is no longer revocable rather than a second revocation.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: keyId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Revoked. }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/webhook-events:
+    get:
+      tags: [Integrations]
+      operationId: listWebhookEvents
+      summary: The event catalogue, so the console never hard-codes it
+      responses:
+        '200':
+          description: Events and what each one means.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        event: { $ref: '#/components/schemas/WebhookEvent' }
+                        detail: { type: string }
+
+  /api/v1/orgs/{orgId}/webhooks:
+    get:
+      tags: [Integrations]
+      operationId: listWebhooks
+      summary: An organisation's webhook endpoints, with pending and failed counts
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Endpoints.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  endpoints:
+                    type: array
+                    items: { $ref: '#/components/schemas/WebhookEndpoint' }
+        '404': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Integrations]
+      operationId: createWebhook
+      summary: Create an endpoint (owner or admin)
+      description: HTTPS only, enforced by a database constraint rather than by this route, so the second route that creates an endpoint cannot forget it. The signing secret is returned once.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url: { type: string, format: uri, pattern: '^https://' }
+                events:
+                  type: array
+                  items: { $ref: '#/components/schemas/WebhookEvent' }
+                description: { type: string }
+              required: [url, events]
+      responses:
+        '201':
+          description: Created. Copy the signing secret now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  endpoint: { $ref: '#/components/schemas/WebhookEndpoint' }
+                  secret:
+                    type: string
+                    description: The HMAC key for `X-Inicio-Signature`. Stored, but never returned again.
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/webhooks/{endpointId}:
+    patch:
+      tags: [Integrations]
+      operationId: updateWebhook
+      summary: Change, pause or re-enable an endpoint (owner or admin)
+      description: Re-enabling clears the failure history, because an endpoint disabled by five consecutive failures should not be one failure away from disabling itself again.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/EndpointId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url: { type: string, format: uri }
+                events:
+                  type: array
+                  items: { $ref: '#/components/schemas/WebhookEvent' }
+                description: { type: string }
+                active: { type: boolean }
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { endpoint: { $ref: '#/components/schemas/WebhookEndpoint' } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [Integrations]
+      operationId: deleteWebhook
+      summary: Delete an endpoint and its delivery history (owner or admin)
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/EndpointId'
+      responses:
+        '204': { description: Deleted. }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/webhooks/{endpointId}/deliveries:
+    get:
+      tags: [Integrations]
+      operationId: listWebhookDeliveries
+      summary: Delivery history for one endpoint
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/EndpointId'
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: Deliveries, newest first, with the receiver's own status.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deliveries:
+                    type: array
+                    items: { $ref: '#/components/schemas/WebhookDelivery' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/webhooks/{endpointId}/test:
+    post:
+      tags: [Integrations]
+      operationId: testWebhook
+      summary: Sign and send a synthetic event now, and report the receiver's real answer
+      description: |
+        The answer is what the receiver actually did — including its failure status —
+        rather than "sent". Delivery rows are not created for a test.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/EndpointId'
+      responses:
+        '200':
+          description: What the receiver answered.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  delivered: { type: boolean }
+                  status: { type: [integer, 'null'] }
+                  responseBody: { type: [string, 'null'] }
+                  error: { type: [string, 'null'] }
+                  deliveryId: { type: [string, 'null'] }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/webhooks/deliveries/{deliveryId}/retry:
+    post:
+      tags: [Integrations]
+      operationId: retryWebhookDelivery
+      summary: Requeue one delivery and drain now
+      description: '`next_attempt_at = now()` and the attempts counter resets, so "did it work this time" is the reply rather than a wait.'
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: deliveryId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The requeued delivery, and what the drain did with the due queue.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deliveryId: { type: string }
+                  drained:
+                    type: object
+                    properties:
+                      attempted: { type: integer }
+                      delivered: { type: integer }
+                      failed: { type: integer }
+                      retrying: { type: integer }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------------------
+  # Quality. The whole machine surface of this feature is scoped, which is what a
+  # QC pipeline needs: pull the queue, close what it has reviewed, raise what only a
+  # person would notice.
+  # ---------------------------------------------------------------------------
+  /api/v1/flag-kinds:
+    get:
+      tags: [Quality]
+      operationId: listFlagKinds
+      summary: The flag vocabulary and the thresholds, in words
+      description: 'Session-only: the vocabulary is documentation rather than an action, and a key cannot call it.'
+      responses:
+        '200':
+          description: Kinds with what each means, and the thresholds applied.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  kinds:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        kind: { $ref: '#/components/schemas/FlagKind' }
+                        detail: { type: string }
+                  thresholds:
+                    type: object
+                    properties:
+                      speeding: { type: string }
+                      straightLining: { type: string }
+
+  /api/v1/orgs/{orgId}/flags:
+    get:
+      tags: [Quality]
+      operationId: listFlags
+      summary: The quality queue, with counts by status and kind
+      description: Requires `flags:read` when called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [open, resolved, dismissed, all], default: open }
+        - name: formId
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: Findings, each with the evidence the detector recorded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FlagQueue' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/flags/{flagId}:
+    patch:
+      tags: [Quality]
+      operationId: resolveFlag
+      summary: Record a decision about a finding
+      description: |
+        `dismissed` is a distinct outcome from `resolved`: "I looked and it is fine"
+        is an answer that deserves to be recorded as itself. The note, the person and
+        the time are kept. Requires `flags:write` when called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: flagId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [resolved, dismissed] }
+                note: { type: string, maxLength: 1000 }
+              required: [status]
+      responses:
+        '200':
+          description: The flag, with who decided what and when.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { flag: { $ref: '#/components/schemas/QualityFlag' } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/forms/{formId}/flags/scan:
+    post:
+      tags: [Quality]
+      operationId: scanFlags
+      summary: Detect exact duplicate submissions
+      description: |
+        Idempotent: a unique index on `(response_id, kind, coalesce(question_id, ''))`
+        means a finding is recorded once however often the scan runs, so a second scan
+        reports `flagged: 0` because it found nothing new rather than because it did
+        nothing. An organiser's action rather than a submission-time one, because a
+        respondent's transaction may only see its own response. Requires `flags:write`
+        when called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/FormId'
+      responses:
+        '200':
+          description: How many new findings the scan recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { flagged: { type: integer } }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/forms/{formId}/responses/{responseId}/flags:
+    post:
+      tags: [Quality]
+      operationId: raiseFlag
+      summary: Raise a flag by hand
+      description: |
+        A note is required — a finding without one is an opinion nobody can act on.
+        Requires `flags:write` when called with a key.
+
+        Raising an identical finding again does **not** create a second row, and the
+        answer says so: `200 { queued: false, reason: already_recorded }` rather than a
+        `201` claiming a write that was dropped.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/FormId'
+        - $ref: '#/components/parameters/ResponseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                questionId: { type: string, description: Set for a finding about one answer; omit for the whole response. }
+                severity: { type: string, enum: [info, warn, severe], default: warn }
+                note: { type: string, minLength: 1, maxLength: 1000 }
+              required: [note]
+      responses:
+        '201':
+          description: Recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { queued: { type: boolean, const: true } }
+              examples:
+                recorded:
+                  value: { queued: true }
+        '200':
+          description: An identical finding already exists, so nothing was written.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queued: { type: boolean, const: false }
+                  reason: { type: string, const: already_recorded }
+              examples:
+                alreadyRecorded:
+                  value: { queued: false, reason: already_recorded }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------------------
+  # Public. The one unauthenticated route, and it carries nothing about anybody.
+  # ---------------------------------------------------------------------------
+  /api/v1/public/summary:
+    get:
+      tags: [Public]
+      operationId: publicSummary
+      summary: What this software is and that it is answering
+      description: |
+        Server version and uptime, the measured round trip of the query that produced
+        this response, the migration ledger, and the template library summarised by
+        walking the real definitions. No form, response, organisation or count of any of
+        them. Never stored, so a cached body cannot be mistaken for a live figure.
+      security: []
+      responses:
+        '200':
+          description: Live facts about the software, and nothing about its users.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PublicSummary' }
 
 components:
   securitySchemes:
-    sessionCookie: { type: apiKey, in: cookie, name: sid }
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sid
+      description: The console session cookie. `httpOnly`, `Secure`, `SameSite=Lax`, host-only — which is why the SPA and the API share one origin.
+    bearerApiKey:
+      type: http
+      scheme: bearer
+      bearerFormat: ik_
+      description: An API key issued by `POST /api/v1/orgs/{orgId}/api-keys`. It acts only inside the organisation it was issued for, and only at operations that declare a scope.
+
+  parameters:
+    OrgId:
+      name: orgId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      description: A non-member gets `404`, not `403`.
+    FormId:
+      name: formId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    VersionId:
+      name: versionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ResponseId:
+      name: responseId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    EndpointId:
+      name: endpointId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CollectToken:
+      name: token
+      in: path
+      required: true
+      schema: { type: string }
+      description: The distribution-link token. It is the authorisation for every `/collect` operation.
+
+  responses:
+    Error:
+      description: A machine-readable error. `error` is stable; `message` is for a human.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
   schemas:
-    School:
+    Error:
       type: object
-      required: [name, registeredEmail]
+      properties:
+        error:
+          type: string
+          description: A stable code from the table in the introduction.
+          example: insufficient_scope
+        message:
+          type: string
+          description: Human-readable, and deliberately not to be parsed.
+          example: this key does not have flags:read
+        issues:
+          type: array
+          description: Present on `400` validation failures.
+          items: { type: object }
+      required: [error]
+
+    Role:
+      type: string
+      enum: [owner, admin, member, viewer]
+
+    Scope:
+      type: string
+      enum: [forms:read, responses:read, responses:export, analytics:read, flags:read, flags:write]
+
+    ApiScope:
+      type: object
+      properties:
+        scope: { $ref: '#/components/schemas/Scope' }
+        detail: { type: string }
+        enforced:
+          type: boolean
+          description: True when a route declares this scope, so a key can actually use it.
+      required: [scope, detail, enforced]
+
+    ApiKey:
+      type: object
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        region: { type: string }
-        registeredEmail: { type: string, format: email }
-        status: { type: string, enum: [invited, active, disabled] }
-    Questionnaire:
+        prefix: { type: string, example: ik_ab12cd34 }
+        scopes:
+          type: array
+          items: { $ref: '#/components/schemas/Scope' }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: [string, 'null'], format: date-time }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+        createdBy: { type: [string, 'null'], format: email }
+        active: { type: boolean }
+
+    Organisation:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        plan: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+        created_at: { type: string, format: date-time }
+        form_count: { type: integer }
+        member_count: { type: integer }
+
+    Member:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        role: { $ref: '#/components/schemas/Role' }
+        email: { type: string, format: email }
+        display_name: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+
+    Invite:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role: { $ref: '#/components/schemas/Role' }
+        expires_at: { type: string, format: date-time }
+        accepted_at: { type: [string, 'null'], format: date-time }
+        revoked_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+        pending: { type: boolean }
+
+    Project:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        created_at: { type: string, format: date-time }
+        form_count: { type: integer }
+
+    Template:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        questionCount: { type: integer }
+        languages:
+          type: array
+          items: { type: string }
+
+    FormSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        project_id: { type: [string, 'null'], format: uuid }
+        archived_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        organisation: { type: string }
+        published_version: { type: [integer, 'null'] }
+        draft_version_id: { type: [string, 'null'], format: uuid }
+        submitted_count: { type: integer }
+        in_progress_count: { type: integer }
+        active_links: { type: integer }
+
+    VersionSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        form_id: { type: string, format: uuid }
+        version: { type: integer }
+        status: { type: string, enum: [draft, published, archived] }
+        title: { type: string }
+        definition: { type: object, description: The canonical definition, present on the single-version read. }
+        based_on: { type: [string, 'null'], format: uuid }
+        created_by: { type: [string, 'null'], format: uuid }
+        published_at: { type: [string, 'null'], format: date-time }
+        created_at: { type: string, format: date-time }
+        question_count: { type: integer }
+
+    DistributionLink:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [anonymous, single_use, multiple, panel] }
+        label: { type: [string, 'null'] }
+        expires_at: { type: [string, 'null'], format: date-time }
+        max_uses: { type: [integer, 'null'] }
+        uses: { type: integer }
+        active: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    CollectDefinition:
+      type: object
+      properties:
+        link:
+          type: object
+          properties:
+            kind: { type: string }
+            id: { type: string, format: uuid }
+        form:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            title: { type: string }
+            version: { type: integer }
+            definition: { type: object }
+
+    CollectStart:
+      type: object
+      properties:
+        responseId: { type: string, format: uuid }
+        created: { type: boolean }
+        status: { type: string }
+        form:
+          type: object
+          properties:
+            title: { type: string }
+            version: { type: integer }
+            definition: { type: object }
+
+    ResponseSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        form_version_id: { type: string, format: uuid }
+        form_version: { type: integer }
+        status: { type: string, enum: [in_progress, submitted, screened_out, quota_full] }
+        started_at: { type: [string, 'null'], format: date-time }
+        submitted_at: { type: [string, 'null'], format: date-time }
+        updated_at: { type: [string, 'null'], format: date-time }
+        answers: { type: object, additionalProperties: true }
+        conflict_count: { type: integer }
+
+    Analytics:
+      type: object
+      properties:
+        definition: { type: [object, 'null'], description: The published definition that produced the data. }
+        publishedVersion: { type: [integer, 'null'] }
+        byStatus:
+          type: array
+          items:
+            type: object
+            properties:
+              status: { type: string }
+              count: { type: integer }
+        tallies:
+          type: array
+          items:
+            type: object
+            properties:
+              question_id: { type: string }
+              value: {}
+              count: { type: integer }
+        timeline:
+          type: array
+          items:
+            type: object
+            properties:
+              day: { type: string, format: date }
+              started: { type: integer }
+              submitted: { type: integer }
+        conflicts: { type: integer, description: Sync conflicts, counted live rather than cached. }
+        generatedAt: { type: string, format: date-time }
+
+    WebhookEvent:
+      type: string
+      enum: [form.published, response.submitted]
+
+    WebhookEndpoint:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        url: { type: string, format: uri }
+        description: { type: [string, 'null'] }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/WebhookEvent' }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        lastSuccessAt: { type: [string, 'null'], format: date-time }
+        lastFailureAt: { type: [string, 'null'], format: date-time }
+        failureCount: { type: integer }
+        disabledAt: { type: [string, 'null'], format: date-time }
+        reason:
+          type: [string, 'null']
+          description: Why it is not sending, in words, when it has disabled itself.
+
+    WebhookDelivery:
+      type: object
+      properties:
+        id: { type: string }
+        event: { $ref: '#/components/schemas/WebhookEvent' }
+        status: { type: string, enum: [pending, delivered, failed] }
+        attempts: { type: integer }
+        response_status: { type: [integer, 'null'] }
+        error: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+        delivered_at: { type: [string, 'null'], format: date-time }
+        next_attempt_at: { type: string, format: date-time }
+        payload: { type: object, description: The signed body, as sent. }
+
+    FlagKind:
+      type: string
+      enum: [speeding, straight_lining, duplicate, manual]
+
+    QualityFlag:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        formId: { type: string, format: uuid }
+        formName: { type: string }
+        responseId: { type: string, format: uuid }
+        questionId: { type: [string, 'null'] }
+        kind: { $ref: '#/components/schemas/FlagKind' }
+        kindDetail: { type: string, description: What the kind means, in words, from the server's own vocabulary. }
+        severity: { type: string, enum: [info, warn, severe] }
+        detail:
+          type: object
+          description: Whatever the detector recorded — evidence, not a verdict.
+          additionalProperties: true
+        status: { type: string, enum: [open, resolved, dismissed] }
+        note: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        resolvedAt: { type: [string, 'null'], format: date-time }
+        resolvedBy: { type: [string, 'null'], format: email }
+
+    FlagQueue:
+      type: object
+      properties:
+        flags:
+          type: array
+          items: { $ref: '#/components/schemas/QualityFlag' }
+        summary:
+          type: object
+          properties:
+            byStatus: { type: object, additionalProperties: { type: integer } }
+            byKind: { type: object, additionalProperties: { type: integer } }
+            open: { type: integer }
+
+    MailStatus:
+      type: object
+      properties:
+        configured: { type: boolean }
+        reachable: { type: boolean }
+        basis: { type: string, description: How that answer was established. }
+        transport: { type: string, enum: [resend, smtp] }
+
+    LegalDocument:
       type: object
       properties:
         version: { type: string }
+        effectiveDate: { type: string, format: date }
+        hash: { type: string, description: The hash of the exact text served, so acceptance identifies a version of the words. }
         title: { type: string }
-        languages: { type: array, items: { type: string } }
-        sections: { type: array, items: { type: object, additionalProperties: true } }
-    ResponseSet:
+        body: { type: string, description: The text, as served. }
+
+    DocumentVersion:
       type: object
       properties:
-        id: { type: string, format: uuid }
-        status: { type: string, enum: [draft, submitted, locked] }
-        completionPct: { type: number }
-        lastSectionId: { type: string }
-        uniqueSubmissionId: { type: string }
-    Attachment:
+        version: { type: string }
+        hash: { type: string }
+        effectiveDate: { type: string, format: date }
+
+    PublicSummary:
       type: object
       properties:
-        id: { type: string, format: uuid }
-        questionId: { type: string }
-        filename: { type: string }
-        mime: { type: string }
-        sizeBytes: { type: integer }
-        status: { type: string, enum: [uploaded, pending, not_applicable, deleted] }
-    Monitor:
-      type: object
-      properties:
-        loggedIn: { type: integer }
-        drafts: { type: integer }
-        completed: { type: integer }
-        pending: { type: integer }
-    ValidationError:
-      type: object
-      properties:
-        missing: { type: array, items: { type: string } }
-        message: { type: string }
+        generatedAt: { type: string, format: date-time }
+        database:
+          type: object
+          properties:
+            latencyMs: { type: number, description: The round trip of the query that produced this response. }
+            serverTime: { type: string, format: date-time }
+            version: { type: string }
+            startedAt: { type: string, format: date-time }
+            migrationsApplied: { type: integer }
+            latestMigration: { type: [string, 'null'] }
+            listening: { type: boolean }
+        templates:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              title: { type: string }
+              description: { type: string }
+              questionCount: { type: integer }
+              groupCount: { type: integer }
+              languages:
+                type: array
+                items: { type: string }
+              questionTypes:
+                type: array
+                items: { type: string }
+        engine:
+          type: object
+          properties:
+            questionTypesInUse:
+              type: array
+              items: { type: string }
+            templateQuestions: { type: integer }
+            templateGroups: { type: integer }

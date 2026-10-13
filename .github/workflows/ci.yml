@@ -1,0 +1,156 @@
+name: CI
+
+# Every push, and every pull request. The point of this file is that "verified" stops
+# meaning "verified on somebody's machine at the time": the same commands the README
+# documents are run against a clean checkout and a real PostgreSQL, and the build is
+# measured against its budgets before it can reach a deployment.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: lint, typecheck, test, build, budgets
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          # Migration 0002 creates `app_role` without a password on purpose (no
+          # secrets in migrations) and the suite connects as that role, so the
+          # cluster here trusts local connections the way the sandbox does.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      MIGRATION_DATABASE_URL: postgres://postgres@127.0.0.1:5432/postgres
+      APP_DATABASE_URL: postgres://app_role@127.0.0.1:5432/postgres
+      DATABASE_SSL: 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # The API suite owns its own database (see apps/api/test/setup.ts) and creates
+      # it on first use, so this needs a cluster, not a schema.
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Bundle budgets
+        run: pnpm budgets
+
+  harnesses:
+    name: end-to-end harnesses against the running stack
+    runs-on: ubuntu-latest
+    needs: verify
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      MIGRATION_DATABASE_URL: postgres://postgres@127.0.0.1:5432/postgres
+      APP_DATABASE_URL: postgres://app_role@127.0.0.1:5432/postgres
+      DATABASE_SSL: 'false'
+      # The harnesses drive the same origin a browser uses: Vite on 3000 proxying
+      # /api/v1 to the API on 3001.
+      PORT: '3001'
+      APP_ORIGIN: http://127.0.0.1:3000
+      OTP_PEPPER: ci-pepper-0123456789abcdef
+      COOKIE_SECURE: 'false'
+      MAIL_FROM: 'Inicio Survey <no-reply@inicio.example>'
+      E2E_OWNER: owner@example.com
+      E2E_BASE: http://127.0.0.1:3000
+      # The harnesses sign in and out repeatedly from one address.
+      RATE_LIMIT_MAX: '100000'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Migrate
+        run: pnpm db:migrate
+
+      - name: Create the first owner
+        run: pnpm --filter @inicio/api bootstrap:owner --email owner@example.com --org Inicio
+
+      - name: Start the stack and wait for it
+        run: |
+          set -e
+          pnpm --filter @inicio/api start > /tmp/api.log 2>&1 &
+          pnpm --filter @inicio/web dev > /tmp/web.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:3001/health > /dev/null && curl -sf http://127.0.0.1:3000/ > /dev/null; then
+              echo "stack ready after ${attempt}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "the stack did not come up in 60s"
+          echo "--- api ---"; tail -40 /tmp/api.log
+          echo "--- web ---"; tail -40 /tmp/web.log
+          exit 1
+
+      - name: Consumer journey, over HTTP against a real database
+        run: pnpm e2e:consumer
+
+      - name: Offline sync contract, over HTTP against a real database
+        run: pnpm e2e:offline
+
+      - name: Logs, when something failed
+        if: failure()
+        run: |
+          echo "--- api ---"; tail -60 /tmp/api.log || true
+          echo "--- web ---"; tail -20 /tmp/web.log || true

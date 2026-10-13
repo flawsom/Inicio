@@ -19,7 +19,7 @@ import {
   type Question,
   type QuestionType,
 } from '../types.js';
-import { readWorkbook, writeWorkbook, type Sheet } from './xlsx.js';
+import { readWorkbook, writeWorkbook, type OutSheet, type Sheet } from './xlsx.js';
 
 export interface AdapterNote {
   kind: 'dropped' | 'normalised' | 'unsupported' | 'lossy' | 'preserved';
@@ -583,7 +583,22 @@ function columnLabel(col: OutColumn): string {
   return col.lang ? `${col.base}::${col.lang}` : col.base;
 }
 
-export function exportXlsForm(def: FormDefinition): XlsFormExport {
+export interface XlsFormSheets {
+  sheets: OutSheet[];
+  notes: AdapterNote[];
+}
+
+/**
+ * The three sheets the export writes, before they are zipped.
+ *
+ * `exportXlsForm` is a zip around this function, and that is the whole point: the
+ * console's XLSForm viewer reads the rows from here, so what somebody is looking at
+ * and what `Download .xlsx` hands them are the same rows by construction rather than
+ * by agreement. It is also why the browser does not import `writeWorkbook` to draw a
+ * table — a viewer should not drag a zip implementation onto a screen that never
+ * writes a byte.
+ */
+export function xlsFormSheets(def: FormDefinition): XlsFormSheets {
   const notes: AdapterNote[] = [];
   const defaultLanguage = def.defaultLanguage || 'en';
   const languages: string[] = [];
@@ -761,14 +776,6 @@ export function exportXlsForm(def: FormDefinition): XlsFormExport {
   if (xf.instanceName) settingsRows.push(['instance_name', xf.instanceName]);
   for (const [key, value] of Object.entries(xf.extra ?? {})) settingsRows.push([key, value]);
 
-  const bytes = writeWorkbook({
-    sheets: [
-      { name: 'survey', rows: surveyRows },
-      { name: 'choices', rows: choiceRows },
-      { name: 'settings', rows: settingsRows },
-    ],
-  });
-
   if (passthrough.length > 0) {
     notes.push({
       kind: 'preserved',
@@ -776,5 +783,18 @@ export function exportXlsForm(def: FormDefinition): XlsFormExport {
     });
   }
 
-  return { bytes, notes };
+  return {
+    sheets: [
+      { name: 'survey', rows: surveyRows },
+      { name: 'choices', rows: choiceRows },
+      { name: 'settings', rows: settingsRows },
+    ],
+    notes,
+  };
+}
+
+/** The workbook as a file: the same sheets, zipped. */
+export function exportXlsForm(def: FormDefinition): XlsFormExport {
+  const { sheets, notes } = xlsFormSheets(def);
+  return { bytes: writeWorkbook({ sheets }), notes };
 }
