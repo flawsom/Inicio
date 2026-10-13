@@ -447,20 +447,25 @@ export function Collect({ token }: { token: string }): JSX.Element {
 
   return (
     <div className="collect">
-      <header>
-        <h1>{definition.title}</h1>
-        <p className={online ? 'muted small' : 'offline small'} role="status" aria-live="polite">
-          {draft ? syncLabel(draft, online, syncing) : 'Loading…'}
-        </p>
-        <p className="muted small">
-          {savedAt && <>Saved on this device at {savedAt}. </>}
-          {syncedAt ? <>The server has everything up to {syncedAt}.</> : <>Not sent to the server yet.</>}
-        </p>
-        {(waiting > 0 || outcome?.phase === 'error') && (
-          <button type="button" className="ghost" onClick={() => void flush()} disabled={!online}>
-            {online ? 'Send now' : 'Waiting for a connection'}
-          </button>
-        )}
+      <header className="screen-head">
+        <div>
+          <span className="eyebrow">Survey</span>
+          <h1>{definition.title}</h1>
+          <p className="muted small">
+            {savedAt && <>Saved on this device at {savedAt}. </>}
+            {syncedAt ? <>The server has everything up to {syncedAt}.</> : <>Not sent to the server yet.</>}
+          </p>
+        </div>
+        <div className="stack tight">
+          <span className={online ? 'pill ok' : 'pill warn'} role="status" aria-live="polite">
+            {draft ? syncLabel(draft, online, syncing) : 'Loading…'}
+          </span>
+          {(waiting > 0 || outcome?.phase === 'error') && (
+            <button type="button" className="ghost" onClick={() => void flush()} disabled={!online}>
+              {online ? 'Send now' : 'Waiting for a connection'}
+            </button>
+          )}
+        </div>
       </header>
 
       {sections.map((section) => (
@@ -486,11 +491,16 @@ export function Collect({ token }: { token: string }): JSX.Element {
       ))}
 
       {error && <div className="card error">{error}</div>}
-      <div className="card row">
+      <div className="card row wrap">
         <button type="button" onClick={() => void submit()} disabled={busy}>
           {busy ? 'Submitting…' : 'Submit'}
         </button>
-        {problems.missing.length > 0 && <span className="muted">{problems.missing.length} required answer(s) still missing</span>}
+        {problems.missing.length > 0 && (
+          <span className="stat">
+            <strong>{problems.missing.length}</strong>
+            {` required answer(s) still missing`}
+          </span>
+        )}
         {!online && <span className="muted">Your answers are safe on this device and will be sent automatically.</span>}
       </div>
     </div>

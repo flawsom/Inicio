@@ -18,7 +18,7 @@ there is no signal** — and exporting data that is ready for analysis rather th
 [![Version](https://img.shields.io/badge/version-0.1.0-38bdf8?style=flat-square&labelColor=0f172a)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-34d399?style=flat-square&labelColor=0f172a)](LICENSE)
 [![Build](https://img.shields.io/badge/build-clean-34d399?style=flat-square&labelColor=0f172a)](#-testing)
-[![Tests](https://img.shields.io/badge/tests-162%20passing-34d399?style=flat-square&labelColor=0f172a)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-169%20passing-34d399?style=flat-square&labelColor=0f172a)](#-testing)
 [![Typecheck](https://img.shields.io/badge/typecheck-0%20errors-38bdf8?style=flat-square&labelColor=0f172a)](#-testing)
 [![Lint](https://img.shields.io/badge/lint-0%20errors-a78bfa?style=flat-square&labelColor=0f172a)](#-testing)
 [![Production](https://img.shields.io/badge/production-live-22c55e?style=flat-square&labelColor=0f172a&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app/health)
@@ -271,6 +271,7 @@ cache to go stale and no nightly job to wait for.
 | 🖥️ **Live analyser** | The console validates the definition as you type and reports errors and warnings with the question name in them. |
 | 📡 **An honest live indicator** | The console header says whether the push channel is connected, and the screens fall back to a timer only when it is not. "Live" is a claim about the connection, not a style. |
 | 🌌 **A public surface with nothing invented on it** | Every figure on the landing page is read in that request from `GET /api/v1/public/summary`, and the scene is decoration: it is `aria-hidden`, it stops when the tab is hidden or the stage has scrolled past, and the page is complete with no WebGL at all. |
+| 🪞 **One world, not two** | The signed-in app wears the same palette, the same type scale and the same glass as the landing page, over an ambient light field drawn from the product's own node-and-filament structure. Every figure on a console screen is live, every panel arrives with the same entrance, and the whole shell is complete with no canvas and under `prefers-reduced-motion`. |
 | 🏫 **A real template** | The 2026 school ranking survey — the project this platform grew out of — ships as template #1, not as the product. |
 | 📶 **Honest connection state** | "No connection. Your answers are saved on this device and will be sent automatically", plus a **Send now** button and the timestamp the server has everything up to. |
 | 🐳 **A self-hosted profile** | Compose brings up PostgreSQL 16, Valkey, MinIO, ClamAV and Mailpit, with Caddy in front. |
@@ -729,7 +730,7 @@ Open **http://localhost:3000**, request a one-time code, read it in Mailpit, and
 ```bash
 pnpm lint        # ESLint 9, flat config
 pnpm typecheck   # tsc across four workspace packages
-pnpm test        # 162 tests
+pnpm test        # 169 tests
 pnpm coverage    # v8 coverage, per package
 pnpm build       # engine -> api -> web
 ```
@@ -1304,18 +1305,21 @@ only ever fetched by a reader who is looking at the landing page.
 | Asset | Raw | Gzip | Loaded by |
 |---|---:|---:|---|
 | `index.html` | 1.74 kB | 0.84 kB | everyone |
-| `index-*.css` (console) | 8.02 kB | 2.52 kB | everyone |
-| `index-*.js` (console, 62 modules) | **214.75 kB** | **67.85 kB** | everyone |
-| `landing-*.css` | 10.53 kB | 3.12 kB | the landing page |
+| `index-*.css` (the whole app) | 19.18 kB | 4.87 kB | everyone |
+| `index-*.js` (console, collection, admin, legal) | **222.88 kB** | **70.87 kB** | everyone |
+| `landing-*.css` | 12.39 kB | 3.51 kB | the landing page |
 | `landing-*.js` | 16.20 kB | 5.56 kB | the landing page |
 | `instrument-*.js` (three.js) | 533.48 kB | 135.76 kB | the landing page, after first paint |
 
-The console bundle is 214.75 kB raw, of which the push channel and the connection indicator are a few
-kilobytes. There is no charting library, no UI kit, no state manager and no icon package: the console is
-hand-built React with CSS custom properties, which is why the whole app is smaller than a typical
-component library's stylesheet. The scene is in its own dynamically imported chunk, so a signed-in user
-heading for the console never downloads it, and the WebGL code is not in the critical path of the page
-that does.
+The console bundle is 222.88 kB raw, which carries the push channel, the console and the ambient light
+field that makes the signed-in app the same world as the landing page. There is no charting library, no
+UI kit, no state manager and no icon package: the console is hand-built React with CSS custom
+properties, which is why the whole app is smaller than a typical component library's stylesheet. The
+scene is in its own dynamically imported chunk, so a signed-in user heading for the console never
+downloads three.js, and the WebGL code is not in the critical path of the page that does. The ambient
+field is the deliberate other half of that decision: it draws the same structure as the sculpture in
+about 9 kB of hand-written canvas code rather than 135 kB of renderer, because a person reading a table
+of responses should not be paying for a 3D engine to look at a background.
 
 ### Database
 
@@ -1346,13 +1350,13 @@ pnpm coverage     # v8 coverage, per package
 pnpm build        # engine -> api -> web
 ```
 
-### What the 162 tests actually cover
+### What the 169 tests actually cover
 
 | Suite | Tests | Focus |
 |---|---:|---|
 | `packages/engine` | **54** | Expression parsing and evaluation, validation, XLSForm round-trip fixpoint, XLSX read/write, dataset and codebook assembly, every export writer |
 | `apps/api` | **70** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers, and **the push channel over a real socket**: `ready` first, silence while nothing changes, then one coalesced event naming the aggregate that moved, with a 404 and no stream for a form the caller cannot see, plus the public summary: read live, and asserted key by key to carry no tenant data |
-| `apps/web` | **38** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer) and **the console's live read**: a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request |
+| `apps/web` | **45** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request) and **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure) |
 
 ### Coverage
 

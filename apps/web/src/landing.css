@@ -4,33 +4,62 @@
  * Everything here is scoped under `.landing`, and it is imported by landing.tsx,
  * which is itself loaded lazily. That matters for two reasons: a signed in reader
  * opening the console never downloads or evaluates any of it, and the console's
- * stylesheet (styles.css) stays exactly as it was, so this cannot restyle a table
- * row or an input by accident.
+ * stylesheet stays exactly as it is, so this cannot restyle a table row or an input
+ * by accident.
  *
- * The theme is the product's theme: near-black, one blue, one violet, glass
- * everywhere. Nothing here is a purple gradient on white.
+ * The theme is the product's theme: near-black, pearl type, one blue, one violet,
+ * one cyan used only where something is genuinely live, and glass everywhere.
+ *
+ * Two rules keep the page from cramping.
+ *
+ * 1. Every space in this file comes from the scale below. A page of display type
+ *    goes wrong the moment one margin is `18px` because it looked right, so there
+ *    are no orphan spacing values after this block.
+ * 2. Display type is set with room to breathe: line heights are 1.0 and up (never
+ *    .9), stacked display lines get a real gap between them, and nothing that is
+ *    two different things is closer than 24px to the next.
  */
 
 .landing {
-  --l-bg: #05070d;
-  --l-panel: rgba(255, 255, 255, 0.035);
-  --l-line: rgba(255, 255, 255, 0.09);
-  --l-line-strong: rgba(255, 255, 255, 0.18);
-  --l-text: #eef2fb;
-  --l-muted: #8e9bb4;
-  --l-blue: #4c8dff;
+  /* Spacing scale. */
+  --l-sp-1: 4px;
+  --l-sp-2: 8px;
+  --l-sp-3: 12px;
+  --l-sp-4: 16px;
+  --l-sp-5: 24px;
+  --l-sp-6: 32px;
+  --l-sp-7: 48px;
+  --l-sp-8: 72px;
+
+  /* The product palette. */
+  --l-pearl: #f3f2ee;
+  --l-ink: #05070d;
+  --l-panel: rgba(255, 255, 255, 0.038);
+  --l-line: rgba(243, 242, 238, 0.12);
+  --l-line-strong: rgba(243, 242, 238, 0.22);
+  --l-text: var(--l-pearl);
+  --l-muted: #8e8e96;
+  --l-blue: #2a5bff;
+  --l-blue-text: #6f95ff;
   --l-violet: #7b4dff;
-  --l-cyan: #35d6c4;
+  --l-violet-text: #b7b0ff;
+  --l-cyan: #1cc7d0;
+
   --l-gutter: clamp(20px, 5vw, 84px);
+  --l-measure: 68ch;
   --l-display: 'Archivo', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --l-serif: 'Instrument Serif', 'Times New Roman', Georgia, serif;
+  --l-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+
+  /* The gap between two stacked display lines, and the gap between blocks. */
+  --l-line-gap: clamp(10px, 1.6vh, 22px);
 
   position: relative;
-  background: var(--l-bg);
+  background: var(--l-ink);
   color: var(--l-text);
   font-family: var(--l-display);
   font-size: 16px;
-  line-height: 1.6;
+  line-height: 1.65;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   isolation: isolate;
@@ -73,9 +102,53 @@
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(120% 80% at 78% 8%, rgba(76, 141, 255, 0.22), transparent 60%),
+    radial-gradient(120% 80% at 78% 8%, rgba(42, 91, 255, 0.24), transparent 60%),
     radial-gradient(90% 70% at 12% 82%, rgba(123, 77, 255, 0.18), transparent 62%),
-    radial-gradient(60% 50% at 50% 50%, rgba(53, 214, 196, 0.07), transparent 70%);
+    radial-gradient(60% 50% at 50% 50%, rgba(28, 199, 208, 0.07), transparent 70%);
+}
+
+/* ------------------------------------------------------- grain and vignette */
+
+/*
+ * Grain over the whole page, and a vignette under it.
+ *
+ * Both are decoration and both are CSS: the scene behind them is expensive and the
+ * flats of a large dark page are the one place a viewer notices that nothing is
+ * physically there. Neither one takes a pointer event, and neither animates when the
+ * reader has asked for stillness.
+ */
+.landing::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 34;
+  pointer-events: none;
+  background: radial-gradient(125% 95% at 50% 0%, transparent 44%, rgba(4, 5, 10, 0.74) 100%);
+}
+
+.landing::after {
+  content: '';
+  position: fixed;
+  inset: -50%;
+  z-index: 35;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: radial-gradient(var(--l-pearl) 0.5px, transparent 0.5px);
+  background-size: 3px 3px;
+  animation: lgrain 6s steps(6) infinite;
+}
+
+@keyframes lgrain {
+  0% { transform: translate3d(0, 0, 0); }
+  20% { transform: translate3d(-2%, 1%, 0); }
+  40% { transform: translate3d(1%, -2%, 0); }
+  60% { transform: translate3d(-1%, 2%, 0); }
+  80% { transform: translate3d(2%, -1%, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing::after { animation: none; }
 }
 
 /* --------------------------------------------------------------- cursor ring */
@@ -173,7 +246,7 @@
 }
 
 .landing code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--l-mono);
   font-size: 0.88em;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--l-line);
@@ -181,10 +254,17 @@
   padding: 1px 5px;
 }
 
+/*
+ * The eyebrow: a hairline, a number, a word.
+ *
+ * It gets a margin block so it can never sit flush against the heading it belongs
+ * to, which is the failure the reader sees as "everything is stuck together".
+ */
 .leyebrow {
   display: inline-flex;
   align-items: center;
   gap: 0.7em;
+  margin: 0 0 var(--l-sp-5);
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.24em;
@@ -207,8 +287,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 20px var(--l-gutter);
+  gap: var(--l-sp-4);
+  padding: var(--l-sp-5) var(--l-gutter);
   backdrop-filter: blur(14px);
   background: linear-gradient(to bottom, rgba(5, 7, 13, 0.82), rgba(5, 7, 13, 0.32));
   border-bottom: 1px solid var(--l-line);
@@ -217,7 +297,7 @@
 .lbrand {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--l-sp-2);
   font-weight: 800;
   letter-spacing: -0.03em;
   font-size: 18px;
@@ -228,13 +308,13 @@
   height: 9px;
   border-radius: 50%;
   background: var(--l-blue);
-  box-shadow: 0 0 16px rgba(76, 141, 255, 0.9);
+  box-shadow: 0 0 16px rgba(42, 91, 255, 0.9);
 }
 
 .lnav nav {
   display: flex;
   align-items: center;
-  gap: clamp(10px, 2vw, 26px);
+  gap: clamp(12px, 2vw, 28px);
   font-size: 13.5px;
 }
 
@@ -260,18 +340,18 @@
   font: inherit;
   font-weight: 600;
   font-size: 14.5px;
-  color: #04070f;
+  color: var(--l-ink);
   background: linear-gradient(120deg, #cfe0ff, #ffffff 45%, #cfe0ff);
   padding: 13px 22px;
   border-radius: 999px;
-  box-shadow: 0 12px 40px rgba(76, 141, 255, 0.28);
+  box-shadow: 0 12px 40px rgba(42, 91, 255, 0.28);
   transition: box-shadow 0.25s ease, filter 0.25s ease;
   will-change: transform;
 }
 
 .lcta:hover {
   filter: brightness(1.06);
-  box-shadow: 0 16px 54px rgba(76, 141, 255, 0.44);
+  box-shadow: 0 16px 54px rgba(42, 91, 255, 0.44);
 }
 
 .lcta.small {
@@ -294,8 +374,8 @@
 
 .lghost:hover {
   color: var(--l-text);
-  border-color: rgba(76, 141, 255, 0.5);
-  background: rgba(76, 141, 255, 0.08);
+  border-color: rgba(42, 91, 255, 0.5);
+  background: rgba(42, 91, 255, 0.08);
 }
 
 /* ------------------------------------------------------------------- stage */
@@ -309,29 +389,37 @@
   padding: 0 var(--l-gutter);
 }
 
+/*
+ * The hero.
+ *
+ * The two display lines are the page's whole argument, so they are set larger than
+ * anything else and given a gap of their own: at 0.92 line height with nothing
+ * between them, two 150px lines read as one grey block.
+ */
 .lhero {
   min-height: 100svh;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 6px;
-  padding-top: 14vh;
-  padding-bottom: 12vh;
+  gap: var(--l-sp-5);
+  padding-top: 16vh;
+  padding-bottom: 14vh;
 }
 
 .lhero-eyebrow {
-  margin-bottom: 26px;
+  margin-bottom: var(--l-sp-5);
 }
 
 .lhero h1 {
   margin: 0;
   font-weight: 800;
-  font-size: clamp(44px, 10.2vw, 148px);
-  line-height: 0.92;
+  font-size: clamp(46px, 10.4vw, 150px);
+  line-height: 1;
   letter-spacing: -0.045em;
 }
 
 .lhero-line2 {
+  margin-top: var(--l-line-gap);
   background: linear-gradient(96deg, #ffffff 8%, var(--l-blue) 48%, var(--l-violet) 92%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -339,9 +427,10 @@
 }
 
 .lhero-sub {
-  margin: 30px 0 0;
+  margin: var(--l-sp-5) 0 0;
   max-width: 62ch;
   font-size: clamp(15px, 1.35vw, 18px);
+  line-height: 1.64;
   color: var(--l-muted);
 }
 
@@ -349,17 +438,18 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 14px;
-  margin-top: 38px;
+  gap: var(--l-sp-4);
+  margin-top: var(--l-sp-6);
 }
 
 .lhero-foot {
-  margin: 34px 0 0;
-  max-width: 68ch;
+  margin: var(--l-sp-6) 0 0;
+  max-width: var(--l-measure);
   font-size: 13px;
-  color: rgba(142, 155, 180, 0.85);
+  line-height: 1.7;
+  color: rgba(142, 142, 150, 0.9);
   border-left: 1px solid var(--l-line-strong);
-  padding-left: 16px;
+  padding-left: var(--l-sp-4);
 }
 
 .lclaim {
@@ -367,7 +457,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 18px;
+  gap: var(--l-sp-6);
 }
 
 .lclaim-text {
@@ -377,21 +467,22 @@
   font-style: italic;
   font-weight: 400;
   font-size: clamp(34px, 6.4vw, 92px);
-  line-height: 1.02;
+  line-height: 1.06;
   letter-spacing: -0.02em;
 }
 
 .lclaim-body {
   margin: 0;
-  max-width: 60ch;
+  max-width: var(--l-measure);
   color: var(--l-muted);
   font-size: clamp(14.5px, 1.3vw, 17px);
+  line-height: 1.68;
 }
 
 /* ---------------------------------------------------------------- live band */
 
 .llive {
-  padding-bottom: 16vh;
+  padding-bottom: 18vh;
 }
 
 .llive-head {
@@ -399,15 +490,16 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: var(--l-sp-4);
   border-bottom: 1px solid var(--l-line);
-  padding-bottom: 16px;
+  padding-bottom: var(--l-sp-4);
+  margin-bottom: var(--l-sp-6);
 }
 
 .llive-state {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--l-sp-2);
   font-size: 12.5px;
   color: var(--l-muted);
 }
@@ -417,7 +509,7 @@
   height: 7px;
   border-radius: 50%;
   background: var(--l-cyan);
-  box-shadow: 0 0 0 0 rgba(53, 214, 196, 0.6);
+  box-shadow: 0 0 0 0 rgba(28, 199, 208, 0.6);
   animation: lpulse 2.6s ease-out infinite;
 }
 
@@ -428,13 +520,13 @@
 
 @keyframes lpulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(53, 214, 196, 0.5);
+    box-shadow: 0 0 0 0 rgba(28, 199, 208, 0.5);
   }
   70% {
-    box-shadow: 0 0 0 12px rgba(53, 214, 196, 0);
+    box-shadow: 0 0 0 12px rgba(28, 199, 208, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(53, 214, 196, 0);
+    box-shadow: 0 0 0 0 rgba(28, 199, 208, 0);
   }
 }
 
@@ -458,7 +550,7 @@
 .llive-grid > div {
   background: rgba(8, 11, 20, 0.72);
   backdrop-filter: blur(16px);
-  padding: 26px 22px;
+  padding: var(--l-sp-6) var(--l-sp-5);
 }
 
 .llive-grid dt {
@@ -466,21 +558,22 @@
   font-weight: 800;
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
-  line-height: 1;
+  line-height: 1.04;
   color: #fff;
 }
 
 .llive-grid dd {
-  margin: 10px 0 0;
+  margin: var(--l-sp-3) 0 0;
   font-size: 12.5px;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--l-muted);
 }
 
 .llive-note {
-  margin: 18px 0 0;
+  margin: var(--l-sp-5) 0 0;
   font-size: 13px;
-  color: rgba(142, 155, 180, 0.85);
+  line-height: 1.7;
+  color: rgba(142, 142, 150, 0.9);
   max-width: 76ch;
 }
 
@@ -492,11 +585,16 @@
 .lfooter {
   position: relative;
   z-index: 10;
-  background: var(--l-bg);
+  background: var(--l-ink);
   border-top: 1px solid var(--l-line);
-  padding: clamp(70px, 9vw, 130px) var(--l-gutter);
+  padding: clamp(72px, 9.5vw, 140px) var(--l-gutter);
 }
 
+/*
+ * A section heading is three things in a column: a label, a headline, a sentence.
+ * Each gets its own gap from the scale, so the block reads as three statements
+ * rather than as a paragraph with a big first line.
+ */
 .lcapabilities header,
 .ltemplates header,
 .lhonest header,
@@ -508,41 +606,42 @@
 .ltemplates h2,
 .lhonest h2,
 .lfooter h2 {
-  margin: 22px 0 0;
+  margin: var(--l-sp-5) 0 0;
   font-size: clamp(28px, 4.4vw, 58px);
   font-weight: 800;
   letter-spacing: -0.04em;
-  line-height: 1.02;
+  line-height: 1.06;
 }
 
 .lcapabilities header p,
 .ltemplates header p {
-  margin: 18px 0 0;
+  margin: var(--l-sp-5) 0 0;
   color: var(--l-muted);
-  max-width: 68ch;
+  max-width: var(--l-measure);
+  line-height: 1.7;
 }
 
 .lcards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 18px;
-  margin-top: clamp(38px, 5vw, 64px);
+  gap: var(--l-sp-5);
+  margin-top: clamp(40px, 5vw, 68px);
 }
 
 .lcards article {
   border: 1px solid var(--l-line);
   border-radius: 16px;
-  padding: 26px 24px 22px;
+  padding: var(--l-sp-6) var(--l-sp-5) var(--l-sp-5);
   background: var(--l-panel);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--l-sp-4);
   transition: border-color 0.3s ease, transform 0.5s cubic-bezier(0.2, 0.75, 0.2, 1), background 0.3s ease;
 }
 
 .lcards article:hover {
-  border-color: rgba(76, 141, 255, 0.42);
-  background: rgba(76, 141, 255, 0.06);
+  border-color: rgba(42, 91, 255, 0.42);
+  background: rgba(42, 91, 255, 0.06);
   transform: translateY(-3px);
 }
 
@@ -551,20 +650,31 @@
   font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.02em;
+  line-height: 1.3;
 }
 
 .lcards p {
   margin: 0;
   font-size: 14px;
+  line-height: 1.7;
   color: var(--l-muted);
   flex: 1;
 }
 
+/*
+ * The file each claim is implemented in.
+ *
+ * Set apart from the sentence above it by a hairline and a gap, because it is
+ * evidence rather than prose.
+ */
 .lcode {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--l-mono);
   font-size: 12px;
-  color: var(--l-blue);
+  color: var(--l-blue-text);
   word-break: break-all;
+  margin-top: var(--l-sp-2);
+  padding-top: var(--l-sp-3);
+  border-top: 1px solid var(--l-line);
 }
 
 .lcode:hover {
@@ -574,18 +684,18 @@
 .ltemplate-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 18px;
-  margin-top: clamp(38px, 5vw, 64px);
+  gap: var(--l-sp-5);
+  margin-top: clamp(40px, 5vw, 68px);
 }
 
 .ltemplate-grid article {
   border: 1px solid var(--l-line);
   border-radius: 16px;
-  padding: 26px 24px;
+  padding: var(--l-sp-6) var(--l-sp-5);
   background: var(--l-panel);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--l-sp-4);
 }
 
 .ltemplate-grid h3 {
@@ -593,20 +703,24 @@
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.03em;
+  line-height: 1.2;
 }
 
 .ltemplate-grid > article > p {
   margin: 0;
   font-size: 14px;
+  line-height: 1.7;
   color: var(--l-muted);
 }
 
 .lpill {
   align-self: flex-start;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  margin: 0 0 var(--l-sp-1);
+  font-family: var(--l-mono);
   font-size: 11.5px;
+  letter-spacing: 0.06em;
   color: var(--l-cyan);
-  border: 1px solid rgba(53, 214, 196, 0.32);
+  border: 1px solid rgba(28, 199, 208, 0.34);
   border-radius: 999px;
   padding: 3px 10px;
 }
@@ -614,9 +728,9 @@
 .ltemplate-grid dl {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
-  gap: 14px;
+  gap: var(--l-sp-5) var(--l-sp-4);
   margin: 0;
-  padding-top: 14px;
+  padding-top: var(--l-sp-4);
   border-top: 1px solid var(--l-line);
 }
 
@@ -624,11 +738,12 @@
   font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.04em;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
 
 .ltemplate-grid dd {
-  margin: 4px 0 0;
+  margin: var(--l-sp-2) 0 0;
   font-size: 11.5px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -636,30 +751,33 @@
 }
 
 .ltypes {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--l-mono);
   font-size: 11.5px !important;
-  line-height: 1.9;
-  color: rgba(142, 155, 180, 0.7) !important;
+  line-height: 2;
+  color: rgba(142, 142, 150, 0.72) !important;
+  margin-top: var(--l-sp-2);
 }
 
 .lquiet {
   color: var(--l-muted);
   font-size: 14px;
+  line-height: 1.7;
 }
 
 .lhonest ul {
-  margin: clamp(30px, 4vw, 46px) 0 30px;
+  margin: clamp(32px, 4vw, 50px) 0 var(--l-sp-6);
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 16px;
+  gap: var(--l-sp-5);
   max-width: 88ch;
 }
 
 .lhonest li {
   position: relative;
-  padding-left: 26px;
+  padding-left: var(--l-sp-5);
   font-size: 14.5px;
+  line-height: 1.72;
   color: var(--l-muted);
 }
 
@@ -667,7 +785,7 @@
   content: '';
   position: absolute;
   left: 0;
-  top: 0.62em;
+  top: 0.72em;
   width: 12px;
   height: 1px;
   background: var(--l-violet);
@@ -683,22 +801,23 @@
 .lfooter {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.9fr);
-  gap: clamp(28px, 5vw, 70px);
+  gap: clamp(32px, 5vw, 72px);
   align-items: end;
-  padding-bottom: 40px;
+  padding-bottom: var(--l-sp-7);
 }
 
 .lfooter p {
-  margin: 18px 0 0;
+  margin: var(--l-sp-5) 0 0;
   color: var(--l-muted);
   max-width: 58ch;
   font-size: 14.5px;
+  line-height: 1.7;
 }
 
 .lfooter-actions {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--l-sp-4);
   align-items: flex-start;
 }
 
@@ -707,9 +826,9 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  gap: 10px;
-  margin-top: 30px;
-  padding-top: 18px;
+  gap: var(--l-sp-3);
+  margin-top: var(--l-sp-7);
+  padding-top: var(--l-sp-5);
   border-top: 1px solid var(--l-line);
   font-size: 12.5px;
   color: var(--l-muted);
@@ -722,6 +841,10 @@
   }
 
   .lhero {
-    padding-top: 18vh;
+    padding-top: 20vh;
+  }
+
+  .lhero h1 {
+    font-size: clamp(42px, 13vw, 96px);
   }
 }

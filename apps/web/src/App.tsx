@@ -14,6 +14,7 @@ import { Collect } from './collect';
 import { AdminView } from './admin';
 import { InvitePage, LegalPage, TermsGate } from './legal';
 import { useFormStream, type Aggregate, type StreamStatus } from './realtime';
+import { createAmbientField, type AmbientField, type AmbientQuality } from './immersive/ambient';
 import { navigate } from './router';
 
 /**
@@ -142,6 +143,102 @@ export function liveLabel(status: StreamStatus, live: boolean, fallbackMs: numbe
   if (live) return 'live: pushed by the server the moment it changes';
   if (status === 'connecting') return `live: connecting, refreshing every ${Math.round(fallbackMs / 1000)}s until it opens`;
   return `live: stream down, refreshing every ${Math.round(fallbackMs / 1000)}s`;
+}
+
+/**
+ * The chrome that puts the signed-in app in the same world as the landing page.
+ *
+ * Three fixed layers, none of them interactive and none of them load-bearing: the
+ * ambient field (the same node-and-filament structure as the landing page's
+ * sculpture, drawn as a light field on a 2D canvas, so the console does not grow by
+ * a renderer to look like the product), film grain over it, and a vignette that
+ * stops a wide table from floating in the middle of nowhere. With no canvas, with
+ * JavaScript off, or under reduced motion, the page is complete: the layers simply
+ * do not appear.
+ *
+ * It is mounted once for the session rather than per screen, so moving between
+ * forms does not rebuild it, and it stops when the tab is hidden, because an
+ * animation nobody is watching is a battery cost with no reader.
+ */
+function ImmersiveChrome(): JSX.Element {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const ringRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const host = canvas?.parentElement;
+    if (!canvas || !host) return;
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    const quality: AmbientQuality =
+      reducedMotion || window.innerWidth < 860 || (navigator.hardwareConcurrency || 8) <= 4 ? 'low' : 'high';
+
+    const field: AmbientField | null = createAmbientField(canvas, { quality, reducedMotion });
+    if (field) {
+      field.resize();
+      host.classList.add('ready');
+    }
+
+    let frame = 0;
+    const onScroll = (): void => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        const scrollable = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+        field?.setProgress(window.scrollY / scrollable);
+      });
+    };
+
+    const onResize = (): void => field?.resize();
+
+    const onPointer = (event: PointerEvent): void => {
+      field?.setPointer(
+        (event.clientX / window.innerWidth) * 2 - 1,
+        -((event.clientY / window.innerHeight) * 2 - 1),
+      );
+      const ring = ringRef.current;
+      if (!ring) return;
+      ring.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0)`;
+      // The ring is a halo around the real pointer, never a replacement for it: a
+      // tool full of text fields keeps the cursor it was born with.
+      const target = event.target as HTMLElement | null;
+      const interactive = target?.closest('a, button, select, input, textarea, [role="button"]');
+      ring.classList.toggle('on', Boolean(interactive));
+      ring.dataset.label = interactive?.getAttribute('data-cursor') ?? '';
+    };
+
+    const onVisibility = (): void => {
+      field?.setActive(document.visibilityState === 'visible');
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
+    document.addEventListener('visibilitychange', onVisibility);
+    if (fine && !reducedMotion) window.addEventListener('pointermove', onPointer, { passive: true });
+    onScroll();
+
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onResize);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pointermove', onPointer);
+      if (frame) cancelAnimationFrame(frame);
+      host.classList.remove('ready');
+      field?.dispose();
+    };
+  }, []);
+
+  return (
+    <>
+      <div className="field" aria-hidden="true">
+        <canvas ref={canvasRef} />
+      </div>
+      <div className="vignette" aria-hidden="true" />
+      <div className="grain" aria-hidden="true" />
+      <div ref={ringRef} className="cursor-ring" aria-hidden="true" />
+    </>
+  );
 }
 
 const CODE_LENGTH = 6;
@@ -849,17 +946,22 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
 
   return (
     <div className="stack grow">
-      <div className="row wrap">
-        <button type="button" className="ghost" onClick={onBack}>
-          ← Forms
-        </button>
-        <h2>{form.name}</h2>
-        <span className="muted small">{form.organisation}</span>
-        {published ? (
-          <span className="pill ok">published v{published.version} · collecting</span>
-        ) : (
-          <span className="pill">draft only · not collecting yet</span>
-        )}
+      <div className="screen-head">
+        <div>
+          <span className="eyebrow">Form</span>
+          <h1>{form.name}</h1>
+          <p className="muted small">{form.organisation}</p>
+        </div>
+        <div className="appbar-right">
+          {published ? (
+            <span className="pill ok">published v{published.version} · collecting</span>
+          ) : (
+            <span className="pill">draft only · not collecting yet</span>
+          )}
+          <button type="button" className="ghost" onClick={onBack}>
+            ← Forms
+          </button>
+        </div>
       </div>
 
       <nav className="tabs">
@@ -994,12 +1096,30 @@ function Workspace({ me, onSignedOut }: { me: Me; onSignedOut: () => void }): JS
     }
   };
 
+  const activeOrg = orgs.find((org) => org.id === orgId) ?? null;
+
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="brand">Inicio</div>
-        <p className="muted small">{me.user.email}</p>
-        <label className="small muted">Organisation</label>
+    <>
+      <header className="appbar">
+        <div className="row">
+          <span className="brand">Inicio</span>
+          <span className="muted small">{me.user.email}</span>
+        </div>
+        <div className="appbar-right">
+          <span className="pill">{activeOrg ? `${activeOrg.name} \u00b7 ${activeOrg.role}` : 'No organisation yet'}</span>
+          <span className="muted small">
+            {orgForms.length} form{orgForms.length === 1 ? '' : 's'}
+          </span>
+          <button type="button" className="ghost" onClick={onSignedOut}>
+            Sign out
+          </button>
+        </div>
+      </header>
+
+      <div className="shell">
+        <aside className="sidebar">
+          <span className="eyebrow">Workspace</span>
+          <label className="small muted">Organisation</label>
         <select value={orgId ?? ''} onChange={(e) => { setOrgId(e.target.value); setFormId(null); }}>
           {orgs.map((org) => (
             <option key={org.id} value={org.id}>
@@ -1078,9 +1198,6 @@ function Workspace({ me, onSignedOut }: { me: Me; onSignedOut: () => void }): JS
           </button>
         )}
 
-        <button type="button" className="ghost" onClick={onSignedOut}>
-          Sign out
-        </button>
       </aside>
 
       <main className="main">
@@ -1089,22 +1206,30 @@ function Workspace({ me, onSignedOut }: { me: Me; onSignedOut: () => void }): JS
         ) : selectedForm ? (
           <FormView form={selectedForm} onBack={() => setFormId(null)} />
         ) : (
-          <div className="card">
-            <h1>Your work</h1>
-            <p className="muted">
-              Pick a form on the left, or create one: blank, from a template such as the School Ranking Survey 2026, or
-              by uploading an XLSForm workbook. Logic, validation and calculations run in the same engine on the client
-              and the server, and the server is the authority when a response is submitted.
-            </p>
-            <ul>
+          <section>
+            <div className="screen-head">
+              <div>
+                <span className="eyebrow">Workspace</span>
+                <h1>Your work</h1>
+                <p className="muted">
+                  Pick a form on the left, or create one: blank, from a template such as the School Ranking Survey
+                  2026, or by uploading an XLSForm workbook. Logic, validation and calculations run in the same engine
+                  on the client and the server, and the server is the authority when a response is submitted.
+                </p>
+              </div>
+            </div>
+            <div className="card">
+              <ul>
               <li>Publish a version and it becomes immutable: responses always record the version they answered.</li>
               <li>Quotas count on submission; partial responses are first-class and exportable.</li>
               <li>Exports are bundles: data, codebook, value labels and a missing-code table.</li>
-            </ul>
-          </div>
+              </ul>
+            </div>
+          </section>
         )}
       </main>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -1185,16 +1310,22 @@ export function App(): JSX.Element {
     };
   }, [me]);
 
-  if (inviteMatch?.[1]) return <InvitePage token={decodeURIComponent(inviteMatch[1])} />;
-  if (legalMatch?.[1]) return <LegalPage id={legalMatch[1] as 'terms' | 'privacy'} />;
-  if (collectMatch?.[1]) return <Collect token={decodeURIComponent(collectMatch[1])} />;
-
   // The marketing page renders immediately rather than waiting on the session
   // check, because it does not depend on the answer: a visitor sees the product
   // present itself, and a signed in reader who asked for the bare domain is sent
   // on to the console by the effect above.
-  if (onMarketing && !signedIn) {
-    return (
+  //
+  // Every route except the landing page is wrapped in the ambient chrome, which is
+  // what makes signing in feel like walking further into the same room rather than
+  // arriving at a different site. The landing page is the one exclusion: it carries
+  // its own scene, and a second renderer behind it would be two worlds at once.
+  const marketing = onMarketing && !signedIn;
+  let page: JSX.Element;
+  if (inviteMatch?.[1]) page = <InvitePage token={decodeURIComponent(inviteMatch[1])} />;
+  else if (legalMatch?.[1]) page = <LegalPage id={legalMatch[1] as 'terms' | 'privacy'} />;
+  else if (collectMatch?.[1]) page = <Collect token={decodeURIComponent(collectMatch[1])} />;
+  else if (marketing) {
+    page = (
       <Suspense
         fallback={
           <div className="boot" role="status">
@@ -1206,26 +1337,32 @@ export function App(): JSX.Element {
         <Landing />
       </Suspense>
     );
-  }
-  if (onLogin && !signedIn) return <Login onSignedIn={goToConsole} />;
-  if (me === undefined) {
-    return (
+  } else if (onLogin && !signedIn) page = <Login onSignedIn={goToConsole} />;
+  else if (me === undefined) {
+    page = (
       <div className="boot" role="status">
         <span className="boot-bar" aria-hidden="true" />
         <p>Opening your workspace.</p>
       </div>
     );
+  } else if (me === null) page = <Login onSignedIn={goToConsole} />;
+  else if (terms?.required) {
+    page = <TermsGate status={terms} onAccepted={() => setTerms({ ...terms, required: false })} />;
+  } else {
+    page = (
+      <Workspace
+        me={me}
+        onSignedOut={() => {
+          void api.logout().finally(() => setMe(null));
+        }}
+      />
+    );
   }
-  if (me === null) return <Login onSignedIn={goToConsole} />;
-  if (terms?.required) {
-    return <TermsGate status={terms} onAccepted={() => setTerms({ ...terms, required: false })} />;
-  }
+
   return (
-    <Workspace
-      me={me}
-      onSignedOut={() => {
-        void api.logout().finally(() => setMe(null));
-      }}
-    />
+    <>
+      {!marketing && <ImmersiveChrome />}
+      {page}
+    </>
   );
 }

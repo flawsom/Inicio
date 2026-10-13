@@ -139,11 +139,16 @@ export function AdminView({ orgId, canAdminister }: { orgId: string; canAdminist
   return (
     <div className="stack">
       <div className="card">
-        <h1>People</h1>
-        <p className="muted small">
-          Membership is checked on every request, so a change here takes effect immediately rather than at the next sign
-          in.
-        </p>
+        <div className="screen-head">
+          <div>
+            <span className="eyebrow">Administration</span>
+            <h1>People</h1>
+            <p className="muted small">
+              Membership is checked on every request, so a change here takes effect immediately rather than at the next
+              sign in.
+            </p>
+          </div>
+        </div>
         <table className="table">
           <thead>
             <tr>
@@ -187,11 +192,15 @@ export function AdminView({ orgId, canAdminister }: { orgId: string; canAdminist
       </div>
 
       <div className="card">
-        <h1>Invitations</h1>
-        <p className="muted small">
-          An invitation link signs in the invited address once, then stops working. It is bound to that address and
-          carries the role you choose here, so it cannot be used by anyone else even if it is forwarded.
-        </p>
+        <div className="screen-head">
+          <div>
+            <h2>Invitations</h2>
+            <p className="muted small">
+              An invitation link signs in the invited address once, then stops working. It is bound to that address and
+              carries the role you choose here, so it cannot be used by anyone else even if it is forwarded.
+            </p>
+          </div>
+        </div>
         <div className="row wrap">
           <input
             type="email"
@@ -256,16 +265,20 @@ export function AdminView({ orgId, canAdminister }: { orgId: string; canAdminist
             {invites.map((invite) => (
               <tr key={invite.id}>
                 <td className="mono small">{invite.email}</td>
-                <td>{invite.role}</td>
+                <td>
+                  <span className="pill">{invite.role}</span>
+                </td>
                 <td className="small">{new Date(invite.expires_at).toLocaleString()}</td>
                 <td className="small">
-                  {invite.accepted_at
-                    ? 'accepted'
-                    : invite.revoked_at
-                      ? 'revoked'
-                      : invite.pending
-                        ? 'pending'
-                        : 'expired'}
+                  {invite.accepted_at ? (
+                    <span className="pill ok">accepted</span>
+                  ) : invite.revoked_at ? (
+                    <span className="pill bad">revoked</span>
+                  ) : invite.pending ? (
+                    <span className="pill warn">pending</span>
+                  ) : (
+                    <span className="pill">expired</span>
+                  )}
                 </td>
                 <td className="right">
                   {invite.pending && (
@@ -288,11 +301,15 @@ export function AdminView({ orgId, canAdminister }: { orgId: string; canAdminist
       </div>
 
       <div className="card">
-        <h1>Email delivery</h1>
-        <p className="muted small">
-          Sign in codes depend on this. The detail below is shown here rather than on the login page, because it is
-          operational information.
-        </p>
+        <div className="screen-head">
+          <div>
+            <h2>Email delivery</h2>
+            <p className="muted small">
+              Sign in codes depend on this. The detail below is shown here rather than on the login page, because it is
+              operational information.
+            </p>
+          </div>
+        </div>
         {mail && (
           <ul className="small">
             <li>
@@ -302,7 +319,8 @@ export function AdminView({ orgId, canAdminister }: { orgId: string; canAdminist
               From: <span className="mono">{mail.from}</span>
             </li>
             <li>
-              Usable right now: <strong>{mail.reachable ? 'yes' : 'no'}</strong>{' '}
+              Usable right now:{' '}
+              <strong className={mail.reachable ? 'pill ok' : 'pill bad'}>{mail.reachable ? 'yes' : 'no'}</strong>{' '}
               <span className="muted">
                 ({mail.basis === 'none' ? 'nothing sent yet in this process' : mail.basis === 'last-send' ? 'from the last send' : 'from a live check'})
               </span>
@@ -313,7 +331,11 @@ export function AdminView({ orgId, canAdminister }: { orgId: string; canAdminist
       </div>
 
       {notice && <p className="small muted">{notice}</p>}
-      {error && <p className="error small">{error}</p>}
+      {error && (
+        <div className="card error">
+          <p className="error small">{error}</p>
+        </div>
+      )}
     </div>
   );
 }

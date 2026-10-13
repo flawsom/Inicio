@@ -37,6 +37,7 @@ export function TermsGate({
 
   return (
     <div className="auth card">
+      <div className="eyebrow">Consent</div>
       <h1>Before you continue</h1>
       <p className="muted small">
         These terms explain what you may do with the service and what happens to the data you collect. The privacy
@@ -58,10 +59,11 @@ export function TermsGate({
         </span>
       </label>
 
-      <p className="muted small mono">
-        Version {status.terms.version} | terms {status.terms.hash.slice(0, 12)} | privacy{' '}
-        {status.privacy.hash.slice(0, 12)}
-      </p>
+      <div className="row wrap">
+        <span className="pill mono">Version {status.terms.version}</span>
+        <span className="pill mono">terms {status.terms.hash.slice(0, 12)}</span>
+        <span className="pill mono">privacy {status.privacy.hash.slice(0, 12)}</span>
+      </div>
 
       <button type="button" onClick={() => void accept()} disabled={!agreed || busy}>
         {busy ? 'Recording...' : 'Agree and continue'}
@@ -99,16 +101,31 @@ export function LegalPage({ id }: { id: 'terms' | 'privacy' }): JSX.Element {
     };
   }, [id]);
 
-  if (error) return <div className="card">{error}</div>;
-  if (!doc) return <div className="card">Loading...</div>;
+  if (error) {
+    return (
+      <div className="card">
+        <p className="error">{error}</p>
+      </div>
+    );
+  }
+  if (!doc) {
+    return (
+      <div className="boot">
+        <p>Loading...</p>
+        <div className="boot-bar" />
+      </div>
+    );
+  }
 
   return (
     <div className="prose card">
+      <div className="eyebrow">Document</div>
       <h1>{doc.title}</h1>
-      <p className="muted small">
-        Version {doc.version}, effective {doc.effectiveDate}. Document hash{' '}
-        <span className="mono">{doc.hash.slice(0, 16)}</span>
-      </p>
+      <div className="row wrap">
+        <span className="pill">Version {doc.version}</span>
+        <span className="pill">Effective {doc.effectiveDate}</span>
+        <span className="pill mono">Hash {doc.hash.slice(0, 16)}</span>
+      </div>
       <p>{doc.summary}</p>
       {doc.sections.map((section) => (
         <section key={section.heading}>
@@ -185,6 +202,7 @@ export function InvitePage({ token }: { token: string }): JSX.Element {
   if (invalid) {
     return (
       <div className="auth card">
+        <div className="eyebrow">Invitation</div>
         <h1>Invitation not usable</h1>
         <p className="muted">
           {error ?? 'This link is not valid.'} Invitation links can be used once and expire. Ask the person who invited
@@ -197,18 +215,33 @@ export function InvitePage({ token }: { token: string }): JSX.Element {
     );
   }
 
-  if (!invite) return <div className="card">Loading...</div>;
+  if (!invite) {
+    return (
+      <div className="boot">
+        <p>Loading...</p>
+        <div className="boot-bar" />
+      </div>
+    );
+  }
 
   return (
     <div className="auth card">
-      <h1>Join {invite.organisation}</h1>
-      <p className="muted">
-        You have been invited as <strong>{invite.role}</strong> for <span className="mono">{invite.email}</span>.
-      </p>
-      <p className="muted small">
-        This link works once and expires on {new Date(invite.expiresAt).toLocaleString()}. Pressing the button below
-        signs you in and uses it.
-      </p>
+      <header className="screen-head">
+        <div>
+          <div className="eyebrow">Invitation</div>
+          <h1>Join {invite.organisation}</h1>
+          <p className="muted">
+            You have been invited as <span className="pill">{invite.role}</span> for{' '}
+            <span className="mono">{invite.email}</span>.
+          </p>
+        </div>
+      </header>
+      <div className="card">
+        <p className="muted small">
+          This link works once and expires on {new Date(invite.expiresAt).toLocaleString()}. Pressing the button below
+          signs you in and uses it.
+        </p>
+      </div>
       <button type="button" onClick={() => void redeem()} disabled={busy}>
         {busy ? 'Joining...' : `Join ${invite.organisation}`}
       </button>

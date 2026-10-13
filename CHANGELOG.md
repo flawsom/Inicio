@@ -60,7 +60,20 @@ what changed and why.
   client. The console's own live read is covered too, and it is the assertion that matters most here:
   a push naming its aggregate refetches the screen, a push naming another one does not, two pushes
   inside a frame cost one read, and a minute of clock passes while the stream is live without a single
-  timed request. `pnpm test` is 162 tests: 54 engine, 70 API, 38 web.
+  timed request. `pnpm test` is 169 tests: 54 engine, 70 API, 45 web.
+- **One visual world, for the whole product.** The signed-in surfaces were restyled onto a single design
+  system: the pearl and ink palette with the two accents, a spacing scale used for every margin, padding
+  and gap, a type scale with real line heights, and one glass pane (`.card`) at four sizes. The console
+  gained a fixed application bar, chapter headings with a hairline eyebrow, metric figures set in tabular
+  display type, and a left accent bar on the active form. Collection, administration and the legal
+  surfaces were restructured onto the same components without a single behavioural change.
+- **An ambient light field behind the app** (`apps/web/src/immersive/ambient.ts`). The landing page's
+  sculpture redrawn as a light field on a 2D canvas: the same node-and-filament structure, hand-projected
+  with a perspective divide, using the theme's own custom properties as its palette. It costs no
+  dependency and about 9 kB, draws one path and five fills per frame, stops entirely when the tab is
+  hidden, and assembles as the page is scrolled. With no 2D context, no JavaScript, or under
+  `prefers-reduced-motion` it draws one frame or none and the page is complete. A film grain and vignette
+  sit above it in CSS.
 
 ### Changed
 
@@ -84,6 +97,13 @@ what changed and why.
   `index.html` **and a 200**, so the service worker never installed and the manifest was never
   parsed. Each root static file is now excluded from the catch-all, and verification checks static
   assets by content type rather than by status code.
+- **The ambient wash behind the console was invisible.** It was a fixed, negative-z-index layer behind an
+  opaque `body` background, and a negative-z-index descendant paints before in-flow block backgrounds, so
+  it could never be seen, which is the kind of flatness that reads as unfinished. The base colour now
+  lives on `html` and the body is transparent. The new tests for the field are what stop "the background
+  actually paints" from being something nobody checks.
+- **A resize after dispose touched the canvas.** `resize` was handed out unguarded, so a window resize
+  arriving in the same tick as teardown would keep sizing a canvas the field had already let go of.
 
 ## [0.1.0] — 2026-10-12
 

@@ -1,141 +1,606 @@
 /*
- * The design tokens, shared by the console and the collection app.
+ * The design system.
  *
- * The names are the ones the whole codebase already uses, so every existing class
- * keeps working; what changed is the depth. The surfaces are built from a much
- * darker base with translucent panels over a faint accent wash, so a table of live
- * responses sits on something with weight instead of a flat grey rectangle.
+ * One stylesheet for every signed-in surface and the respondent app, because
+ * they are one product: a person who signs in, authors a questionnaire, circulates
+ * it and reads the results should not feel the interface change character halfway
+ * through. The landing page keeps its own file (it carries the WebGL scene and a
+ * reader who never signs in should not download this), and its palette is the same
+ * palette, so the two read as one thing.
  *
- * The landing page has its own stylesheet. Nothing here leaks into it and it cannot
- * leak back, and a signed in reader never downloads the other one.
+ * Three rules hold this together.
+ *
+ * 1. Every colour, radius, gap and shadow comes from a token. There is no literal
+ *    hex below the token blocks, which is what makes the light theme a switch
+ *    rather than a rewrite.
+ * 2. Spacing is a scale, not a mood. `--sp-*` is used for every margin, padding and
+ *    gap, so nothing ends up jammed against anything: the smallest gap between two
+ *    pieces of type is 12px and the smallest inside a control is 12px, which is the
+ *    floor at which two different things stop looking like one.
+ * 3. Type has a rhythm. Display sizes come with a line height that leaves the
+ *    ascenders and descenders alone (1.02 and up, never 0.9), headings carry a
+ *    margin block instead of a margin bottom, and every uppercase label gets
+ *    tracking wide enough to be read as a label rather than shouted as a word.
+ *
+ * The palette is the product's own: pearl and ink, one blue, one violet, one cyan
+ * used only where something is genuinely live.
  */
+
 :root {
-  --bg: #05070d;
-  --bg-deep: #03050a;
-  --panel: rgba(19, 25, 38, 0.72);
-  --panel-solid: #131926;
-  --panel-2: rgba(255, 255, 255, 0.045);
-  --line: rgba(255, 255, 255, 0.1);
-  --line-strong: rgba(255, 255, 255, 0.18);
-  --text: #eef2fb;
-  --muted: #8e9bb4;
-  --accent: #4c8dff;
-  --accent-2: #7b4dff;
-  --ok: #2f9e6b;
-  --live: #35d6c4;
-  --bad: #e0555a;
-  --glow: 0 18px 60px rgba(76, 141, 255, 0.18);
-  --radius: 12px;
-  --font-display: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Palette, named, so the themes below are readable. */
+  --pearl: #f3f2ee;
+  --ink: #0a0a0b;
+  --blue: #2a5bff;
+  --violet: #7b4dff;
+  --cyan: #1cc7d0;
+  --pearl-muted: #6d6d74;
+  --ink-muted: #8e8e96;
+  --green: #2f9e6b;
+  --red: #e0555a;
+  --amber: #d3a24a;
+
+  /* Spacing scale. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 72px;
+
+  /* Type. */
+  --font-display: 'Archivo', 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
   --font-serif: 'Instrument Serif', 'Times New Roman', Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  --text-xs: 12px;
+  --text-sm: 13.5px;
+  --text-base: 15.5px;
+  --text-lg: 18px;
+  --label-tracking: 0.22em;
+
+  --radius-sm: 10px;
+  --radius: 16px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+
+  --gutter: clamp(20px, 4vw, 56px);
+  --measure: 74ch;
+}
+
+/* Dark, which is what the product is: a dark room with glass in it. */
+:root {
+  --bg: #07070a;
+  --bg-deep: #040406;
+  --panel: rgba(255, 255, 255, 0.038);
+  --panel-2: rgba(255, 255, 255, 0.062);
+  --panel-solid: #101018;
+  --line: rgba(243, 242, 238, 0.13);
+  --line-strong: rgba(243, 242, 238, 0.24);
+  --text: var(--pearl);
+  --muted: var(--ink-muted);
+  --accent: #6f95ff;
+  --accent-solid: var(--blue);
+  --accent-2: var(--violet);
+  --live: var(--cyan);
+  --ok: var(--green);
+  --bad: #ff6b70;
+  --warn-fg: #f0d9a8;
+  --warn-bg: rgba(211, 162, 74, 0.12);
+  --warn-line: rgba(211, 162, 74, 0.5);
+  --sheen: rgba(255, 255, 255, 0.09);
+  /* Opaque fallback for the two surfaces that must never be see-through, for a
+     browser without `color-mix`. */
+  --scrim: rgba(7, 7, 10, 0.84);
+  --shadow: 0 22px 70px rgba(0, 0, 0, 0.55);
+  --glow: 0 18px 60px rgba(42, 91, 255, 0.28);
   color-scheme: dark;
 }
 
-* { box-sizing: border-box; }
+/*
+ * The other half of the palette.
+ *
+ * Pearl ground, ink type, the same two accents darkened just enough to hold their
+ * contrast on a light background. Nothing else changes: same scale, same radii,
+ * same components.
+ */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: var(--pearl);
+    --bg-deep: #e9e8e3;
+    --panel: rgba(255, 255, 255, 0.66);
+    --panel-2: rgba(10, 10, 11, 0.045);
+    --panel-solid: #ffffff;
+    --line: rgba(10, 10, 11, 0.14);
+    --line-strong: rgba(10, 10, 11, 0.28);
+    --text: var(--ink);
+    --muted: var(--pearl-muted);
+    --accent: var(--blue);
+    --accent-2: #5b32d6;
+    --live: #0d8f9c;
+    --ok: #1f7a52;
+    --bad: #c4343a;
+    --warn-fg: #6b4c12;
+    --warn-bg: rgba(211, 162, 74, 0.16);
+    --warn-line: rgba(160, 118, 30, 0.45);
+    --sheen: rgba(255, 255, 255, 0.9);
+    --scrim: rgba(243, 242, 238, 0.88);
+    --shadow: 0 20px 60px rgba(10, 10, 11, 0.12);
+    --glow: 0 18px 60px rgba(42, 91, 255, 0.16);
+    color-scheme: light;
+  }
+}
 
-body {
-  margin: 0;
+* {
+  box-sizing: border-box;
+}
+
+html {
   background: var(--bg);
-  color: var(--text);
-  font: 15px/1.55 var(--font-display);
-  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
 }
 
 /*
- * The ambient wash behind everything.
+ * Why the body has no background of its own.
  *
- * Two very faint accent pools and one hairline grid, drawn in CSS and then faded
- * out to nothing at the edge of the viewport. It costs no JavaScript and no image,
- * it is `background-attachment: fixed` so it does not scroll with the content, and
- * it is the only ornament in a screen that is mostly numbers.
+ * The field is a fixed element at `z-index: -1`. A negative-z-index descendant
+ * paints before the in-flow block backgrounds, so an opaque `body` background hides
+ * it completely: the wash was in this stylesheet before and could never be seen,
+ * which is exactly the kind of flatness that reads as unfinished. The base colour
+ * therefore lives on `html`, which paints first, and the body stays transparent so
+ * the field shows through it.
  */
-body::before {
-  content: '';
+body {
+  margin: 0;
+  min-height: 100%;
+  background: transparent;
+  color: var(--text);
+  font: var(--text-base) / 1.62 var(--font-display);
+  font-variation-settings: 'wdth' 100;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/*
+ * The ambient field.
+ *
+ * A canvas the shell draws into (see immersive/ambient.ts): the same node-and-
+ * filament structure as the landing page's sculpture, drawn as a light field rather
+ * than as glass. It is fixed, it is behind everything, it is never interactive, and
+ * it stops drawing when the tab is hidden. With no WebGL, or with JavaScript not
+ * running, the gradient underneath it is what shows, so the page never depends on it.
+ */
+.field {
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(70% 55% at 88% -8%, rgba(76, 141, 255, 0.16), transparent 62%),
-    radial-gradient(58% 50% at 4% 104%, rgba(123, 77, 255, 0.13), transparent 60%),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.014) 1px, transparent 1px) 0 0 / 100% 68px;
+    radial-gradient(78% 60% at 84% -10%, rgba(42, 91, 255, 0.2), transparent 62%),
+    radial-gradient(62% 54% at 2% 104%, rgba(123, 77, 255, 0.17), transparent 60%),
+    radial-gradient(50% 40% at 50% 50%, rgba(28, 199, 208, 0.05), transparent 70%);
 }
 
-h1 { font-size: 23px; font-weight: 800; letter-spacing: -0.03em; margin: 0 0 8px; }
-h2 { font-size: 19px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 8px; }
+.field canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0;
+  transition: opacity 1.6s ease;
+}
 
-a { color: var(--accent); }
+.field.ready canvas {
+  opacity: 1;
+}
 
-label { display: block; font-size: 13px; margin: 10px 0 4px; }
+/*
+ * Film grain, and the vignette above it.
+ *
+ * Both are pure CSS, both are fixed, and both exist so the flat areas of a table
+ * are not literally flat. They are the only ornament in a screen made of numbers.
+ */
+/*
+ * Grain, at 1Hz.
+ *
+ * A three pixel dot lattice on a fixed layer, stepped through eight offsets a
+ * second. The step is deliberate: animating a full-viewport texture every frame is
+ * a repaint per frame for something nobody can see moving. This is eight repaints a
+ * second of the cheapest possible fill, and it reads as film rather than as a
+ * gradient.
+ */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.04;
+  background-image: radial-gradient(var(--text) 0.5px, transparent 0.5px);
+  background-size: 3px 3px;
+  animation: grain-shift 8s steps(8) infinite;
+}
 
-input, select, textarea, button {
+@keyframes grain-shift {
+  0% { background-position: 0 0; }
+  12.5% { background-position: -1px 1px; }
+  25% { background-position: 2px -1px; }
+  37.5% { background-position: -2px -2px; }
+  50% { background-position: 1px 2px; }
+  62.5% { background-position: 2px 1px; }
+  75% { background-position: -1px -1px; }
+  100% { background-position: 0 0; }
+}
+
+.vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 59;
+  pointer-events: none;
+  background: radial-gradient(120% 100% at 50% 0%, transparent 45%, color-mix(in srgb, var(--bg-deep) 85%, transparent) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grain { animation: none; }
+}
+
+/* ------------------------------------------------------------------- cursor */
+
+/*
+ * The halo.
+ *
+ * A thin ring that trails the real pointer, so everything under it has somewhere to
+ * live. It is not a substitute for the cursor: this product is full of text fields
+ * and selects, and taking the pointer away from a form is a usability bug dressed as
+ * a style. It grows over anything interactive and never appears on touch.
+ */
+.cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 70;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--text) 42%, transparent);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0;
+  transition: width 0.3s ease, height 0.3s ease, margin 0.3s ease, background 0.3s ease,
+    border-color 0.3s ease, opacity 0.4s ease;
+}
+
+.cursor-ring.on {
+  width: 62px;
+  height: 62px;
+  margin: -31px 0 0 -31px;
+  border-color: color-mix(in srgb, var(--accent) 75%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.cursor-ring.on::after {
+  content: attr(data-label);
+}
+
+@media (hover: none), (prefers-reduced-motion: reduce) {
+  .cursor-ring { display: none; }
+}
+
+/* --------------------------------------------------------------------- type */
+
+h1,
+h2,
+h3,
+h4 {
+  margin: var(--sp-6) 0 var(--sp-4);
+  font-weight: 800;
+  color: var(--text);
+}
+
+h1 {
+  font-size: clamp(30px, 3.6vw, 46px);
+  line-height: 1.04;
+  letter-spacing: -0.038em;
+}
+
+h2 {
+  font-size: clamp(22px, 2.1vw, 28px);
+  line-height: 1.12;
+  letter-spacing: -0.028em;
+}
+
+h3 {
+  font-size: var(--text-lg);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  margin: var(--sp-5) 0 var(--sp-3);
+}
+
+h4 {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  margin: var(--sp-5) 0 var(--sp-2);
+}
+
+h1:first-child,
+h2:first-child,
+h3:first-child,
+h4:first-child { margin-top: 0; }
+
+p {
+  margin: 0 0 var(--sp-4);
+  max-width: var(--measure);
+}
+
+p:last-child { margin-bottom: 0; }
+
+ul,
+ol {
+  margin: 0 0 var(--sp-4);
+  padding-left: 1.35em;
+}
+
+li { margin-bottom: var(--sp-2); }
+li:last-child { margin-bottom: 0; }
+
+strong { font-weight: 650; }
+
+a {
+  color: var(--accent);
+  text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  text-underline-offset: 3px;
+  transition: color 0.18s ease, text-decoration-color 0.18s ease;
+}
+
+a:hover { text-decoration-color: currentColor; }
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+
+/*
+ * The eyebrow, shared by every screen heading.
+ *
+ * It is the one piece of chrome that makes a page of controls feel like a chapter
+ * of a document: a hairline, a number, and a word, tracked wide.
+ */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8em;
+  margin: 0 0 var(--sp-4);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.eyebrow::before {
+  content: '';
+  width: 26px;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.screen-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-6);
+  padding-bottom: var(--sp-5);
+  margin-bottom: var(--sp-5);
+  border-bottom: 1px solid var(--line);
+}
+
+.screen-head h1 { margin-bottom: var(--sp-2); }
+
+.screen-head p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.muted { color: var(--muted); }
+.small { font-size: var(--text-sm); }
+.mono { font-family: var(--font-mono); font-size: 0.94em; }
+.error { color: var(--bad); }
+.ok { color: var(--ok); }
+.req { color: var(--bad); }
+.grow { flex: 1; }
+.measure { max-width: var(--measure); }
+
+/* --------------------------------------------------------------- controls */
+
+label {
+  display: block;
+  margin: var(--sp-4) 0 var(--sp-2);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+input,
+select,
+textarea,
+button {
   font: inherit;
   color: var(--text);
   background: var(--panel-2);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 10px;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  border-radius: var(--radius-sm);
+  padding: 11px 13px;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
-input:hover:not(:disabled), select:hover:not(:disabled), textarea:hover:not(:disabled) {
-  border-color: var(--line-strong);
+input,
+select,
+textarea { width: 100%; }
+
+input::placeholder,
+textarea::placeholder { color: color-mix(in srgb, var(--muted) 80%, transparent); }
+
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) { border-color: var(--line-strong); }
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
-textarea { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; resize: vertical; }
-
-input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+textarea {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  resize: vertical;
+  min-height: 120px;
+}
 
 button {
+  width: auto;
   cursor: pointer;
-  background: linear-gradient(120deg, #6ea4ff, var(--accent) 55%, #3f77e6);
-  border-color: transparent;
   font-weight: 600;
-  box-shadow: 0 6px 22px rgba(76, 141, 255, 0.22);
-  transition: filter 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+  letter-spacing: -0.01em;
+  color: #05070f;
+  background: linear-gradient(120deg, #cfe0ff, var(--pearl) 46%, #bed1ff);
+  border-color: transparent;
+  box-shadow: 0 10px 34px rgba(42, 91, 255, 0.24);
 }
-button:hover:not(:disabled) { filter: brightness(1.08); }
-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-button:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+
+button:hover:not(:disabled) {
+  filter: brightness(1.05);
+  box-shadow: 0 14px 46px rgba(42, 91, 255, 0.36);
+}
+
+button:active:not(:disabled) { transform: translateY(1px); }
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible,
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button:disabled { opacity: 0.42; cursor: not-allowed; box-shadow: none; }
+
 button.ghost {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: var(--line-strong);
   color: var(--text);
   font-weight: 500;
+  background: var(--panel);
+  border-color: var(--line);
   box-shadow: none;
+  backdrop-filter: blur(14px);
 }
-button.ghost:hover:not(:disabled) { background: rgba(76, 141, 255, 0.1); border-color: rgba(76, 141, 255, 0.45); }
 
-.card {
+button.ghost:hover:not(:disabled) {
+  background: var(--panel-2);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  input, select, textarea, button { transition: none; }
+  button:active:not(:disabled) { transform: none; }
+}
+
+.row { display: flex; gap: var(--sp-3); align-items: center; }
+.row.wrap { flex-wrap: wrap; }
+.stack { display: flex; flex-direction: column; gap: var(--sp-3); }
+.stack.tight { gap: var(--sp-2); }
+
+/* ------------------------------------------------------------------ panels */
+
+/*
+ * The glass unit.
+ *
+ * Every surface in the product is this one object at a different size: a
+ * translucent pane with a hairline, a soft inner highlight along its top edge and a
+ * lift on hover. `.card` is kept as the name the whole codebase already uses.
+ */
+.card,
+.gunit {
+  position: relative;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 16px;
-  margin: 12px 0;
-  backdrop-filter: blur(18px);
+  padding: var(--sp-5);
+  margin: 0 0 var(--sp-4);
+  backdrop-filter: blur(22px) saturate(1.1);
+  box-shadow: var(--shadow);
+  overflow: hidden;
 }
-.card.error { border-color: var(--bad); }
-.card.ok { border-color: var(--ok); }
+
+.card::before,
+.gunit::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--sheen), transparent);
+  pointer-events: none;
+}
+
+.card.error { border-color: color-mix(in srgb, var(--bad) 55%, var(--line)); }
+.card.ok { border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+
+.card h2,
+.card h3 { margin-top: 0; }
+
+.frame {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  backdrop-filter: blur(22px) saturate(1.1);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
 
 /*
  * The connection state, in words.
  *
  * "Live" is a claim, so it is only made when the stream is actually carrying the
  * data. While it is down the pill says so and says how often the fallback refresh
- * is running, which is the difference between a live product and a product that
- * looks live.
+ * runs, which is the difference between a live product and a product that looks
+ * live.
  */
 .live-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 4px 12px;
+  gap: var(--sp-2);
   margin: 0;
+  padding: 6px 14px;
+  font-size: var(--text-xs);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  white-space: nowrap;
 }
+
 .live-pill i {
   width: 7px;
   height: 7px;
@@ -143,176 +608,600 @@ button.ghost:hover:not(:disabled) { background: rgba(76, 141, 255, 0.1); border-
   background: var(--muted);
   flex: 0 0 auto;
 }
+
 .live-pill.on {
   color: var(--live);
-  border-color: rgba(53, 214, 196, 0.35);
-  background: rgba(53, 214, 196, 0.07);
+  border-color: color-mix(in srgb, var(--live) 40%, transparent);
+  background: color-mix(in srgb, var(--live) 9%, transparent);
 }
+
 .live-pill.on i {
   background: var(--live);
   animation: live-pulse 2.6s ease-out infinite;
 }
+
 @keyframes live-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(53, 214, 196, 0.5); }
-  70% { box-shadow: 0 0 0 11px rgba(53, 214, 196, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(53, 214, 196, 0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .live-pill.on i { animation: none; }
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 55%, transparent); }
+  70% { box-shadow: 0 0 0 11px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
 }
 
-/* The first thing anybody sees: a hairline that fills, not a spinner. */
-.boot {
-  min-height: 60vh;
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pill.ok { border-color: color-mix(in srgb, var(--ok) 55%, transparent); color: var(--ok); }
+.pill.warn { border-color: var(--warn-line); color: var(--warn-fg); }
+.pill.bad { border-color: color-mix(in srgb, var(--bad) 55%, transparent); color: var(--bad); }
+
+/* ------------------------------------------------------------------ shell */
+
+/*
+ * The application frame.
+ *
+ * A top bar that says where you are and whether the data is live, a rail on the
+ * left, and a content column with a real measure. The rail is sticky, the bar is
+ * fixed, and the content scrolls between them: this is a tool, so the frame stays
+ * put while the work moves.
+ */
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--gutter);
+  border-bottom: 1px solid var(--line);
+  /* The literal first, so a browser without `color-mix` still gets an opaque bar
+     rather than content scrolling visibly underneath a transparent one. */
+  background: var(--scrim);
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  backdrop-filter: blur(20px) saturate(1.15);
+}
+
+.appbar .brand { font-size: 17px; }
+
+.appbar-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: var(--sp-5);
+  align-items: start;
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: var(--sp-5) var(--gutter) var(--sp-8);
+}
+
+.sidebar {
+  position: sticky;
+  top: calc(var(--sp-8) + var(--sp-2));
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-}
-.boot p { margin: 0; font-size: 13px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); }
-.boot-bar {
-  width: 84px;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  background-size: 200% 100%;
-  animation: boot-sweep 1.4s ease-in-out infinite;
-}
-@keyframes boot-sweep {
-  0% { background-position: 200% 0; }
-  100% { background-position: -100% 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .boot-bar { animation: none; background: var(--accent); }
-}
-
-.muted { color: var(--muted); }
-.small { font-size: 13px; }
-.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.error { color: var(--bad); }
-.req { color: var(--bad); }
-.grow { flex: 1; }
-
-.row { display: flex; gap: 8px; align-items: center; }
-.row.wrap { flex-wrap: wrap; }
-.stack { display: flex; flex-direction: column; gap: 8px; }
-
-.auth { max-width: 400px; margin: 12vh auto; }
-.auth button { width: 100%; margin-top: 12px; }
-
-.shell { display: grid; grid-template-columns: 320px 1fr; gap: 16px; padding: 16px; align-items: start; }
-.sidebar {
-  background: var(--panel);
+  gap: var(--sp-3);
+  max-height: calc(100svh - var(--sp-8) - var(--sp-5));
+  overflow-y: auto;
+  padding: var(--sp-5);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  position: sticky;
-  top: 16px;
-  backdrop-filter: blur(22px);
-
-  /*
-   * Opening the workspace is a transition, not a jump: the sidebar arrives from the
-   * left and the content fades up, once, on mount. Short on purpose, and it is the
-   * only movement in the authenticated shell, because a tool that animates while you
-   * are reading a table of live responses is a tool that is in the way.
-   */
+  background: var(--panel);
+  backdrop-filter: blur(24px) saturate(1.1);
+  box-shadow: var(--shadow);
   animation: panel-in 0.55s cubic-bezier(0.22, 0.8, 0.24, 1) both;
 }
-.sidebar input, .sidebar select, .sidebar button { width: 100%; }
+
+.sidebar input,
+.sidebar select,
+.sidebar button { width: 100%; }
+
+.main {
+  min-width: 0;
+  animation: panel-in 0.6s cubic-bezier(0.22, 0.8, 0.24, 1) 0.05s both;
+}
+
+@keyframes panel-in {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+/*
+ * Everything arrives.
+ *
+ * Each panel and figure fades up once, on mount, with a small stagger down the
+ * column. It is mount-only and never re-triggered by a data update, so a live table
+ * does not flicker every time a response lands: the animation is about the screen
+ * appearing, not about the numbers changing.
+ */
+@keyframes card-in {
+  from { opacity: 0; transform: translate3d(0, 16px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+.card,
+.frame,
+.metric,
+.metrics,
+.screen-head {
+  animation: card-in 0.52s cubic-bezier(0.22, 0.8, 0.24, 1) both;
+}
+
+.stack > *:nth-child(2),
+.main > *:nth-child(2) { animation-delay: 0.05s; }
+.stack > *:nth-child(3),
+.main > *:nth-child(3) { animation-delay: 0.1s; }
+.stack > *:nth-child(4),
+.main > *:nth-child(4) { animation-delay: 0.15s; }
+.stack > *:nth-child(n + 5),
+.main > *:nth-child(n + 5) { animation-delay: 0.2s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .main,
+  .card,
+  .frame,
+  .metric,
+  .metrics,
+  .screen-head { animation: none; }
+}
+
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-size: 21px;
   font-weight: 800;
   letter-spacing: -0.035em;
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
+  color: var(--text);
 }
+
 .brand::before {
   content: '';
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 14px rgba(76, 141, 255, 0.85);
-}
-.main { min-width: 0; animation: panel-in 0.6s cubic-bezier(0.22, 0.8, 0.24, 1) 0.05s both; }
-@keyframes panel-in {
-  from { opacity: 0; transform: translate3d(-10px, 0, 0); }
-  to { opacity: 1; transform: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .sidebar, .main { animation: none; }
+  background: var(--accent-solid);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--accent-solid) 90%, transparent);
 }
 
-.list, .versions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.list .tab, .versions .tab { width: 100%; text-align: left; display: block; }
+/* ------------------------------------------------------------------ lists */
 
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
-.tab { background: transparent; border: 1px solid transparent; color: var(--muted); font-weight: 500; }
-.tab.active { background: var(--panel-2); border-color: var(--line); color: var(--text); }
+.list,
+.versions {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+}
 
-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { color: var(--muted); font-weight: 500; font-size: 13px; }
-tbody tr { transition: background 0.18s ease; }
-tbody tr:hover { background: rgba(76, 141, 255, 0.05); }
-
-.stat {
+/*
+ * The form and version rows.
+ *
+ * They are buttons, and they hold two lines of text each, so they get the room to
+ * hold them: a real padding, a line height above 1.2, and a lift on hover instead
+ * of a colour swap.
+ */
+.list .tab,
+.versions .tab {
+  position: relative;
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 13px 15px;
+  line-height: 1.35;
+  border-radius: var(--radius-sm);
   background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 13px;
-  color: var(--muted);
+  border-color: transparent;
 }
+
+.list .tab:hover:not(:disabled),
+.versions .tab:hover:not(:disabled) { border-color: var(--line); }
+
+/* The active row gets a hairline and a bar, so the current form is unmistakable. */
+.list .tab.active::before,
+.versions .tab.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 11px;
+  bottom: 11px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent-solid);
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-5);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  width: auto;
+  color: var(--muted);
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  box-shadow: none;
+}
+
+.tab:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--panel-2);
+  box-shadow: none;
+  filter: none;
+}
+
+.tab.active {
+  color: var(--text);
+  background: var(--panel-2);
+  border-color: var(--line-strong);
+}
+
+/* ------------------------------------------------------------------ tables */
+
+table,
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--sp-4) 0;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  line-height: 1.5;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+tbody tr { transition: background 0.18s ease; }
+tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+
+.table .right,
+.right { text-align: right; }
+
+/* ----------------------------------------------------------------- metrics */
+
+/*
+ * A figure with a label above it.
+ *
+ * The number is the point, so it is set display-size with tabular figures, and the
+ * label is tracked and small. The gap between the two is what stops a row of these
+ * reading as one long line of text.
+ */
+.stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding: 9px 16px;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  white-space: nowrap;
+}
+
 .stat strong {
+  margin: 0;
   font-size: 17px;
   font-weight: 800;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
   color: var(--text);
-  margin-right: 4px;
 }
 
-.pill { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 12px; color: var(--muted); }
-.pill.ok { border-color: var(--ok); color: var(--ok); }
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1px;
+  margin: 0 0 var(--sp-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--line);
+}
 
-.field { margin-bottom: 14px; }
-.choices { display: flex; flex-direction: column; gap: 6px; }
-.choice { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; }
-.computed { display: inline-block; padding: 6px 10px; background: var(--panel-2); border: 1px dashed var(--line); border-radius: 8px; }
+.metric {
+  padding: var(--sp-5);
+  background: var(--scrim);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(18px);
+}
 
-.collect { max-width: 760px; margin: 24px auto 64px; padding: 0 16px; }
-.collect header { margin-bottom: 8px; }
+.metric dt {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
 
-.warn { border: 1px solid #b98a2f; background: #2a2314; color: #f0d9a8; border-radius: 8px; padding: 8px 10px; margin: 10px 0; }
-.warn code { background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 4px; }
+.metric dd {
+  margin: var(--sp-3) 0 0;
+  font-size: clamp(28px, 3.4vw, 40px);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
 
-.codebox { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; }
-.code { font-size: 30px; letter-spacing: 8px; font-weight: 700; padding: 6px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; }
+.metric dd .unit {
+  margin-left: 6px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--muted);
+}
+
+/* -------------------------------------------------------------------- boot */
+
+/* The first thing anybody sees: a hairline that fills, not a spinner. */
+.boot {
+  min-height: 70svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-5);
+}
+
+.boot p {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.boot-bar {
+  width: 96px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 200% 100%;
+  animation: boot-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes boot-sweep {
+  0% { background-position: 200% 0; }
+  100% { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-bar { animation: none; background: var(--accent); }
+}
+
+/* -------------------------------------------------------------------- auth */
+
+/*
+ * Sign in.
+ *
+ * Centred, on its own glass pane, with the scene behind it. The measure is held
+ * short on purpose: a one-time code field should not stretch across a desktop.
+ */
+.auth {
+  width: min(460px, calc(100vw - var(--sp-7)));
+  margin: clamp(56px, 12vh, 140px) auto var(--sp-8);
+  padding: var(--sp-6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  backdrop-filter: blur(26px) saturate(1.1);
+  box-shadow: var(--shadow);
+}
+
+.auth h1 { margin-bottom: var(--sp-3); }
+.auth button { width: 100%; margin-top: var(--sp-4); }
+.auth p { color: var(--muted); font-size: var(--text-sm); }
+
+/* --------------------------------------------------------------------- otp */
+
+.codebox { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); margin: var(--sp-3) 0 var(--sp-4); }
+
+.code {
+  padding: 8px 14px;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.26em;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
 
 /* Six-box OTP entry: one digit per box, no autofill surface. */
-.otprow { display: flex; gap: 8px; margin: 6px 0 12px; }
-.otpbox {
-  width: 44px; height: 54px; text-align: center; font-size: 24px; font-weight: 700;
-  border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2);
-  color: var(--text); caret-color: var(--text);
+.otprow {
+  display: flex;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0 var(--sp-5);
 }
-.otpbox:focus { outline: 2px solid var(--accent, #4a7dff); border-color: var(--accent, #4a7dff); }
+
+.otpbox {
+  width: 46px;
+  height: 58px;
+  padding: 0;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  caret-color: var(--accent);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+
+.otpbox:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 .otpbox:disabled { opacity: 0.6; }
 
-/* Administration and legal pages. */
-.checkbox { display: flex; gap: 10px; align-items: flex-start; margin: 14px 0; font-size: 14px; }
-.checkbox input { width: 18px; height: 18px; margin-top: 2px; flex: 0 0 auto; }
-.table { width: 100%; border-collapse: collapse; margin: 12px 0; }
-.table th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); }
-.table td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-.table .right { text-align: right; }
-.invitebox { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 10px 0; background: var(--panel-2); }
+/* ------------------------------------------------------------ form fields */
+
+.field { margin-bottom: var(--sp-5); }
+.field:last-child { margin-bottom: 0; }
+
+.choices { display: flex; flex-direction: column; gap: var(--sp-3); }
+
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.choice input { width: auto; flex: 0 0 auto; margin-top: 3px; }
+
+.computed {
+  display: inline-block;
+  padding: 9px 13px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.warn {
+  margin: var(--sp-4) 0;
+  padding: 13px 16px;
+  line-height: 1.55;
+  color: var(--warn-fg);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-line);
+  border-radius: var(--radius-sm);
+}
+
+.warn code { background: color-mix(in srgb, var(--warn-fg) 14%, transparent); }
+
+/* ---------------------------------------------------------- administration */
+
+.checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin: var(--sp-5) 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+.checkbox input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+
+.invitebox {
+  margin: var(--sp-4) 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+
+.invitebox .row { align-items: stretch; }
 .invitebox input { flex: 1; }
-.prose { max-width: 780px; margin: 0 auto; }
-.prose h2 { font-size: 16px; margin-top: 22px; }
-.prose p { font-size: 14px; }
+
+.prose {
+  max-width: 78ch;
+  margin: 0 auto var(--sp-8);
+  padding: 0 var(--gutter);
+}
+
+.prose h2 { margin-top: var(--sp-7); }
+.prose h2:first-child { margin-top: 0; }
+.prose p { font-size: 15px; line-height: 1.72; }
+.prose ul { margin-bottom: var(--sp-4); }
+
+/* -------------------------------------------------------------- collection */
+
+/*
+ * The respondent surface.
+ *
+ * Narrower than the console and set larger: this is read on a phone, in daylight,
+ * sometimes with one hand, often with no signal. Everything here is sized and
+ * spaced for that, and the glass is dropped on small screens because a blur is the
+ * first thing to cost a frame on a cheap device.
+ */
+.collect {
+  width: min(820px, 100%);
+  margin: 0 auto;
+  padding: clamp(28px, 6vh, 72px) var(--gutter) var(--sp-8);
+}
+
+.collect header {
+  margin-bottom: var(--sp-6);
+  padding-bottom: var(--sp-5);
+  border-bottom: 1px solid var(--line);
+}
+
+.collect h1 { font-size: clamp(26px, 4.4vw, 40px); }
+
+.collect .card { padding: var(--sp-5) var(--sp-5) var(--sp-6); }
+
+.collect label { font-size: var(--text-base); color: var(--text); font-weight: 600; }
+
+@media (max-width: 640px) {
+  .card,
+  .gunit,
+  .sidebar,
+  .auth { backdrop-filter: blur(10px); }
+}
+
+/* ---------------------------------------------------------------- responsive */
+
+@media (max-width: 1040px) {
+  .shell { grid-template-columns: minmax(0, 1fr); }
+
+  .sidebar {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 640px) {
+  :root { --sp-5: 20px; --gutter: 18px; }
+
+  .appbar { padding: var(--sp-3) var(--gutter); }
+  .screen-head { gap: var(--sp-4); }
+  .metrics { grid-template-columns: 1fr 1fr; }
+  .metric { padding: var(--sp-4); }
+  th, td { padding: 10px 10px; }
+}
