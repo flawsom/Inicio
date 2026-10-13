@@ -56,6 +56,11 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # `pnpm typecheck` and `pnpm test` build the engine first, and they have to:
+      # `@inicio/engine` is consumed through its own `dist`, so on a clean checkout
+      # (this one, on the first run) every import of it in apps/api failed to
+      # resolve. The prerequisite lives in the script rather than here, so a
+      # developer's clean clone behaves the way this job does.
       - name: Typecheck
         run: pnpm typecheck
 

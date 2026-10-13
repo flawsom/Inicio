@@ -209,6 +209,12 @@ what changed and why.
 
 ### Fixed
 
+- **The first real CI run failed, on a clean checkout, for a reason no local run could see.**
+  `@inicio/engine` is consumed by the API and the web app through its own `dist`, and the working tree
+  here had one because it had been built; the runner had none, so every `@inicio/engine` import in
+  `apps/api` failed to resolve and the seven `TS7006` errors that followed were only the shadow of that.
+  `pnpm typecheck`, `pnpm test` and `pnpm coverage` now build the engine first — in the script rather
+  than in the workflow, so a developer's clean clone behaves the way the runner does.
 - **Every question in the respondent's form was an invisible, unclickable layer.** The ambient light
   field behind the signed-in app is a fixed, full-viewport, `z-index: -1`, `pointer-events: none` layer,
   and a question in a form is a block inside a card — and both were called `.field`. On every collection
