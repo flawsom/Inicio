@@ -95,6 +95,13 @@ jobs:
     env:
       MIGRATION_DATABASE_URL: postgres://postgres@127.0.0.1:5432/postgres
       APP_DATABASE_URL: postgres://app_role@127.0.0.1:5432/postgres
+      # `APP_DATABASE_URL` decides which connection the application uses, but
+      # `env.ts` still requires `DATABASE_URL` to exist — in a real deployment the
+      # platform's database integration supplies it (the owner's connection, which
+      # is exactly why APP_DATABASE_URL also exists). Naming it here is what the
+      # migration step needed: without it `pnpm db:migrate` refused to load the
+      # configuration at all, so the whole job stopped before the stack started.
+      DATABASE_URL: postgres://app_role@127.0.0.1:5432/postgres
       DATABASE_SSL: 'false'
       # The harnesses drive the same origin a browser uses: Vite on 3000 proxying
       # /api/v1 to the API on 3001.

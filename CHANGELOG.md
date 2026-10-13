@@ -215,6 +215,19 @@ what changed and why.
   `apps/api` failed to resolve and the seven `TS7006` errors that followed were only the shadow of that.
   `pnpm typecheck`, `pnpm test` and `pnpm coverage` now build the engine first — in the script rather
   than in the workflow, so a developer's clean clone behaves the way the runner does.
+- **Every database-backed API test ran against an un-migrated database in CI.** `test/setup.ts`
+  created and migrated `postgres_test` and pinned `DATABASE_URL` to it — but `src/env.ts` prefers
+  `APP_DATABASE_URL`, which the workflow also sets, to the *owner's* database. The application pool
+  therefore connected somewhere else, no table existed there, and thirteen of the fourteen API test
+  files failed on `relation "school" does not exist` while the migrations had applied cleanly to a
+  database nobody queried. Both names now point at the suite's own database. It is not a CI-only class
+  of bug: pointing `APP_DATABASE_URL` at a fresh database reproduces it locally word for word, which is
+  how this was found.
+- **The end-to-end job could not load the application's configuration at all.** `pnpm db:migrate`
+  stopped inside `env.ts` with `DATABASE_URL: Required`, because the job named only
+  `MIGRATION_DATABASE_URL` and `APP_DATABASE_URL`. `APP_DATABASE_URL` *decides* which connection the
+  application uses; `DATABASE_URL` must still exist, exactly as the environment table says. The job now
+  sets both, so the migration, the owner bootstrap, the stack and the two harnesses all run.
 - **Every question in the respondent's form was an invisible, unclickable layer.** The ambient light
   field behind the signed-in app is a fixed, full-viewport, `z-index: -1`, `pointer-events: none` layer,
   and a question in a form is a block inside a card — and both were called `.field`. On every collection

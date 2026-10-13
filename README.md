@@ -1545,12 +1545,17 @@ pnpm --filter @inicio/engine coverage      # one package
 | Package | Statements | Branches | Functions | Lines |
 |---|---:|---:|---:|---:|
 | `packages/engine` | 89.6 % | 81.4 % | 92.9 % | 89.6 % |
-| `apps/api` | 85.7 % | 79.9 % | 89.4 % | 85.7 % |
-| `apps/web` | 42.9 % *(the whole app)* · 75.3 % *(the offline core)* | 77.3 % | 52.3 % | 42.9 % |
+| `apps/api` | 85.7 % | 79.7 % | 89.4 % | 85.7 % |
+| `apps/web` | 48.5 % *(the whole package)* · 75.3 % *(the offline core)* | 75.9 % | 54.8 % | 48.5 % |
 
-<sub>**Why the web number is low, stated plainly:** the React components are not unit-tested. They are
-covered by the two live harnesses below, which drive the real product through the same origin the
-browser uses — and by nothing else. Turning that into a component suite is tracked in the roadmap.</sub>
+<sub>**Why the web number is what it is, stated plainly:** the components are covered by the jsdom suite
+in `apps/web/test` — the studio, the landing page, the quality queue, the integration screen, the consent
+gate, the realtime client, the offline core — and by the two live harnesses below, which drive the real
+product through the same origin the browser uses. The package percentage is lower than the API's because
+it is measured over the whole package, and the two largest files in it cannot be executed in jsdom at
+all: the WebGL scene is a renderer loop (its tiering, teardown and visibility rules are tested against a
+stub context) and `public/sw.js` is a service worker (its routing is executed in a VM). Neither has any
+UI to click, so neither is counted as "the app is tested".</sub>
 
 ### The live harnesses
 
