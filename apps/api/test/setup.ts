@@ -21,7 +21,9 @@ function testUrl(connectionString: string): string {
 }
 
 const SUPER = testUrl(SOURCE);
-const APP = testUrl(process.env.APP_DATABASE_URL ?? 'postgres://app_role@127.0.0.1:55432/postgres');
+const APP = testUrl(
+  process.env.APP_DATABASE_URL ?? process.env.DATABASE_URL ?? 'postgres://app_role@127.0.0.1:55432/postgres',
+);
 
 async function ensureTestDatabase(): Promise<void> {
   const target = new URL(SUPER);
@@ -40,6 +42,13 @@ async function ensureTestDatabase(): Promise<void> {
 Object.assign(process.env, {
   NODE_ENV: 'test',
   DATABASE_URL: APP,
+  // `src/env.ts` prefers APP_DATABASE_URL over DATABASE_URL, so pinning only
+  // DATABASE_URL left the application connected to whatever the surrounding
+  // environment named — in CI, the un-migrated `postgres` database, while the
+  // migrations went to `postgres_test`. Both names now point at the suite's own
+  // database, which is the only way "the tests own their database" holds off a
+  // developer's machine.
+  APP_DATABASE_URL: APP,
   MIGRATION_DATABASE_URL: SUPER,
   OTP_PEPPER: 'test-pepper-0123456789abcdef',
   OTP_TTL_MINUTES: '10',
