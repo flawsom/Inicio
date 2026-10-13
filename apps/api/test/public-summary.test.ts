@@ -92,11 +92,25 @@ describe('the public summary', () => {
 
   it('says something different on the second read, which is what makes it live', async () => {
     const first = await readSummary();
+    // Far enough apart that the database's own clock — `now()`, read in the request
+    // that serves the response, with millisecond resolution in the JSON — must have
+    // moved. A remembered answer would repeat that instant exactly.
+    await new Promise((resolve) => setTimeout(resolve, 25));
     const second = await readSummary();
+
+    expect(new Date(second.database.serverTime).getTime()).toBeGreaterThan(
+      new Date(first.database.serverTime).getTime(),
+    );
     expect(new Date(second.generatedAt).getTime()).toBeGreaterThanOrEqual(new Date(first.generatedAt).getTime());
-    // Two round trips to a database do not take exactly the same number of
-    // microseconds; an identical figure would mean the value was remembered.
-    expect(second.database.latencyMs).not.toBe(first.database.latencyMs);
+
+    // The round trip is measured per request, not remembered. It is deliberately
+    // rounded to 1/100 ms, so two quick reads *may* report the same figure — that is a
+    // property of the rounding rather than evidence of a cache, which is why the clock
+    // above carries this assertion and the latency only has to be a real measurement.
+    // The first version of this test compared the two latency figures for inequality
+    // and failed on CI the first time both reads happened to take 0.51 ms.
+    expect(first.database.latencyMs).toBeGreaterThan(0);
+    expect(second.database.latencyMs).toBeGreaterThan(0);
   });
 
   it('derives the engine facts by walking the real templates', async () => {

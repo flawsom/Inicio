@@ -229,6 +229,14 @@ what changed and why.
   `MIGRATION_DATABASE_URL` and `APP_DATABASE_URL`. `APP_DATABASE_URL` *decides* which connection the
   application uses; `DATABASE_URL` must still exist, exactly as the environment table says. The job now
   sets both, so the migration, the owner bootstrap, the stack and the two harnesses all run.
+- **The liveness test for the public summary failed on CI, on a correct answer.** It asserted that the
+  two reads reported *different* round trips, but `latencyMs` is deliberately rounded to 1/100 ms, and
+  two quick reads can legitimately land on the same figure — they did, at 0.51 ms. A test that fails on
+  the truth is worse than no test, because the honest response to it is to weaken it. The assertion now
+  rests on the database's own clock instead: `now()` is read in the request that serves the answer, at
+  millisecond resolution, so two reads 25 ms apart must report a later instant, and a remembered value
+  cannot fake that. The latency is still asserted to be a real measurement; it just no longer carries an
+  assertion it cannot hold. Re-run five times locally, green each time.
 - **Every visit to the deployed page carried a 404, and the tab had no icon.** `apps/web/index.html`
   declared an Apple touch icon and a manifest but no `rel="icon"`, so each browser asked for
   `/favicon.ico` on its own — a file this project does not ship, and which `vercel.json` excludes from
