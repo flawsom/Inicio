@@ -18,7 +18,7 @@ there is no signal** — and exporting data that is ready for analysis rather th
 [![Version](https://img.shields.io/badge/version-0.1.0-38bdf8?style=flat-square&labelColor=0f172a)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-34d399?style=flat-square&labelColor=0f172a)](LICENSE)
 [![Build](https://img.shields.io/badge/build-clean-34d399?style=flat-square&labelColor=0f172a)](#-testing)
-[![Tests](https://img.shields.io/badge/tests-157%20passing-34d399?style=flat-square&labelColor=0f172a)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-162%20passing-34d399?style=flat-square&labelColor=0f172a)](#-testing)
 [![Typecheck](https://img.shields.io/badge/typecheck-0%20errors-38bdf8?style=flat-square&labelColor=0f172a)](#-testing)
 [![Lint](https://img.shields.io/badge/lint-0%20errors-a78bfa?style=flat-square&labelColor=0f172a)](#-testing)
 [![Production](https://img.shields.io/badge/production-live-22c55e?style=flat-square&labelColor=0f172a&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app/health)
@@ -729,7 +729,7 @@ Open **http://localhost:3000**, request a one-time code, read it in Mailpit, and
 ```bash
 pnpm lint        # ESLint 9, flat config
 pnpm typecheck   # tsc across four workspace packages
-pnpm test        # 157 tests
+pnpm test        # 162 tests
 pnpm coverage    # v8 coverage, per package
 pnpm build       # engine -> api -> web
 ```
@@ -1346,13 +1346,13 @@ pnpm coverage     # v8 coverage, per package
 pnpm build        # engine -> api -> web
 ```
 
-### What the 157 tests actually cover
+### What the 162 tests actually cover
 
 | Suite | Tests | Focus |
 |---|---:|---|
 | `packages/engine` | **54** | Expression parsing and evaluation, validation, XLSForm round-trip fixpoint, XLSX read/write, dataset and codebook assembly, every export writer |
 | `apps/api` | **70** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers, and **the push channel over a real socket**: `ready` first, silence while nothing changes, then one coalesced event naming the aggregate that moved, with a 404 and no stream for a form the caller cannot see, plus the public summary: read live, and asserted key by key to carry no tenant data |
-| `apps/web` | **33** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`) and the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer) |
+| `apps/web` | **38** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer) and **the console's live read**: a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request |
 
 ### Coverage
 

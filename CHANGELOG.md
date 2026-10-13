@@ -57,7 +57,10 @@ what changed and why.
 - **Component tests for the web surfaces.** The landing page runs in jsdom (its figures come from the
   API, it stays complete when the scene returns nothing, it shows no figure rather than an old one
   when the API does not answer, and its call to action reaches `/login`), and so does the realtime
-  client. `pnpm test` is 157 tests: 54 engine, 70 API, 33 web.
+  client. The console's own live read is covered too, and it is the assertion that matters most here:
+  a push naming its aggregate refetches the screen, a push naming another one does not, two pushes
+  inside a frame cost one read, and a minute of clock passes while the stream is live without a single
+  timed request. `pnpm test` is 162 tests: 54 engine, 70 API, 38 web.
 
 ### Changed
 

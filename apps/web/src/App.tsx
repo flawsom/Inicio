@@ -79,7 +79,7 @@ interface LiveResult<T> {
  * query every five seconds, and the number on screen could still be fifteen seconds
  * old. Here the interval is only armed once the stream has actually failed.
  */
-function useLive<T>(load: () => Promise<T>, options: LiveOptions): LiveResult<T> {
+export function useLive<T>(load: () => Promise<T>, options: LiveOptions): LiveResult<T> {
   const { formId = null, aggregate, fallbackMs, deps } = options;
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -138,7 +138,7 @@ function useLive<T>(load: () => Promise<T>, options: LiveOptions): LiveResult<T>
 }
 
 /** The one line the header shows about the connection, in plain words. */
-function liveLabel(status: StreamStatus, live: boolean, fallbackMs: number): string {
+export function liveLabel(status: StreamStatus, live: boolean, fallbackMs: number): string {
   if (live) return 'live: pushed by the server the moment it changes';
   if (status === 'connecting') return `live: connecting, refreshing every ${Math.round(fallbackMs / 1000)}s until it opens`;
   return `live: stream down, refreshing every ${Math.round(fallbackMs / 1000)}s`;
