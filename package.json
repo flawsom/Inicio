@@ -24,6 +24,8 @@
     "admin:create": "pnpm --filter @inicio/api admin:create"
   },
   "devDependencies": {
+    "@neon/config": "^1.9.1",
+    "@neon/env": "^1.6.1",
     "eslint": "^9.15.0",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.16.0"
