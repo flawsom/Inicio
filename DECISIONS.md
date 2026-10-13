@@ -737,3 +737,44 @@ The host is `.ambient` now, and `apps/web/test/shell.test.ts` asserts the *prope
 the fixed layer keeps its `position: fixed`, and the class a question block wears may set nothing but
 margin — so a future rename on either side cannot put the two back together. It also asserts that the form
 still uses `.field`, because a guard that can be satisfied by renaming the form's class away is not a guard.
+
+## D29 - The application's connection is a role, and the tests' connection is a host
+
+**What was wired.** A Neon project was attached to this repository: ten migrations applied to it
+(`0001`–`0010`, latest `0010_api_keys_webhooks_flags.sql`), S3-compatible object storage and the
+OpenAI-compatible AI gateway reachable with the credentials the project hands out, and the application
+pointed at it. The interesting part was not the URL, it was that **the credential set Neon gives you cannot
+run this application**, and the reason is the one the project already documents: the role is what enforces
+tenancy.
+
+**Why `DATABASE_URL_POOLED` is not "the app connection".** Neon's two names describe *pooling*, not
+privilege: `DATABASE_URL` is the direct endpoint and `DATABASE_URL_POOLED` the pooled one, and both belong to
+the owner. On this database that owner carries `BYPASSRLS` (verified with `pg_roles`, not assumed), which is
+exactly the connection `assertTenancyEnforced()` was written to refuse in production. So the names were not
+mapped onto `APP_DATABASE_URL`/`MIGRATION_DATABASE_URL` by shape — a reading that would have quietly put the
+whole platform on a role with no tenant boundary in development and refused to boot in production. What was
+done instead: migration `0002` had already created `app_role` (non-superuser, no `BYPASSRLS`, `SELECT` on all
+32 tables), it had simply never been given a password, because "no secrets in migrations" and the out-of-band
+step is the operator's. One `ALTER ROLE app_role WITH LOGIN PASSWORD …` closes both gaps at once, and each
+connection then takes the endpoint its workload needs: the API over the **pooler** as `app_role` (serverless
+invocations are short and many), migrations over the **direct** endpoint as the owner (DDL behind a
+transaction pooler is a mistake waiting to happen). The API does not merely claim this: `pg_stat_activity`
+shows the running process connected as `app_role`, which is the check that distinguishes "the URL was set"
+from "the URL is in use".
+
+**Why the tests then had to be stopped from following it.** `src/env.ts` prefers `APP_DATABASE_URL`, and the
+workspace's environment file is also what the suite reads, so wiring the app to a deployment pointed the
+suite at it too: a test run would have created `inicio_test` on that cluster, dropped its schema, and run
+103 tests against somebody's production project — the tenancy-is-a-convention failure this codebase keeps
+arguing against, arriving through a config file rather than through SQL. `test/setup.ts` now resolves both
+connections and refuses a host that is not this machine, naming the variable to change instead of guessing,
+which is the same posture as `assertTenancyEnforced`: the run stops loudly rather than doing something
+surprising one database over from the real data. Verified both ways — the deployed URLs stop the run with
+`MIGRATION_DATABASE_URL points at ep-…neon.tech`, and against the local cluster all 14 files and 103 tests
+pass.
+
+**Honest limits.** Object storage and the AI gateway are configured and were probed successfully with real
+calls, but no feature consumes them yet: file uploads are deliberately unbuilt (`docs/ROADMAP.md`), this
+platform's identity is its own invitation-only OTP flow rather than Neon Auth, and nothing calls a model.
+Credentials that exist are not integration, so none of the three is claimed as integrated here; the
+object-storage path (attachments) is the one that has a designed feature waiting for it.

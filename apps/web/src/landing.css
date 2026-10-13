@@ -229,6 +229,27 @@
   transition-delay: calc(var(--i, 0) * 18ms);
 }
 
+/*
+ * A split headline is only readable because of these two rules.
+ *
+ * The characters are boxes, because that is what a per-character stagger needs —
+ * and a box is precisely what the sentence cannot survive: the browser will end a
+ * line after any atomic inline (so "instrument" broke as "instrumen" / "t"), and
+ * an inline-block holding a bare space collapses to no width at all (so the words
+ * ran together as "Startfromarealinstrument"). The word is therefore one
+ * unbreakable box, and the space between two words is a box that keeps its width
+ * while carrying a real space, so lines break where a reader expects them to.
+ */
+.lword {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.lchar.lspace {
+  display: inline-block;
+  white-space: pre;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing.l-anim [data-reveal]:not(.in),
   .landing.l-anim [data-split]:not(.in) .lchar {

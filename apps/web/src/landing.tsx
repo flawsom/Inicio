@@ -56,19 +56,58 @@ interface Summary {
 
 const REPOSITORY = 'https://github.com/flawsom/Inicio';
 
-/** Split an element's text into per-character spans once, so they can be animated. */
+/**
+ * Split an element's text into per-character spans once, so they can be animated.
+ *
+ * The characters have to be their own boxes for the reveal to stagger, and a box
+ * is exactly what ruins the sentence: the browser will end a line after any
+ * atomic inline, and a box holding a bare space collapses to no width at all —
+ * which is how a headline rendered as "Startfromarealinstrument" with the words
+ * broken mid-letter (`instrumen` / `t`). So the split is word-first: a word is one
+ * `.lword` (inline-block, `nowrap`) holding a `.lchar` per character, and the
+ * spaces between words are `.lchar.lspace` pieces that keep their width and stay
+ * breakable. The rendered sentence is then the sentence: spaced words that wrap
+ * only between themselves.
+ */
 function splitChars(element: HTMLElement): void {
+  // Splitting is not idempotent, and the effect that calls it runs twice in
+  // development (StrictMode mounts, unmounts and mounts again). A second pass
+  // over already-split markup wraps every existing character box in a word and
+  // a box of its own — nested, doubled characters that measure as nonsense
+  // (a 16-character sentence reporting 17 "words") and animate out of step. A
+  // marker on the element makes the second pass a no-op.
+  if (element.dataset.splitDone === 'true') return;
+  element.dataset.splitDone = 'true';
+
   const walk = (node: Node): void => {
     for (const child of Array.from(node.childNodes)) {
       if (child.nodeType === Node.TEXT_NODE) {
         const text = child.textContent ?? '';
+        // A whitespace-only node is the layout of the JSX around an element,
+        // not text a reader sees.
         if (!text.trim()) continue;
         const fragment = document.createDocumentFragment();
-        for (const character of text) {
-          const span = document.createElement('span');
-          span.className = 'lchar';
-          span.textContent = character;
-          fragment.appendChild(span);
+        // One piece per character in the source, so the stagger index and the
+        // text itself keep step with the original string.
+        for (const run of text.match(/\s+|\S+/g) ?? []) {
+          if (/^\s+$/.test(run)) {
+            for (let i = 0; i < run.length; i += 1) {
+              const space = document.createElement('span');
+              space.className = 'lchar lspace';
+              space.textContent = ' ';
+              fragment.appendChild(space);
+            }
+            continue;
+          }
+          const word = document.createElement('span');
+          word.className = 'lword';
+          for (const character of run) {
+            const span = document.createElement('span');
+            span.className = 'lchar';
+            span.textContent = character;
+            word.appendChild(span);
+          }
+          fragment.appendChild(word);
         }
         child.replaceWith(fragment);
       } else if (child.nodeType === Node.ELEMENT_NODE) {

@@ -1060,6 +1060,35 @@ Copy `.env.example` to `.env`. It is the authoritative list — this table is a 
 | `DATABASE_SSL` | | `false` | `true` for Neon, Tiger Cloud and most managed Postgres |
 | `APP_DB_PASSWORD` | | `app_dev_password` | The password migration `0002` gives the `app_role` |
 
+#### Neon: two names for pooling, one axis that matters for privilege
+
+Neon hands out two connections and names them by *pooling*, not by role: `DATABASE_URL` is the direct
+endpoint, `DATABASE_URL_POOLED` the pooled one, and both belong to the database's owner. Pooling is not the
+axis this platform cares about, so neither name is read as the application's connection. What matters is the
+role, and it is set explicitly:
+
+| Connection | Role | Endpoint | Why |
+|---|---|---|---|
+| `APP_DATABASE_URL` | `app_role` (the least-privilege role from migration `0002`) | pooled | short, frequent serverless invocations |
+| `MIGRATION_DATABASE_URL` | owner | direct | DDL does not belong behind a transaction pooler |
+
+An owner connection on Neon typically carries `BYPASSRLS` — this one does — so pointing
+`APP_DATABASE_URL` at it would mean no tenant boundary in development and a refusal to boot in production.
+`app_role` is created by migration `0002` with `LOGIN` and deliberately **no password**, so one step stays
+with the operator, once per database:
+
+```sql
+ALTER ROLE app_role WITH LOGIN PASSWORD '<generated>';
+```
+
+Put that connection in `APP_DATABASE_URL` and the owner's direct connection in `MIGRATION_DATABASE_URL`.
+Both can be verified rather than assumed: `SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname =
+current_user` for the role, and `pg_stat_activity` for the connection the running API actually holds.
+
+Because the suite reads the same variable names the application does, it owns a **local** database and says
+so: `apps/api/test/setup.ts` refuses to run when either host is not this machine, so a workspace wired to a
+deployment cannot have a test run create `…_test` on it and drop that schema. See [Testing](#-testing).
+
 ### Authentication and sessions
 
 | Variable | Required | Default | Description |
@@ -1084,6 +1113,15 @@ Copy `.env.example` to `.env`. It is the authoritative list — this table is a 
 | `MAIL_TRANSPORT` | | inferred | `smtp` or `resend`; inferred from `RESEND_API_KEY` when unset |
 | `RESEND_API_KEY` | | — | Choose the HTTPS API when the network refuses SMTP ports (25/465/587) |
 | `RESEND_API_URL` | | `https://api.resend.com/emails` | Override for a compatible endpoint |
+
+A relay will not send from a domain the account does not own, and the failure is worth
+knowing in advance because it arrives as a refusal rather than a bounce. With Resend,
+`MAIL_FROM` must be an address on a **verified** domain in that account: an unverified one is
+rejected outright (`This API key is not authorized to send emails from …`), and the shared
+`onboarding@resend.dev` sender is accepted but only reaches the account's own address. Neither
+is a guess — both are what the provider answered when asked. `GET /auth/mail-status` (and the
+sign-in screen, which is built on it) reports the same evidence rather than an assumption:
+a probe, a message the relay actually accepted, or nothing yet.
 
 ### Cache, bootstrap and access control
 

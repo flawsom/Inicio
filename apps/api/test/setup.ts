@@ -25,6 +25,30 @@ const APP = testUrl(
   process.env.APP_DATABASE_URL ?? process.env.DATABASE_URL ?? 'postgres://app_role@127.0.0.1:55432/postgres',
 );
 
+/**
+ * The suite's database is local by construction, and this refuses to pretend otherwise.
+ *
+ * `src/env.ts` prefers `APP_DATABASE_URL`, and a workspace whose environment names a
+ * deployment there — which is the normal way to point the app at production — would
+ * otherwise have a test run create `..._test` on that cluster and drop its schema one
+ * database over from the real data. The names the application uses and the name the
+ * tests use are the same names, so the only safe reading is a local host: anything
+ * else stops the run and says which variable to change instead of guessing.
+ */
+const LOCAL_HOST = /^postgres(ql)?:\/\/[^@/]*@(\[[^\]]+\]|127\.0\.0\.1|localhost|::1)(:\d+)?\//;
+for (const [name, url] of [
+  ['MIGRATION_DATABASE_URL', SOURCE],
+  ['APP_DATABASE_URL / DATABASE_URL', APP],
+] as const) {
+  if (!LOCAL_HOST.test(url)) {
+    throw new Error(
+      `Refusing to run: ${name} points at ${new URL(url).host}, which is not this machine. ` +
+        'Tests own a local database — point MIGRATION_DATABASE_URL, APP_DATABASE_URL and ' +
+        'DATABASE_URL at 127.0.0.1 (see .env.example) rather than at a deployment.',
+    );
+  }
+}
+
 async function ensureTestDatabase(): Promise<void> {
   const target = new URL(SUPER);
   const name = target.pathname.replace(/^\//, '');

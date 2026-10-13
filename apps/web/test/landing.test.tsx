@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-import { act } from 'react';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Landing } from '../src/landing';
@@ -184,5 +186,84 @@ describe('the landing page', () => {
       cta?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(window.location.pathname).toBe('/login');
+  });
+
+  it('keeps the words apart when the reveal splits a headline into characters', async () => {
+    await renderLanding();
+
+    // The reveal gives every character its own box. That box is exactly the two
+    // things the sentence cannot survive: it is a line-break opportunity, and a
+    // space inside one collapses to no width — which is how the headlines
+    // rendered as "Startfromarealinstrument" with words broken mid-letter
+    // (`instrumen` / `t`), and how a comma ended up starting a line. No jsdom
+    // assertion noticed, because jsdom applies no stylesheet and `textContent`
+    // keeps its spaces either way. So the structure the split produces is
+    // asserted here, and the two declarations that make it lay out correctly are
+    // asserted from the stylesheet — the way this suite already checks anything
+    // CSS decides.
+    const split = Array.from(container.querySelectorAll<HTMLElement>('[data-split]'));
+    expect(split.length).toBeGreaterThan(0);
+
+    for (const element of split) {
+      const sentence = element.textContent ?? '';
+      const words = Array.from(element.querySelectorAll<HTMLElement>('.lword'));
+      const spaces = Array.from(element.querySelectorAll<HTMLElement>('.lchar.lspace'));
+
+      expect(words.length).toBeGreaterThan(0);
+      // A word is the unit a line may break at, so a word holds no whitespace and
+      // nothing is hidden inside one box.
+      for (const word of words) {
+        expect(word.textContent ?? '').not.toMatch(/\s/);
+        expect(word.children.length).toBe((word.textContent ?? '').length);
+      }
+      // Every space in the sentence is still there, one piece per space.
+      expect(spaces.map((space) => space.textContent).join('')).toBe((sentence.match(/ /g) ?? []).join(''));
+      for (const space of spaces) expect(space.textContent).toBe(' ');
+    }
+
+    // The headline a reader is meant to read, intact.
+    expect(container.querySelector('h1')?.textContent?.trim()).toBe('Real logic.');
+
+    const css = readFileSync(join(__dirname, '..', 'src', 'landing.css'), 'utf8');
+    expect(css).toMatch(/\.lword\s*\{[^}]*white-space:\s*nowrap/);
+    expect(css).toMatch(/\.lchar\.lspace\s*\{[^}]*white-space:\s*pre/);
+  });
+
+  it('splits once, even though the effect runs twice in development', async () => {
+    // StrictMode mounts, unmounts and mounts again, so the splitting effect runs
+    // twice over markup it has already changed. A second pass is not idempotent:
+    // it wraps every existing character box in a word and a box of its own, which
+    // is what the browser was rendering as doubled, mis-staggered letters.
+    const strictContainer = document.createElement('div');
+    document.body.appendChild(strictContainer);
+    const strictRoot = createRoot(strictContainer);
+    try {
+      await act(async () => {
+        strictRoot.render(
+          <StrictMode>
+            <Landing />
+          </StrictMode>,
+        );
+        await Promise.resolve();
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      const words = Array.from(strictContainer.querySelectorAll<HTMLElement>('.lword'));
+      expect(words.length).toBeGreaterThan(0);
+      // No box inside a box: a word holds characters, and a character holds nothing.
+      expect(strictContainer.querySelectorAll('.lchar .lchar, .lword .lword, .lchar .lword').length).toBe(0);
+      for (const word of words) {
+        for (const child of Array.from(word.children)) {
+          expect(child.classList.contains('lchar')).toBe(true);
+        }
+      }
+      // And the sentence is still whole.
+      expect(strictContainer.querySelector('h1')?.textContent?.trim()).toBe('Real logic.');
+    } finally {
+      act(() => strictRoot.unmount());
+      strictContainer.remove();
+    }
   });
 });

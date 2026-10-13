@@ -202,6 +202,14 @@ what changed and why.
 
 ### Security
 
+- **The test suite refuses to run against a deployment.** `src/env.ts` prefers `APP_DATABASE_URL`, so a
+  workspace whose environment points the app at production — which is the normal way to wire one — pointed
+  the suite there too: a test run would have created `inicio_test` on that cluster and dropped its schema
+  one database over from the real data. `apps/api/test/setup.ts` now resolves both connections and stops
+  the run when either host is not this machine, naming the variable to change instead of guessing. Verified
+  in both directions: with the deployed URLs it refuses (`MIGRATION_DATABASE_URL points at ep-…neon.tech`),
+  and against the local cluster the whole suite is green — 14 files, 103 tests. The production wiring that
+  made this necessary is recorded in [DECISIONS.md](DECISIONS.md) D29.
 - **Tenancy: the API refuses to serve on a connection that cannot enforce row-level security.** The
   application connects as the least-privilege `app_role`; a superuser or `BYPASSRLS` role is detected
   on boot and, in production, stops the process with a message naming the fix. `APP_DATABASE_URL` now
@@ -210,6 +218,30 @@ what changed and why.
 
 ### Fixed
 
+- **Every animated headline rendered as one long word.** The landing page's reveal gives
+  each character its own box so the letters can stagger in, and a box is exactly what the
+  sentence cannot survive: the browser will end a line after any atomic inline, and an
+  inline-block holding a bare space collapses to no width — so "Start from a real instrument"
+  was on screen as "Startfromarealinstrument" with the word broken as `instrumen` / `t`, and
+  a comma began a line. The split is now word-first: a word is one unbreakable box holding a
+  box per character, and the spaces between words are boxes that keep their width and stay
+  breakable. A second defect was hiding behind it — the effect that splits runs twice in
+  development (StrictMode), and a second pass over already-split markup wrapped every
+  character box in a word and a box of its own, which measured as a 16-character sentence
+  reporting 17 "words"; the split is now idempotent. Measured in a real browser at 1440 px
+  and 390 px: adjacent words are 7.31 px and 4.19 px apart at those widths, no word straddles
+  two lines, every headline reconstructs into its sentence, and there is no sideways scroll.
+  Held by `apps/web/test/landing.test.tsx`, which asserts the structure, the two stylesheet
+  declarations that keep the sentence laid out, and a StrictMode mount that must not nest.
+- **The sign-in screen said codes could not be sent, and it was telling the truth about the relay.**
+  The deployment was configured for SMTP at `localhost:1025` — a relay that is not there — so the
+  honest verdict on the sign-in page was "cannot be sent right now". Mail now goes out over the
+  provider's HTTPS API, which is the transport this project already preferred for exactly this
+  reason, and the sentence is driven by evidence rather than by hope: `mailStatus()` reports a
+  probe or a message the relay actually accepted, and the page stays quiet when there is nothing
+  honest to say yet. Verified by driving `POST /api/v1/auth/otp/request` through the real relay
+  (the provider returned a message id, `email_log` recorded `sent`, one live code was stored, and
+  the code itself is never echoed to the client).
 - **The first real CI run failed, on a clean checkout, for a reason no local run could see.**
   `@inicio/engine` is consumed by the API and the web app through its own `dist`, and the working tree
   here had one because it had been built; the runner had none, so every `@inicio/engine` import in
