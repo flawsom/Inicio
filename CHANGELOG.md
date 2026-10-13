@@ -26,6 +26,46 @@ what changed and why.
 - **Conflict counts in the console**, per response and in aggregate.
 - `pnpm coverage` (Vitest + v8) in the engine, API and web packages, plus the matching `coverage`
   scripts at the workspace root.
+- **A push channel, so the console stops polling.** `GET /api/v1/forms/:formId/events` is one
+  server-sent event stream per form. The server sends *which aggregate changed* rather than the data,
+  so a screen refetches exactly the one thing that moved with the query it already had. Events are
+  coalesced per tick, and a revision that has not moved writes **no event at all**, so a quiet form
+  costs nothing and twenty responses in a second produce one event instead of twenty. The change
+  signal is a per-aggregate revision vector read inside the tenant transaction (row counts, newest
+  edit times, link usage, publish times), which is what catches an edit that changes no count at all.
+  SSE rather than WebSockets because the traffic is one-directional, already behind the session
+  cookie, and `EventSource` reconnects on its own. The stream deliberately ends itself at 50 seconds
+  (under the hosting function's 60-second cap) and tells the client, so the reconnect happens on a
+  clean boundary rather than mid-write. It is closed with a 404, and no stream at all, for a form the
+  caller cannot see.
+- **The browser half of it.** `apps/web/src/realtime.ts` keeps one stream per form shared by every
+  component that wants it, coalesces a burst inside a single frame into one notification, drops an
+  aggregate name this build does not know rather than forwarding it, backs off exponentially, and
+  after repeated failures says `offline` so the caller's fallback timer takes over. The console header
+  shows that state, because "live" is a claim about the connection and not a style.
+- **`GET /api/v1/public/summary`**, the one unauthenticated route: server version and uptime, the
+  measured round trip of the query that produced the response, the migration ledger, and the template
+  library summarised by walking the real definitions. No form, response, organisation or count of any
+  of them, asserted key by key in `public-summary.test.ts`.
+- **An immersive public page at `/`.** A WebGL scene built for this product's own data model (a
+  sequence of nodes wired by filaments, rearranged by scroll), loaded as its own dynamically imported
+  chunk so a signed-in user never downloads it, `aria-hidden`, stopping entirely when the tab is
+  hidden or the stage has scrolled past, with a cheaper tier on small screens and one drawn frame
+  under `prefers-reduced-motion`. Every figure on the page is read from the API in that request and
+  the panel prints the time it was read, so a live number cannot be mistaken for a decorative one.
+  Where a claim needs evidence it links to the file that implements it.
+- **Component tests for the web surfaces.** The landing page runs in jsdom (its figures come from the
+  API, it stays complete when the scene returns nothing, it shows no figure rather than an old one
+  when the API does not answer, and its call to action reaches `/login`), and so does the realtime
+  client. `pnpm test` is 157 tests: 54 engine, 70 API, 33 web.
+
+### Changed
+
+- **The console no longer polls.** The responses table polled every 5 seconds, analytics every 10, the
+  forms list every 10 and the link table every 15. Four screens open on one form meant four timers per
+  browser and a query per timer whether or not anything had changed, and a number that could still be
+  fifteen seconds stale. There is now one stream per form, and the screens refetch on its signal. The
+  fallback timer only starts when the stream has been reported `offline`.
 
 ### Security
 

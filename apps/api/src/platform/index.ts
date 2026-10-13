@@ -6,6 +6,8 @@ import { platformOrgRoutes } from './orgs.js';
 import { platformFormRoutes } from './forms.js';
 import { platformCollectRoutes } from './collect.js';
 import { platformTermsRoutes } from './terms.js';
+import { platformEventRoutes } from './events.js';
+import { platformPublicRoutes } from './public.js';
 
 /**
  * The platform API, mounted at /api/v1.
@@ -24,5 +26,11 @@ export const platformRoutes: FastifyPluginAsync = async (app) => {
   await app.register(platformAdminRoutes);
   await app.register(platformOrgRoutes);
   await app.register(platformFormRoutes);
+  // Live change notifications for a form. Registered beside the form routes so the
+  // stream lives at the same level as the reads it is telling the client to repeat.
+  await app.register(platformEventRoutes);
   await app.register(platformCollectRoutes, { prefix: '/collect' });
+  // The one unauthenticated route. It reports how the software is doing and
+  // nothing about who is using it (see public.ts).
+  await app.register(platformPublicRoutes);
 };

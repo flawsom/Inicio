@@ -25,7 +25,7 @@ Legend: **built+verified** · **built, partially verified** · **not built**
 - **Operational detail is admin-only.** The public mail status says whether codes
   can be sent, not which relay refused or why.
 
-## 1. Verified now (131 automated tests, plus end-to-end over HTTP)
+## 1. Verified now (157 automated tests, plus end-to-end over HTTP)
 
 | Area | State | Evidence |
 |---|---|---|
@@ -39,7 +39,10 @@ Legend: **built+verified** · **built, partially verified** · **not built**
 | Export bundle | built+verified | data + codebook + value labels + missing table + metadata as CSV (zip), XLSX (5 sheets), JSON; multi-select dichotomous or slots; injection-safe view |
 | Distribution + collection | built+verified | anonymous / single-use / multiple / panel links; token shown once; partial save and resume; required + constraint enforcement **server-side**; `.sav`/`.dta` refused with 501 |
 | Templates | built+verified | the school ranking survey publishes, round-trips through a spreadsheet and collects a real response with a server-computed score |
-| Web app | built+verified (API-level) | login, organisations, forms, JSON builder with live analyser feedback, live counts (5 s poll), export buttons, copy-once link, and a collection renderer that shares the engine with the server |
+| Web app | built+verified (API-level) | login, organisations, forms, JSON builder with live analyser feedback, live counts pushed over the change stream, export buttons, copy-once link, and a collection renderer that shares the engine with the server |
+| Push channel for the console | built+verified | `apps/api/src/platform/events.ts`; one server-sent event stream per form, behind the session cookie and the terms gate, reading the per-aggregate revision vector inside the tenant transaction. An unchanged revision writes **no event at all**, which is what makes the poll removable; a write produces exactly one `change` naming the aggregate that moved. `apps/api/test/realtime.test.ts` opens a real stream over a real socket: `ready` first, silence across three ticks, then one coalesced event after a real collection write, and **404 with no stream** for a form the caller cannot see. `apps/web/src/realtime.ts` coalesces a burst into one notification and gives up to `offline` after repeated failures, both asserted in jsdom |
+| Public summary | built+verified | `apps/api/src/platform/public.ts`, the one unauthenticated route: server version and uptime, the round trip of the query that produced the response, the migration ledger, and the template library summarised by walking the real definitions. `public-summary.test.ts` asserts the response is read live (the figure changes between two calls, the database clock is within a minute of now), that the engine facts equal the sum over the templates rather than a declared list, and the **exact key set**, so no form, response or organisation can appear on it by accident |
+| Immersive public page | built+verified (component-level) | `apps/web/src/landing.tsx`, `apps/web/src/immersive/instrument.ts`; every figure is read in that request, the WebGL scene is a separate dynamically imported chunk, `aria-hidden`, and stops when the tab is hidden or the stage is off screen. `landing.test.tsx` mounts it in jsdom: the figures come from the API, the page is complete and readable when the scene returns nothing (the WebGL-unavailable path), and it prints no figure at all rather than an old one when the API does not answer. **Not measured:** frame rate and GPU cost on real hardware |
 | Offline collection | built+verified | `apps/web/src/offline`; the published definition is cached and every answer is written to IndexedDB before anything is sent; a durable one-deep queue syncs on change, on blur, on tab hide, on reconnect and on a 2-minute timer; the device owns a stable response UUID so a retried start is idempotent; `collect-sync.test.ts` proves two-device merges keep the losing value in `response_answer.device_value` and record it in `response_conflict`; `.run/e2e-offline.mjs` runs 24 checks over a real database through the preview origin |
 | Installable PWA | built+verified | `apps/web/public/{sw.js,manifest.webmanifest,icon-*.png}`; the worker precaches the shell and its hashed assets and **never** intercepts `/api`, `/auth` or `/health`, so no cached body can be served as live data; `service-worker.test.ts` executes the worker in a VM and asserts both; registration is production-only so it cannot shadow hot module replacement |
 
@@ -51,7 +54,7 @@ Legend: **built+verified** · **built, partially verified** · **not built**
 | File uploads (image/audio/video) | not built | object storage (R2/S3) with presigned URLs and a virus-scan step; the renderer marks those inputs as not yet collected rather than silently skipping them |
 | AI authoring / grounded analysis | not built | Workers AI or an LLM API; the **guardrails** are already specified (draft-only, analyser-validated, evidence-linked) in `specs/PLATFORM.md` §7 |
 | SSO/SAML/passkeys, SCIM, WCAG 2.2 AA audit, backups | not built | hardening phase |
-| Realtime via `postgres_changes` | not built | today the dashboard polls every 5 s; Supabase Realtime is the planned upgrade, and its free tier caps concurrent connections (below) |
+| Realtime fan-out across instances | not built | the push channel re-reads the revision vector once per tick (1.5 s) per open stream, which is correct and is one round trip inside the tenant transaction, but it is per-instance work. A broker (Valkey or `pg-boss`) is the upgrade that makes fan-out free across several instances. It is deliberately not `postgres_changes`: the API runs as a serverless function, where a `LISTEN` connection does not survive between invocations, so a `NOTIFY` fired by one instance would reach nobody |
 | Redis-backed rate limiting / queue | not built | in-process limiter only; fine for one instance, not for several |
 
 ## 3. Honest infrastructure ceiling (free tiers, as of 2026)
@@ -88,16 +91,17 @@ Three consequences we state rather than hide:
 
 1. **Object storage + uploads** — R2 with presigned URLs, size/type limits, scan status already
    modelled in `response_attachment`. Unblocks the honest `image`/`file` question types.
-2. **Supabase Realtime dashboards** — replace the 5 s poll; coalesce per aggregate, because the
-   free tier allows 200 concurrent connections.
-3. **The `.sav`/`.dta` worker** — unblocks SPSS/Stata exports and the missing-code numeric
+2. **The `.sav`/`.dta` worker** — unblocks SPSS/Stata exports and the missing-code numeric
    mapping already documented in the codebook.
-4. **AI authoring + grounded analysis** — draft-only generation, validated by the same analyser;
+3. **AI authoring + grounded analysis** — draft-only generation, validated by the same analyser;
    analysis must render the response ids it was derived from.
+4. **A broker for realtime fan-out** — the push channel works on one instance (see §2); a Valkey or
+   `pg-boss` hop is what makes it cheap on several.
 5. **Hardening** — passkeys/SSO, SCIM, per-org budgets, backups/restore drills, WCAG 2.2 AA.
 
-Done since this list was written: **offline collection + the installable PWA** (moved to §1), and
-the sync conflicts it produces are surfaced in the Responses tab.
+Done since this list was written: **offline collection + the installable PWA** (moved to §1), the
+sync conflicts it produces are surfaced in the Responses tab, the console's 5 s poll is replaced by
+the push channel in §1, and the landing page and the realtime client now have component tests.
 
 ## 5. What a reviewer should check first
 

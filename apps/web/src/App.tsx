@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ApiError,
   api,
@@ -13,14 +13,30 @@ import {
 import { Collect } from './collect';
 import { AdminView } from './admin';
 import { InvitePage, LegalPage, TermsGate } from './legal';
+import { useFormStream, type Aggregate, type StreamStatus } from './realtime';
+import { navigate } from './router';
+
+/**
+ * The marketing page, in its own chunk.
+ *
+ * It carries the WebGL scene with it, so a reader who is opening the console never
+ * pays for either. `React.lazy` is the whole reason that is possible without a
+ * second entry point.
+ */
+const Landing = lazy(() => import('./landing').then((module) => ({ default: module.Landing })));
 
 /**
  * The workspace shell: sign in, pick an organisation, author a form, publish it,
  * collect responses, watch the numbers arrive, export.
  *
- * Every count on this screen comes from a live query or a short poll against the
- * server. There is no cached snapshot and no seed data: if it says 3 responses,
- * three responses exist.
+ * Every count on this screen comes from a live query against the server. There is
+ * no cached snapshot and no seed data: if it says 3 responses, three responses
+ * exist.
+ *
+ * The reads are driven by the push channel (`./realtime`), not by timers. While the
+ * stream for the open form is up, the server says which aggregate moved and the
+ * screen refetches only that one; a timer runs only as a fallback while the stream
+ * is down, and the header says which of the two is happening.
  */
 
 interface Me {
@@ -28,47 +44,104 @@ interface Me {
   organisations: Organisation[];
 }
 
-function usePoll<T>(load: () => Promise<T>, ms: number, deps: unknown[]): { data: T | null; error: string | null; reload: () => void } {
+interface LiveOptions {
+  /**
+   * The form whose stream drives this read. When the value is null the read has
+   * no push channel (the workspace list spans every form, so no single stream
+   * describes it) and the fallback timer is the only mechanism.
+   */
+  formId?: string | null;
+  /** Which aggregate on that stream invalidates this read. */
+  aggregate?: Aggregate;
+  /**
+   * Interval used *only* while the push channel is not live for this aggregate.
+   * It is a safety net, not the mechanism: the point of the channel is that this
+   * timer does not run at all when the stream is up.
+   */
+  fallbackMs: number;
+  deps: unknown[];
+}
+
+interface LiveResult<T> {
+  data: T | null;
+  error: string | null;
+  reload: () => void;
+  status: StreamStatus;
+  /** True when the server is pushing this aggregate, so nothing is being timed. */
+  live: boolean;
+}
+
+/**
+ * A live read: the server pushes, the timer is the fallback.
+ *
+ * The distinction is the whole point of the change. Previously every one of these
+ * reads had an interval, so a screen that had not changed in an hour still cost a
+ * query every five seconds, and the number on screen could still be fifteen seconds
+ * old. Here the interval is only armed once the stream has actually failed.
+ */
+function useLive<T>(load: () => Promise<T>, options: LiveOptions): LiveResult<T> {
+  const { formId = null, aggregate, fallbackMs, deps } = options;
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const loadRef = useRef(load);
   loadRef.current = load;
 
+  const run = useCallback(async (): Promise<void> => {
+    try {
+      const result = await loadRef.current();
+      setData(result);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'request failed');
+    }
+  }, []);
+
+  // The first read, every deps change, and a manual refresh. Always exactly one
+  // request per reason, never a loop.
   useEffect(() => {
-    let cancelled = false;
-    const run = async (): Promise<void> => {
-      try {
-        const result = await loadRef.current();
-        if (!cancelled) {
-          setData(result);
-          setError(null);
-        }
-      } catch (err) {
-        if (!cancelled) setError(err instanceof ApiError ? err.message : 'request failed');
-      }
-    };
     void run();
-    const timer = window.setInterval(() => void run(), ms);
+    // The caller passes the identity of what it read; `tick` is the manual refresh.
+  }, [run, tick, ...deps]);
+
+  // The push channel. Only subscribed when this read names an aggregate: a read
+  // with no aggregate has no event that invalidates it.
+  const onStreamEvent = useCallback(
+    (changed: Aggregate[]) => {
+      if (aggregate && changed.includes(aggregate)) void run();
+    },
+    [aggregate, run],
+  );
+  const status = useFormStream(aggregate ? formId : null, onStreamEvent);
+
+  const live = Boolean(aggregate && formId && status === 'live');
+
+  useEffect(() => {
+    if (live) return;
+    const timer = window.setInterval(() => void run(), fallbackMs);
     // A background tab has its timers throttled (or frozen), so the first thing a
     // returning reader saw could be a snapshot from minutes ago. Refresh the
-    // moment the tab becomes visible again, and again if the window is refocused:
-    // the numbers on screen are then always the server's current ones.
+    // moment the tab becomes visible again, and again if the window is refocused.
     const refreshIfVisible = (): void => {
       if (document.visibilityState === 'visible') void run();
     };
     document.addEventListener('visibilitychange', refreshIfVisible);
     window.addEventListener('focus', refreshIfVisible);
     return () => {
-      cancelled = true;
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', refreshIfVisible);
       window.removeEventListener('focus', refreshIfVisible);
     };
-    // The caller passes the identity of what it polled; `tick` is the manual refresh.
-  }, [...deps, tick]);
+  }, [live, fallbackMs, run]);
 
-  return { data, error, reload: () => setTick((n) => n + 1) };
+  return { data, error, reload: () => setTick((n) => n + 1), status, live };
+}
+
+/** The one line the header shows about the connection, in plain words. */
+function liveLabel(status: StreamStatus, live: boolean, fallbackMs: number): string {
+  if (live) return 'live: pushed by the server the moment it changes';
+  if (status === 'connecting') return `live: connecting, refreshing every ${Math.round(fallbackMs / 1000)}s until it opens`;
+  return `live: stream down, refreshing every ${Math.round(fallbackMs / 1000)}s`;
 }
 
 const CODE_LENGTH = 6;
@@ -397,11 +470,21 @@ function formatTally(value: unknown): string {
 }
 
 function DataTab({ formId, publishedVersion }: { formId: string; publishedVersion: number | null }): JSX.Element {
-  const { data, error, reload } = usePoll(() => api.responses(formId), 5000, [formId]);
+  const { data, error, reload, status, live } = useLive(() => api.responses(formId), {
+    formId,
+    aggregate: 'responses',
+    fallbackMs: 30_000,
+    deps: [formId],
+  });
   // The same live tables, read a second way: status counts, per-answer tallies and
-  // a daily timeline, recomputed by the server on every request. Kept on its own
-  // poll so a slow export cannot hold up the numbers.
-  const { data: analytics } = usePoll(() => api.analytics(formId), 10_000, [formId]);
+  // a daily timeline, recomputed by the server on every request. Its own stream
+  // subscription, so a slow export cannot hold up the numbers.
+  const { data: analytics } = useLive(() => api.analytics(formId), {
+    formId,
+    aggregate: 'analytics',
+    fallbackMs: 30_000,
+    deps: [formId],
+  });
   const [downloadError, setDownloadError] = useState<string | null>(null);
   // An export descends from a published version, so there is nothing to export
   // until one exists. Saying why up front beats a failed download.
@@ -430,7 +513,10 @@ function DataTab({ formId, publishedVersion }: { formId: string; publishedVersio
             <strong>{tally.get(status) ?? 0}</strong> {status.replace('_', ' ')}
           </span>
         ))}
-        <span className="muted small">live · refreshed every 5s</span>
+        <span className={live ? 'live-pill on' : 'live-pill'} role="status">
+          <i aria-hidden="true" />
+          {liveLabel(status, live, 30_000)}
+        </span>
         <button type="button" className="ghost" onClick={reload}>
           Refresh
         </button>
@@ -557,7 +643,12 @@ function DataTab({ formId, publishedVersion }: { formId: string; publishedVersio
 }
 
 function DistributeTab({ formId, publishedVersion }: { formId: string; publishedVersion: number | null }): JSX.Element {
-  const { data, reload, error } = usePoll(() => api.links(formId), 15_000, [formId]);
+  const { data, reload, error, status, live } = useLive(() => api.links(formId), {
+    formId,
+    aggregate: 'links',
+    fallbackMs: 60_000,
+    deps: [formId],
+  });
   const [kind, setKind] = useState('anonymous');
   const [created, setCreated] = useState<{ url: string; warning: string } | null>(null);
 
@@ -608,6 +699,11 @@ function DistributeTab({ formId, publishedVersion }: { formId: string; published
       )}
       {error && <p className="error small">{error}</p>}
 
+      <p className={live ? 'live-pill on' : 'live-pill'} role="status">
+        <i aria-hidden="true" />
+        {liveLabel(status, live, 60_000)}
+      </p>
+
       <table>
         <thead>
           <tr>
@@ -655,7 +751,12 @@ function DistributeTab({ formId, publishedVersion }: { formId: string; published
 }
 
 function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): JSX.Element {
-  const { data, reload, error } = usePoll(() => api.form(form.id), 10_000, [form.id]);
+  const { data, reload, error } = useLive(() => api.form(form.id), {
+    formId: form.id,
+    aggregate: 'versions',
+    fallbackMs: 60_000,
+    deps: [form.id],
+  });
   const [tab, setTab] = useState<'builder' | 'data' | 'distribute'>('builder');
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -843,8 +944,14 @@ function Workspace({ me, onSignedOut }: { me: Me; onSignedOut: () => void }): JS
   // same calls independently. Hiding a button is a courtesy, not a control.
   const canAdminister = currentOrg?.role === 'owner' || currentOrg?.role === 'admin';
 
-  const { data: forms, reload: reloadForms } = usePoll(() => api.forms(), 10_000, [orgId]);
-  const { data: templates } = usePoll(() => api.templates(), 300_000, []);
+  // The sidebar spans every form in the organisation, so no single form's stream
+  // describes it. It stays a slow read, and it says so rather than pretending.
+  const { data: forms, reload: reloadForms } = useLive(() => api.forms(), {
+    fallbackMs: 20_000,
+    deps: [orgId],
+  });
+  // Templates ship with the source and change on deploy, not while a page is open.
+  const { data: templates } = useLive(() => api.templates(), { fallbackMs: 300_000, deps: [] });
   const selectedForm: FormSummary | null = (forms?.forms ?? []).find((f) => f.id === formId) ?? null;
   const orgForms = (forms?.forms ?? []).filter((f) => !orgId || f.org_id === orgId);
 
@@ -1001,12 +1108,33 @@ function Workspace({ me, onSignedOut }: { me: Me; onSignedOut: () => void }): JS
   );
 }
 
+/**
+ * Routes.
+ *
+ *     /                       the landing page (signed out) or the console (signed in)
+ *     /console                the console; a signed out visitor is sent to /login
+ *     /login                  sign in with a one-time code
+ *     /collect/:token         the respondent surface, no session at all
+ *     /invite/:token          an invitation, no session yet
+ *     /terms, /privacy        the policy text, public
+ *
+ * The router is deliberately the smallest thing that works: the URL is state, the
+ * `popstate` event is the transition, and `navigate` is the only way to change it.
+ * A routing library would be a dependency, a bundle and a concept for six paths.
+ */
 export function App(): JSX.Element {
-  const collectMatch = useMemo(() => /^\/collect\/(.+)$/.exec(window.location.pathname), []);
-  const inviteMatch = useMemo(() => /^\/invite\/(.+)$/.exec(window.location.pathname), []);
-  const legalMatch = useMemo(() => /^\/(terms|privacy)$/.exec(window.location.pathname), []);
+  const [path, setPath] = useState(() => window.location.pathname);
+  const collectMatch = useMemo(() => /^\/collect\/(.+)$/.exec(path), [path]);
+  const inviteMatch = useMemo(() => /^\/invite\/(.+)$/.exec(path), [path]);
+  const legalMatch = useMemo(() => /^\/(terms|privacy)$/.exec(path), [path]);
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [terms, setTerms] = useState<TermsStatus | null>(null);
+
+  useEffect(() => {
+    const onPopState = (): void => setPath(window.location.pathname);
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -1016,9 +1144,28 @@ export function App(): JSX.Element {
     }
   }, []);
 
+  // The public surfaces never ask who is signed in: a respondent with no account
+  // must not trigger a session lookup, and an invitation must open for a stranger.
+  const isPublicSurface = Boolean(collectMatch || inviteMatch || legalMatch);
   useEffect(() => {
-    if (!collectMatch && !inviteMatch && !legalMatch) void load();
-  }, [collectMatch, inviteMatch, legalMatch, load]);
+    if (!isPublicSurface) void load();
+  }, [isPublicSurface, load]);
+
+  const signedIn = me !== undefined && me !== null;
+  const onMarketing = path === '/' || path === '';
+  const onLogin = path === '/login';
+
+  // Someone with a session who lands on the marketing page or the sign in page has
+  // already done the thing those pages ask for, so they go to the console.
+  useEffect(() => {
+    if (!signedIn) return;
+    if (onMarketing || onLogin) navigate('/console');
+  }, [signedIn, onMarketing, onLogin]);
+
+  const goToConsole = useCallback((): void => {
+    void load();
+    if (window.location.pathname !== '/console') navigate('/console');
+  }, [load]);
 
   // Whether the current terms still need accepting is a server answer, asked
   // once per session rather than trusted from the client.
@@ -1041,8 +1188,35 @@ export function App(): JSX.Element {
   if (inviteMatch?.[1]) return <InvitePage token={decodeURIComponent(inviteMatch[1])} />;
   if (legalMatch?.[1]) return <LegalPage id={legalMatch[1] as 'terms' | 'privacy'} />;
   if (collectMatch?.[1]) return <Collect token={decodeURIComponent(collectMatch[1])} />;
-  if (me === undefined) return <div className="card">Loading...</div>;
-  if (me === null) return <Login onSignedIn={() => void load()} />;
+
+  // The marketing page renders immediately rather than waiting on the session
+  // check, because it does not depend on the answer: a visitor sees the product
+  // present itself, and a signed in reader who asked for the bare domain is sent
+  // on to the console by the effect above.
+  if (onMarketing && !signedIn) {
+    return (
+      <Suspense
+        fallback={
+          <div className="boot" role="status">
+            <span className="boot-bar" aria-hidden="true" />
+            <p>Inicio</p>
+          </div>
+        }
+      >
+        <Landing />
+      </Suspense>
+    );
+  }
+  if (onLogin && !signedIn) return <Login onSignedIn={goToConsole} />;
+  if (me === undefined) {
+    return (
+      <div className="boot" role="status">
+        <span className="boot-bar" aria-hidden="true" />
+        <p>Opening your workspace.</p>
+      </div>
+    );
+  }
+  if (me === null) return <Login onSignedIn={goToConsole} />;
   if (terms?.required) {
     return <TermsGate status={terms} onAccepted={() => setTerms({ ...terms, required: false })} />;
   }

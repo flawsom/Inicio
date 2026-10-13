@@ -18,7 +18,7 @@ there is no signal** — and exporting data that is ready for analysis rather th
 [![Version](https://img.shields.io/badge/version-0.1.0-38bdf8?style=flat-square&labelColor=0f172a)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-34d399?style=flat-square&labelColor=0f172a)](LICENSE)
 [![Build](https://img.shields.io/badge/build-clean-34d399?style=flat-square&labelColor=0f172a)](#-testing)
-[![Tests](https://img.shields.io/badge/tests-131%20passing-34d399?style=flat-square&labelColor=0f172a)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-157%20passing-34d399?style=flat-square&labelColor=0f172a)](#-testing)
 [![Typecheck](https://img.shields.io/badge/typecheck-0%20errors-38bdf8?style=flat-square&labelColor=0f172a)](#-testing)
 [![Lint](https://img.shields.io/badge/lint-0%20errors-a78bfa?style=flat-square&labelColor=0f172a)](#-testing)
 [![Production](https://img.shields.io/badge/production-live-22c55e?style=flat-square&labelColor=0f172a&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app/health)
@@ -245,11 +245,14 @@ restoring an old version forks a **new** draft rather than rewriting history.
 </td>
 <td valign="top" width="50%">
 
-### 📊 Live reads, not snapshots
+### 📡 Pushed, not polled
 Analytics, response counts and conflict totals are recomputed in the tenant-scoped transaction on the
-request that paints them. There is no cache to go stale and no nightly job to wait for.
+request that paints them, and the console is told when to make that request: one server-sent event
+stream per form names the aggregates that moved, coalesced per tick. A quiet form writes no event at
+all, and twenty responses landing in one second produce one event rather than twenty. There is no
+cache to go stale and no nightly job to wait for.
 
-<sub>`GET /forms/:id/analytics` · `GET /forms/:id/responses`</sub>
+<sub>`GET /forms/:id/events` · `GET /forms/:id/analytics` · `GET /forms/:id/responses`</sub>
 
 </td>
 </tr>
@@ -266,6 +269,8 @@ request that paints them. There is no cache to go stale and no nightly job to wa
 | 🧾 **Consent with evidence** | `terms_acceptance` stores policy version, text hash, timestamp, IP and user agent, append-only and tenant-scoped. |
 | 🕵️ **Audit trail** | Material writes (membership, role, invitation, publish, import, export) are recorded as org-scoped audit rows. |
 | 🖥️ **Live analyser** | The console validates the definition as you type and reports errors and warnings with the question name in them. |
+| 📡 **An honest live indicator** | The console header says whether the push channel is connected, and the screens fall back to a timer only when it is not. "Live" is a claim about the connection, not a style. |
+| 🌌 **A public surface with nothing invented on it** | Every figure on the landing page is read in that request from `GET /api/v1/public/summary`, and the scene is decoration: it is `aria-hidden`, it stops when the tab is hidden or the stage has scrolled past, and the page is complete with no WebGL at all. |
 | 🏫 **A real template** | The 2026 school ranking survey — the project this platform grew out of — ships as template #1, not as the product. |
 | 📶 **Honest connection state** | "No connection. Your answers are saved on this device and will be sent automatically", plus a **Send now** button and the timestamp the server has everything up to. |
 | 🐳 **A self-hosted profile** | Compose brings up PostgreSQL 16, Valkey, MinIO, ClamAV and Mailpit, with Caddy in front. |
@@ -724,7 +729,7 @@ Open **http://localhost:3000**, request a one-time code, read it in Mailpit, and
 ```bash
 pnpm lint        # ESLint 9, flat config
 pnpm typecheck   # tsc across four workspace packages
-pnpm test        # 131 tests
+pnpm test        # 157 tests
 pnpm coverage    # v8 coverage, per package
 pnpm build       # engine -> api -> web
 ```
@@ -806,6 +811,8 @@ Inicio
 │   │   │   ├── collect.ts           the respondent surface: responses, sync, submit
 │   │   │   ├── legal.ts, terms.ts   policy text and consent with evidence
 │   │   │   ├── db.ts                withUser / withOrg — the tenant transaction wrapper
+│   │   │   ├── events.ts            the push channel: one server-sent event stream per form
+│   │   │   ├── public.ts            the one unauthenticated route: live facts, no tenant data
 │   │   │   └── guards.ts            authentication and role guards
 │   │   ├── src/db/migrations        0001 -> 0009, forward-only SQL
 │   │   ├── src/auth, src/legal      the Phase 1 school surface, kept working (/auth/*)
@@ -815,11 +822,15 @@ Inicio
 │   │   └── test                     API tests, including the sync-contract suite
 │   └── web                          React 18 + Vite 6 client
 │       ├── src/App.tsx              the console: forms, builder, responses, admin
+│       ├── src/landing.tsx          the public page: live figures, claims with evidence
+│       ├── src/immersive/instrument.ts   the WebGL scene, its own chunk and its own quality tiers
+│       ├── src/realtime.ts          EventSource client: coalescing, backoff, the offline verdict
+│       ├── src/router.ts            the whole router: six paths and popstate
 │       ├── src/collect.tsx          the respondent renderer (offline-first)
 │       ├── src/offline              IndexedDB store, outbox queue, pure sync core
 │       ├── public/sw.js             service worker: cache the shell, never the data
 │       ├── public/manifest.webmanifest and icons   installable app
-│       └── test                     offline core and service-worker routing tests
+│       └── test                     offline core, service worker, realtime client and landing page tests
 ├── packages
 │   ├── engine                       canonical form model and everything derived from it
 │   │   ├── src/expression.ts        parser and validator for the expression grammar
@@ -1027,7 +1038,19 @@ The contract lives in [`specs/openapi.yaml`](specs/openapi.yaml).
 | `POST` | `/collect/:token/responses/:responseId/submit` | token | Submit; a retry answers `409 already_submitted` |
 | `GET` | `/forms/:formId/responses` | cookie + role | Response list with per-response conflict counts |
 | `GET` | `/forms/:formId/analytics` | cookie + role | Live tallies, status counts, conflicts, daily activity |
+| `GET` | `/forms/:formId/events` | cookie + role | The push channel: a server-sent event stream naming the aggregates that changed, coalesced per tick |
 | `GET` | `/forms/:formId/responses/export?format=csv\|xlsx\|json` | cookie + role | Exports; `csv` returns a zip bundle with data, codebook, value labels and missing codes |
+
+</details>
+
+<details>
+<summary><b>The public surface</b></summary>
+
+<br />
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `GET` | `/public/summary` | — | The one unauthenticated route. Server version and uptime, the measured round trip of the query that produced the response, the migration ledger, and the template library summarised by walking the real definitions. No form, response, organisation or count of any of them. Never stored |
 
 </details>
 
@@ -1270,15 +1293,24 @@ should expect a `403` and back off.</sub>
 
 Generated by `pnpm build` — the entire frontend, with no framework runtime beyond React:
 
-| Asset | Raw | Gzip |
-|---|---:|---:|
-| `index.html` | 0.98 kB | 0.50 kB |
-| `index-*.css` | 4.69 kB | 1.47 kB |
-| `index-*.js` (45 modules) | **208.87 kB** | **65.80 kB** |
+The console and the landing page are separate chunks, and that separation is the point: three.js is
+only ever fetched by a reader who is looking at the landing page.
 
-There is no charting library, no UI kit, no state manager and no icon package — the console is
+| Asset | Raw | Gzip | Loaded by |
+|---|---:|---:|---|
+| `index.html` | 1.74 kB | 0.84 kB | everyone |
+| `index-*.css` (console) | 8.02 kB | 2.52 kB | everyone |
+| `index-*.js` (console, 62 modules) | **214.75 kB** | **67.86 kB** | everyone |
+| `landing-*.css` | 10.53 kB | 3.12 kB | the landing page |
+| `landing-*.js` | 16.18 kB | 5.55 kB | the landing page |
+| `instrument-*.js` (three.js) | 533.51 kB | 135.77 kB | the landing page, after first paint |
+
+The console bundle is 214.75 kB raw, of which the push channel and the connection indicator are a few
+kilobytes. There is no charting library, no UI kit, no state manager and no icon package: the console is
 hand-built React with CSS custom properties, which is why the whole app is smaller than a typical
-component library's stylesheet.
+component library's stylesheet. The scene is in its own dynamically imported chunk, so a signed-in user
+heading for the console never downloads it, and the WebGL code is not in the critical path of the page
+that does.
 
 ### Database
 
@@ -1304,18 +1336,18 @@ than pretending the score is 100. What can be verified today is verifiable: the 
 ```bash
 pnpm lint         # ESLint 9, flat config — 0 errors
 pnpm typecheck    # tsc across engine, api, web and the serverless entry
-pnpm test         # 131 tests
+pnpm test         # 152 tests
 pnpm coverage     # v8 coverage, per package
 pnpm build        # engine -> api -> web
 ```
 
-### What the 131 tests actually cover
+### What the 157 tests actually cover
 
 | Suite | Tests | Focus |
 |---|---:|---|
 | `packages/engine` | **54** | Expression parsing and evaluation, validation, XLSForm round-trip fixpoint, XLSX read/write, dataset and codebook assembly, every export writer |
-| `apps/api` | **58** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers |
-| `apps/web` | **19** | The offline core (`planSync`, outbox supersede rules, draft persistence) and the service worker's routing, executed in a VM |
+| `apps/api` | **70** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers, and **the push channel over a real socket**: `ready` first, silence while nothing changes, then one coalesced event naming the aggregate that moved, with a 404 and no stream for a form the caller cannot see, plus the public summary: read live, and asserted key by key to carry no tenant data |
+| `apps/web` | **33** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`) and the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer) |
 
 ### Coverage
 
@@ -1549,6 +1581,8 @@ ceilings underneath — lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). This is t
 - [x] **An installable PWA** that caches the shell and never the data
 - [x] **Exports that carry meaning** — CSV bundle (data + codebook + labels + missing codes), XLSX, JSON
 - [x] **Live analytics** recomputed per request, plus per-response conflict counts
+- [x] **Pushed, not polled**: one server-sent event stream per form, coalesced per aggregate, with an honest connection indicator and a timer that only starts when the stream is gone
+- [x] **An immersive public surface**: a WebGL landing page whose every figure is read live from the API, and which is complete and readable without the scene
 - [x] **Consent with evidence**, and templates (the 2026 school ranking survey is #1)
 - [x] **A one-origin deployment** with verified tenancy on production
 
@@ -1557,10 +1591,9 @@ ceilings underneath — lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). This is t
 - [ ] **File uploads** — object storage with presigned URLs, type and size limits and a scan step; unblocks the honest `image` and `file` question types
 - [ ] **`.sav` / `.dta` export** — the Python `pyreadstat` worker that turns today's `501` into a real file
 - [ ] **Quality flags and a flag queue** — the rule set is specified, the surface is not built
-- [ ] **Realtime dashboards** — replace the 5-second poll with a push channel, coalesced per aggregate
 - [ ] **CI on every push** — lint, typecheck, test, build and the two harnesses, so "verified locally" stops depending on someone remembering
 - [ ] **Backups and one rehearsed restore** — currently *not done*, and the single most important gap
-- [ ] **Component tests for the React UI**, so the web coverage number stops being carried by the harnesses alone
+- [x] **Component tests for the React UI**: the landing page and the realtime client now run in jsdom, so the web coverage number is no longer carried by the harnesses alone
 - [ ] **Accessibility and performance budgets** — an axe/WCAG 2.2 AA pass and a Lighthouse budget checked in CI
 - [ ] **API keys with scopes, and webhooks** — the programmatic integration surface
 - [ ] **A visual builder and logic editor** — the JSON editor is complete; the drag-and-drop surface is not

@@ -1,6 +1,8 @@
+import type { FastifyInstance } from 'fastify';
 import { Client, type PoolClient } from 'pg';
 import { pool } from '../../src/db/pool.js';
 import { withTenant } from '../../src/db/tenant.js';
+import { PRIVACY, TERMS } from '../../src/legal/documents.js';
 
 let counter = 0;
 export function uniqueEmail(prefix = 'school'): string {
@@ -93,4 +95,87 @@ export async function readLiveOtp(email: string): Promise<string | null> {
   } finally {
     await admin.end();
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Platform fixtures                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Sign in against the real platform surface, as a person does.
+ *
+ * Shared by the suites that need a signed in account but are not about sign-in,
+ * so that "how do I get a session" stays one answer. The steps are the real ones:
+ * request a code, read what was actually issued out of the database, verify it,
+ * and accept the current terms, because nothing else is reachable until you do.
+ */
+export interface PlatformSession {
+  cookie: string;
+  userId: string;
+  email: string;
+}
+
+export async function signInPlatform(app: FastifyInstance, email: string): Promise<PlatformSession> {
+  const requested = await app.inject({ method: 'POST', url: '/api/v1/auth/otp/request', payload: { email } });
+  if (requested.statusCode !== 200) throw new Error(`otp request failed: ${requested.body}`);
+  const code = await readLiveOtp(email);
+  if (!code) throw new Error(`no live OTP for ${email}`);
+
+  const verified = await app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/otp/verify',
+    payload: { email, code },
+  });
+  if (verified.statusCode !== 200) throw new Error(`otp verify failed: ${verified.body}`);
+  const cookie = String(verified.headers['set-cookie']).split(';')[0] ?? '';
+
+  const accepted = await app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/terms/accept',
+    headers: { cookie },
+    payload: { termsVersion: TERMS.version, privacyVersion: PRIVACY.version, accepted: true },
+  });
+  if (accepted.statusCode !== 200) throw new Error(`terms accept failed: ${accepted.body}`);
+
+  const me = await app.inject({ method: 'GET', url: '/api/v1/auth/me', headers: { cookie } });
+  if (me.statusCode !== 200) throw new Error(`me failed: ${me.body}`);
+  return { cookie, userId: (me.json() as { user: { id: string } }).user.id, email };
+}
+
+export async function createOrgFor(app: FastifyInstance, session: PlatformSession, name: string): Promise<string> {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/v1/orgs',
+    headers: { cookie: session.cookie },
+    payload: { name },
+  });
+  if (res.statusCode !== 201) throw new Error(`create org failed: ${res.body}`);
+  return (res.json() as { organisation: { id: string } }).organisation.id;
+}
+
+/** A form, a published version of it, and the version id, in one call. */
+export async function createPublishedForm(
+  app: FastifyInstance,
+  session: PlatformSession,
+  orgId: string,
+  name: string,
+  definition: unknown,
+): Promise<{ formId: string; versionId: string }> {
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/v1/forms',
+    headers: { cookie: session.cookie },
+    payload: { orgId, name, definition },
+  });
+  if (created.statusCode !== 201) throw new Error(`create form failed: ${created.body}`);
+  const formId = (created.json() as { form: { id: string }; version: { id: string } }).form.id;
+  const versionId = (created.json() as { version: { id: string } }).version.id;
+
+  const published = await app.inject({
+    method: 'POST',
+    url: `/api/v1/forms/${formId}/versions/${versionId}/publish`,
+    headers: { cookie: session.cookie },
+  });
+  if (published.statusCode !== 200) throw new Error(`publish failed: ${published.body}`);
+  return { formId, versionId };
 }
