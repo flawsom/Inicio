@@ -1,6 +1,6 @@
 {
   "base": "https://inicio.unifies.codes",
-  "at": "2026-10-14T02:38:37.386Z",
+  "at": "2026-10-14T05:08:41.307Z",
   "checks": [
     {
       "name": "the landing read its figures from the API in this request",
@@ -37,12 +37,12 @@
     "[phone] 401 https://inicio.unifies.codes/api/v1/auth/me"
   ],
   "sizes": {
-    "landing-hero.jpg": "216 kB",
-    "landing-capabilities.jpg": "154 kB",
-    "landing-scene.jpg": "198 kB",
-    "landing-templates.jpg": "197 kB",
-    "login-desktop.jpg": "154 kB",
-    "landing-mobile.jpg": "169 kB",
-    "login-mobile.jpg": "182 kB"
+    "landing-hero.jpg": "256 kB",
+    "landing-capabilities.jpg": "145 kB",
+    "landing-scene.jpg": "224 kB",
+    "landing-templates.jpg": "126 kB",
+    "login-desktop.jpg": "152 kB",
+    "landing-mobile.jpg": "170 kB",
+    "login-mobile.jpg": "141 kB"
   }
 }

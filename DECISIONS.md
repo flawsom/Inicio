@@ -1111,6 +1111,12 @@ rather than reading it: `test/offline/store.ts` passed a key to a store declared
 **Honest limits.** The palette is measured to the 4.5:1 floor for text and 3:1 for boundaries, and the two
 stylesheets are held to each other's values; what is *not* measured is whether the surfaces look good, which
 is a judgement and not a test. Repository documents (this file, `README.md`, `CHANGELOG.md`, `specs/`) still
-carry their em dashes by D33's reasoning, which is unchanged by this work. And `login-desktop.jpg` and
-`login-mobile.jpg` in the README are photographs of the front door as it was before this change until
-`scripts/screenshots.mjs` is run against the deployment that carries it.
+carry their em dashes by D33's reasoning, which is unchanged by this work.
+
+**And the photographs were re-taken, because a stale one is the kind of claim this repository measures
+rather than makes.** The README calls its first two tables photographs of the running product, and the front
+door in them was the old one: `scripts/screenshots.mjs` was run against the deployment that carries this
+change (`https://inicio.unifies.codes`), all five of its assertions passed, and the report it writes records
+the URL and the time. The result is checkable in the images themselves: the desktop sign-in capture is warm
+grey with 361,691 warm pixels against 906 cool ones, where the previous version of that screen was blue, and
+the landing page's three captures carry no cool pixels at all.
