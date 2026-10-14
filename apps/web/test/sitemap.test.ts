@@ -109,4 +109,19 @@ describe('the two catch-alls that could swallow either file', () => {
     expect(api, 'the API proxy rule is gone').toBeDefined();
     expect(api).toContain('force = true');
   });
+
+  it('Netlify proxies to the canonical host, not one of the platform aliases', () => {
+    // One deployment answers to three names. The config names the canonical one, the
+    // same name the README, the badges, the sitemap and robots.txt carry, so a future
+    // edit cannot leave the deploy config pointing at a hostname the docs deny exists.
+    const targets = [...NETLIFY.matchAll(/to = "([^"]+)"/g)].map((match) => match[1]);
+    expect(targets.length, 'netlify.toml declares no redirect targets').toBeGreaterThan(0);
+    for (const target of targets) {
+      if (!target.startsWith('http')) continue; // the SPA rule targets /index.html
+      expect(
+        target.startsWith('https://inicio.unifies.codes'),
+        `${target} is not on the canonical host`,
+      ).toBe(true);
+    }
+  });
 });

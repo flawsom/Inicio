@@ -114,6 +114,16 @@ beforeEach(() => {
         201,
       );
     }
+    if (url.endsWith('/rotate') && method === 'POST') {
+      return json(
+        {
+          key: { ...keysBody.keys[0], id: 'key-3' },
+          secret: `ik_${'b'.repeat(64)}`,
+          revokedKeyId: 'key-1',
+        },
+        201,
+      );
+    }
     if (url.includes('/api-keys')) return json(keysBody);
     if (url.includes('/webhooks/') && url.endsWith('/test')) {
       return json({ ...testAnswer, deliveryId: 'd-1' }, 200);
@@ -227,7 +237,8 @@ describe('the integrations screen', () => {
     await mount(false);
     expect(hasButton('Create key')).toBe(false);
     expect(hasButton('Revoke')).toBe(false);
-    expect(container.textContent).toContain('Only an owner or an admin can issue or revoke a key');
+    expect(hasButton('Rotate')).toBe(false);
+    expect(container.textContent).toContain('Only an owner or an admin can issue, rotate or revoke a key');
     // The read-only half stays: a member may see where the organisation's data goes.
     expect(hasButton('Deliveries')).toBe(true);
     expect(hasButton('Send test')).toBe(true);
@@ -251,6 +262,33 @@ describe('the integrations screen', () => {
     expect(shown[0]!.readOnly).toBe(true);
     // The list was re-read after the write, and the panel goes away for good when it
     // is dismissed — there is nothing to come back for.
+    expect(calls.filter((c) => c.method === 'GET' && c.url.includes('/api-keys')).length).toBe(2);
+    await click(button('Done'));
+    expect([...container.querySelectorAll('input')].some((el) => el.value === secret)).toBe(false);
+  });
+
+  it('rotates a key in place: the new secret is shown once and the copy says the old one is already dead', async () => {
+    const confirmSpy = vi.fn((_question?: string) => true);
+    vi.stubGlobal('confirm', confirmSpy);
+    await mount();
+
+    await click(button('Rotate'));
+
+    expect(calls.filter((c) => c.method === 'POST' && c.url.endsWith('/api-keys/key-1/rotate'))).toHaveLength(1);
+    // The question names the prefix that is about to stop working, because "rotate"
+    // is the one action here whose consequence is not visible on the screen.
+    expect(String(confirmSpy.mock.calls[0]?.[0])).toContain('ik_ab12cd34');
+    expect(String(confirmSpy.mock.calls[0]?.[0])).toContain('stops working on its very next request');
+
+    const secret = `ik_${'b'.repeat(64)}`;
+    expect(container.textContent).toContain('this is the only time it is shown');
+    const shown = [...container.querySelectorAll('input')].filter((el) => el.value === secret);
+    expect(shown).toHaveLength(1);
+    expect(shown[0]!.readOnly).toBe(true);
+    expect(container.textContent).toContain('is revoked and will not be accepted again');
+
+    // The list is re-read after the write, and dismissing the panel leaves nothing
+    // behind to come back for — the server cannot return the secret again.
     expect(calls.filter((c) => c.method === 'GET' && c.url.includes('/api-keys')).length).toBe(2);
     await click(button('Done'));
     expect([...container.querySelectorAll('input')].some((el) => el.value === secret)).toBe(false);

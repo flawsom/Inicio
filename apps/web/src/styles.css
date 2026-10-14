@@ -930,6 +930,26 @@ button.ghost:hover:not(:disabled) {
 .list .tab:hover:not(:disabled),
 .versions .tab:hover:not(:disabled) { border-color: var(--line); }
 
+/*
+ * A version row: the version is the selectable row, and what changed hangs under it.
+ *
+ * The history is a timeline — who forked it from which version, and what moved between
+ * the two — so the row is a small column rather than a line of buttons, and the diff
+ * gets a whole line of its own instead of being squeezed beside the restore control.
+ */
+.versions .version {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.versions .version:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
 /* The active row gets a hairline and a bar, so the current form is unmistakable. */
 .list .tab.active::before,
 .versions .tab.active::before {

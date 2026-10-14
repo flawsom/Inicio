@@ -9,6 +9,8 @@ import {
   type PublicMailStatus,
   type Organisation,
   type TermsStatus,
+  type VersionComparison,
+  type VersionSummary,
   type WebhookDelivery,
 } from './api';
 import { Collect } from './collect';
@@ -625,10 +627,21 @@ export function DataTab({
     return counts;
   }, [data]);
 
+  const [withCodebook, setWithCodebook] = useState(false);
+
   const exportAs = async (format: string): Promise<void> => {
     setDownloadError(null);
+    // A `.sav` is one file, so when the codebook is asked for it travels beside the data
+    // in an archive — the codebook, the value labels, the missing table and the metadata
+    // the CSV bundle carries, without the data that the statistical file already is.
+    // This matters most for Stata: a `.dta` cannot hold the value labels of a string
+    // variable at all, so the codebook is where an option's codes are written down.
+    const codebook = withCodebook && (format === 'sav' || format === 'dta');
     try {
-      await download(`/forms/${formId}/responses/export?format=${format}`, `export.${format === 'csv' ? 'zip' : format}`);
+      await download(
+        `/forms/${formId}/responses/export?format=${format}${codebook ? '&codebook=1' : ''}`,
+        codebook ? `${format}-bundle.zip` : `export.${format === 'csv' ? 'zip' : format}`,
+      );
     } catch (err) {
       setDownloadError(err instanceof ApiError ? (err.message ?? err.code) : 'export failed');
     }
@@ -668,14 +681,31 @@ export function DataTab({
         <button type="button" onClick={() => void exportAs('json')} disabled={!canExport}>
           Export .json
         </button>
-        <button type="button" disabled title="SPSS .sav needs the pyreadstat export worker">
-          Export .sav (unavailable)
+        {/* Offered rather than greyed out: whether this deployment can write a statistical
+            file is the deployment's business, and the API answers for itself — a 501 naming
+            the variable to set, or a 502 saying the worker did not answer. A button that
+            says "unavailable" on a deployment that has a worker is its own small lie. */}
+        <button type="button" onClick={() => void exportAs('sav')} disabled={!canExport}>
+          Export .sav
         </button>
+        <button type="button" onClick={() => void exportAs('dta')} disabled={!canExport}>
+          Export .dta
+        </button>
+        <label className="small muted">
+          <input
+            type="checkbox"
+            checked={withCodebook}
+            onChange={(event) => setWithCodebook(event.target.checked)}
+          />{' '}
+          ship the codebook beside .sav/.dta
+        </label>
       </div>
       <p className="muted small">
         {canExport ? `Exports are built from the published version${publishedVersion ? ` v${publishedVersion}` : ''}. ` : ''}
         The CSV export is a bundle: data, codebook, value labels, the missing-code table and metadata: plus a
-        spreadsheet-safe copy where formula-looking cells are neutralised. .sav/.dta are refused rather than faked.
+        spreadsheet-safe copy where formula-looking cells are neutralised. .sav and .dta are written by the
+        pyreadstat worker, which is deployed separately: without one this deployment refuses the export and names
+        the variable that would change that, rather than emitting a file that is quietly wrong.
       </p>
       {downloadError && <p className="error small">{downloadError}</p>}
       {error && <p className="error small">{error}</p>}
@@ -1111,19 +1141,18 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
             />
           </div>
 
-          <ul className="versions">
-            {versions.map((version) => (
-              <li key={version.id}>
-                <button
-                  type="button"
-                  className={version.id === selected?.id ? 'tab active' : 'tab'}
-                  onClick={() => setSelectedVersionId(version.id)}
-                >
-                  v{version.version} · {version.status} · {version.question_count} question(s)
-                </button>
-              </li>
-            ))}
-          </ul>
+          <VersionHistory
+            formId={form.id}
+            orgId={form.org_id}
+            versions={versions}
+            selectedId={selected?.id ?? null}
+            onSelect={setSelectedVersionId}
+            onChanged={() => {
+              setEditorRevision((n) => n + 1);
+              reload();
+            }}
+            onNotice={setNotice}
+          />
 
           {selected && (
             <Suspense fallback={<p className="muted">Opening the studio…</p>}>
@@ -1138,6 +1167,199 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
       )}
       {tab === 'quality' && <QualityTab formId={form.id} orgId={form.org_id} />}
       {tab === 'distribute' && <DistributeTab formId={form.id} publishedVersion={published?.version ?? null} />}
+    </div>
+  );
+}
+
+/**
+ * The form's version history, as the graph it actually is.
+ *
+ * Each version records the one it was forked from (`based_on`), so a restore shows up
+ * as a new version pointing back at the old one rather than as history rewritten. The
+ * comparison the row expands is fetched from the API — the sentences are computed from
+ * the two stored definitions in `diffDefinitions`, so what the console shows and what
+ * the database holds cannot drift apart — and every non-draft version can be restored,
+ * which forks a fresh draft.
+ *
+ * Who and when come from the version row and the organisation's members: a history that
+ * says "v3 changed" and not who changed it or when is a timeline nobody can act on.
+ */
+export function VersionHistory({
+  formId,
+  orgId,
+  versions,
+  selectedId,
+  onSelect,
+  onChanged,
+  onNotice,
+}: {
+  formId: string;
+  orgId: string;
+  versions: VersionSummary[];
+  selectedId: string | null;
+  onSelect: (versionId: string) => void;
+  onChanged: () => void;
+  onNotice: (notice: string | null) => void;
+}): JSX.Element {
+  const [people, setPeople] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState<string | null>(null);
+  const [comparisons, setComparisons] = useState<Record<string, VersionComparison | null>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void api
+      .members(orgId)
+      .then((result) => {
+        if (live) setPeople(Object.fromEntries(result.members.map((member) => [member.user_id, member.email])));
+      })
+      // A history without names is still a history: the dates and the diffs are the part
+      // that matters, so a members list this viewer may not read is not an error here.
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [orgId]);
+
+  const toggle = async (version: VersionSummary): Promise<void> => {
+    if (open === version.id) {
+      setOpen(null);
+      return;
+    }
+    setOpen(version.id);
+    if (version.id in comparisons) return;
+    try {
+      const comparison = await api.versionDiff(formId, version.id);
+      setComparisons((current) => ({ ...current, [version.id]: comparison }));
+    } catch (err) {
+      setComparisons((current) => ({ ...current, [version.id]: null }));
+      onNotice(err instanceof ApiError ? (err.message ?? 'could not load the comparison') : 'could not load the comparison');
+    }
+  };
+
+  const restore = async (version: VersionSummary): Promise<void> => {
+    if (!window.confirm(`Restore v${version.version} as a new draft? The published version keeps collecting until you publish the new one.`)) return;
+    setBusy(version.id);
+    onNotice(null);
+    try {
+      const result = await api.restoreVersion(formId, version.id);
+      onSelect(result.version.id);
+      setOpen(null);
+      setComparisons({});
+      onNotice(`Restored v${version.version} as draft v${result.version.version}, based on it. Nothing was rewritten.`);
+      onChanged();
+    } catch (err) {
+      onNotice(err instanceof ApiError ? (err.message ?? 'could not restore that version') : 'could not restore that version');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (versions.length === 0) return <p className="muted small">This form has no versions yet.</p>;
+
+  return (
+    <div className="stack">
+      <p className="muted small">
+        {versions.length} version(s). A published version is frozen and keeps the responses it collected;
+        restoring one forks a new draft from it rather than rewriting it.
+      </p>
+      <ul className="versions">
+        {versions.map((version) => {
+          const parent = version.based_on ? versions.find((candidate) => candidate.id === version.based_on) : undefined;
+          const comparison = comparisons[version.id];
+          const expanded = open === version.id;
+          const author = version.created_by ? (people[version.created_by] ?? 'a former member') : 'an unknown member';
+          return (
+            <li key={version.id} className="version">
+              {/* The version itself stays the selectable row — it is what the studio edits —
+                  and everything about where it came from hangs underneath it. */}
+              <button
+                type="button"
+                className={version.id === selectedId ? 'tab active' : 'tab'}
+                onClick={() => onSelect(version.id)}
+              >
+                v{version.version} · {version.status} · {version.question_count} question(s)
+              </button>
+              <div className="row wrap">
+                <button type="button" className="ghost" onClick={() => void toggle(version)}>
+                  {expanded ? 'Hide changes' : 'What changed'}
+                </button>
+                {version.status !== 'draft' && (
+                  <button
+                    type="button"
+                    className="ghost"
+                    disabled={busy === version.id}
+                    onClick={() => void restore(version)}
+                  >
+                    {busy === version.id ? 'Restoring…' : 'Restore as draft'}
+                  </button>
+                )}
+              </div>
+              <p className="muted small">
+                {author} · created {new Date(version.created_at).toLocaleString()}
+                {version.published_at ? ` · published ${new Date(version.published_at).toLocaleString()}` : ''}
+                {parent
+                  ? ` · based on v${parent.version}`
+                  : version.based_on
+                    ? ' · based on a version this form no longer lists'
+                    : ' · the first version of this form'}
+              </p>
+              {expanded && (
+                <div className="stack">
+                  {comparison === undefined && <p className="muted small">Comparing…</p>}
+                  {comparison === null && <p className="warn small">The comparison could not be loaded.</p>}
+                  {comparison && <VersionDiff comparison={comparison} />}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/** The server's own sentences, laid out. Nothing here is re-derived in the browser. */
+function VersionDiff({ comparison }: { comparison: VersionComparison }): JSX.Element {
+  const { from, to, diff } = comparison;
+  if (!diff || !from) {
+    return (
+      <p className="muted small">
+        v{to.version} is where this form started, so there is nothing to compare it with. Compare it with an
+        earlier version above instead.
+      </p>
+    );
+  }
+  const { counts, changes, notes } = diff;
+  return (
+    <div className="stack">
+      <p className="small">
+        <strong>
+          v{from.version} → v{to.version}:
+        </strong>{' '}
+        {diff.identical
+          ? 'the definition is unchanged.'
+          : `${counts.added} added, ${counts.removed} removed, ${counts.changed} changed.`}
+      </p>
+      {changes.length > 0 && (
+        <ul className="small">
+          {changes.map((change) => (
+            <li key={change}>{change}</li>
+          ))}
+        </ul>
+      )}
+      {changes.length === 0 && !diff.identical && (
+        <p className="warn small">
+          The two definitions differ, but nothing this comparison describes: see the notes below.
+        </p>
+      )}
+      {notes.length > 0 && (
+        <ul className="small muted">
+          {notes.map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -1537,7 +1759,7 @@ export function IntegrationsView({ orgId, canAdminister }: { orgId: string; canA
             </div>
           </div>
         ) : (
-          <p className="muted small">Only an owner or an admin can issue or revoke a key.</p>
+          <p className="muted small">Only an owner or an admin can issue, rotate or revoke a key.</p>
         )}
 
         <table>
@@ -1569,20 +1791,47 @@ export function IntegrationsView({ orgId, canAdminister }: { orgId: string; canA
                 </td>
                 <td>
                   {canAdminister && key.active && (
-                    <button
-                      type="button"
-                      className="ghost"
-                      disabled={busy}
-                      onClick={() => {
-                        if (!window.confirm(`Revoke "${key.name}"? Anything using it stops working immediately. This cannot be undone.`)) return;
-                        void run(async () => {
-                          await api.revokeApiKey(orgId, key.id);
-                          return `Revoked "${key.name}".`;
-                        }, keys.reload);
-                      }}
-                    >
-                      Revoke
-                    </button>
+                    <div className="row">
+                      <button
+                        type="button"
+                        className="ghost"
+                        disabled={busy}
+                        title={`Issue a new secret for "${key.name}" with the same scopes and expiry. The current secret stops working on its next request.`}
+                        onClick={() => {
+                          if (
+                            !window.confirm(
+                              `Rotate "${key.name}"? The current secret (${key.prefix}) stops working on its very next request, so anything still using it breaks until it is given the new one. The new key keeps the same scopes and expiry.`,
+                            )
+                          )
+                            return;
+                          void run(async () => {
+                            const res = await api.rotateApiKey(orgId, key.id);
+                            setRevealed({
+                              label: `rotated API key "${res.key.name}"`,
+                              value: res.secret,
+                              hint: `Send it as Authorization: Bearer <key>. Its prefix is ${res.key.prefix}; ${key.prefix} is revoked and will not be accepted again. The scopes and the expiry are unchanged.`,
+                            });
+                            return `Rotated "${res.key.name}". The previous secret is already refused.`;
+                          }, keys.reload);
+                        }}
+                      >
+                        Rotate
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost"
+                        disabled={busy}
+                        onClick={() => {
+                          if (!window.confirm(`Revoke "${key.name}"? Anything using it stops working immediately. This cannot be undone.`)) return;
+                          void run(async () => {
+                            await api.revokeApiKey(orgId, key.id);
+                            return `Revoked "${key.name}".`;
+                          }, keys.reload);
+                        }}
+                      >
+                        Revoke
+                      </button>
+                    </div>
                   )}
                 </td>
               </tr>

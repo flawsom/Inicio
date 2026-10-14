@@ -71,6 +71,9 @@ const VERSION_SUMMARY = {
   published_at: null,
   created_at: '2026-10-13T09:00:00.000Z',
   question_count: 2,
+  // The first version of a form: nothing to have been forked from.
+  based_on: null,
+  created_by: null,
 };
 
 interface Call {

@@ -8,6 +8,14 @@
 #
 # The API's own deploy step provisions the database and runs the migrations;
 # Netlify never touches the database.
+#
+# Why the canonical host and not one of the platform's own hostnames: the
+# deployment answers to inicio.unifies.codes, inicio-prjct.vercel.app and
+# inicio-six-psi.vercel.app, and a probe of all three on 2026-10-14 returned the
+# same compute start time to the millisecond and the same database (10 migrations,
+# PostgreSQL 18.6) — one service under three names, not three deployments. Naming
+# the canonical one keeps this file agreeing with the README, the badges, the
+# sitemap and robots.txt, and `apps/web/test/sitemap.test.ts` holds it there.
 
 [build]
   command = "pnpm --filter @inicio/web build"
@@ -21,19 +29,19 @@
 # API first, so the catch-all SPA rule below cannot swallow it.
 [[redirects]]
   from = "/api/*"
-  to = "https://inicio-six-psi.vercel.app/api/:splat"
+  to = "https://inicio.unifies.codes/api/:splat"
   status = 200
   force = true
 
 [[redirects]]
   from = "/auth/*"
-  to = "https://inicio-six-psi.vercel.app/auth/:splat"
+  to = "https://inicio.unifies.codes/auth/:splat"
   status = 200
   force = true
 
 [[redirects]]
   from = "/health"
-  to = "https://inicio-six-psi.vercel.app/health"
+  to = "https://inicio.unifies.codes/health"
   status = 200
   force = true
 

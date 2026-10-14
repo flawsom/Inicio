@@ -1,29 +1,27 @@
 /*
  * The landing page's own stylesheet.
  *
- * Everything here is scoped under `.landing`, and it is imported by landing.tsx,
- * which is itself loaded lazily. That matters for two reasons: a signed in reader
- * opening the console never downloads or evaluates any of it, and the console's
- * stylesheet stays exactly as it is, so this cannot restyle a table row or an input
- * by accident.
+ * Everything here is scoped under `.landing`, and it is imported by landing.tsx, which
+ * is itself loaded lazily. That matters for two reasons: a signed in reader opening the
+ * console never downloads or evaluates any of it, and the console's stylesheet stays
+ * exactly as it is, so this cannot restyle a table row or an input by accident.
  *
- * The theme is the brand palette: a light ground (#ffffff) with ink type on it, one
- * orange as the primary, one peach as the accent, and one near-black surface
- * (#191c21) that the stage and the footer are made of. Background, surface, text and
- * border are four separate roles and no rule borrows one for another: type on the
- * ground uses `--l-text`/`--l-muted`, type on the surface uses
- * `--l-on-surface`/`--l-muted-on-surface`, and a border is a hairline of whichever
- * of the two it is drawn on. That is what keeps a page made of two materials
- * legible in both.
+ * The page is one flight through the product, and it is made of two materials. The
+ * flight itself is the surface (#191c21) with the scene behind the type, and the
+ * evidence below it is the light ground (#ffffff) with ink on it. Background, surface,
+ * text and border are four separate roles and no rule borrows one for another: type on
+ * the surface uses `--l-on-surface`/`--l-muted-on-surface`, type on the ground uses
+ * `--l-text`/`--l-muted`. That is what keeps a page made of two materials legible in
+ * both, and `apps/web/test/contrast.test.ts` measures every pair from this file.
  *
  * Two rules keep the page from cramping.
  *
- * 1. Every space in this file comes from the scale below. A page of display type
- *    goes wrong the moment one margin is `18px` because it looked right, so there
- *    are no orphan spacing values after this block.
- * 2. Display type is set with room to breathe: line heights are 1.0 and up (never
- *    .9), stacked display lines get a real gap between them, and nothing that is
- *    two different things is closer than 24px to the next.
+ * 1. Every space in this file comes from the scale below. A page of display type goes
+ *    wrong the moment one margin is `18px` because it looked right, so there are no
+ *    orphan spacing values after this block.
+ * 2. Display type is set with room to breathe: line heights are 1.0 and up (never .9),
+ *    stacked display lines get a real gap between them, and the beats are a screen and
+ *    a bit apart so each one gets the stage to itself.
  */
 
 .landing {
@@ -40,15 +38,12 @@
   /*
    * The brand palette.
    *
-   * The orange is the primary and it is two tokens, because one value cannot do
-   * both jobs honestly: #ea580c as type on white is 3.6:1, short of the 4.5:1 text
-   * needs, so `--l-primary` is the brand value wherever it is a fill or a mark and
-   * `--l-primary-text` is the darker shade wherever it is a glyph. Both, and every
-   * other pair below, are measured in `apps/web/test/contrast.test.ts`.
-   *
-   * `--l-line-control` and `--l-line-control-on-surface` exist for the same reason:
-   * a hairline chosen for looks is about 1.2:1 against either ground, and WCAG 1.4.11
-   * asks the boundary of a control to reach 3:1 against what is behind it.
+   * The orange is the primary and it is two tokens, because one value cannot do both
+   * jobs honestly: #ea580c as type on white is 3.6:1, short of the 4.5:1 text needs, so
+   * `--l-primary` is the brand value wherever it is a fill or a mark and
+   * `--l-primary-text` is the darker shade wherever it is a glyph. `--l-line-control`
+   * exists for the same reason: a hairline chosen for looks is about 1.2:1 against
+   * either ground, and WCAG 1.4.11 asks the boundary of a control to reach 3:1.
    */
   --l-primary: #ea580c;
   --l-primary-text: #c2410c;
@@ -66,8 +61,8 @@
   --l-line-on-surface: rgba(255, 255, 255, 0.16);
   --l-line-control-on-surface: rgba(255, 255, 255, 0.45);
 
-  /* One radius language. A chip, a card and a pill on this page is one of these
-     three values and never a fourth one invented at the point of use. */
+  /* One radius language. A chip, a panel and a pill on this page is one of these three
+     values and never a fourth one invented at the point of use. */
   --l-radius-sm: 8px;
   --l-radius: 16px;
   --l-radius-pill: 999px;
@@ -80,14 +75,16 @@
 
   /* The gap between two stacked display lines, and the gap between blocks. */
   --l-line-gap: clamp(10px, 1.6vh, 22px);
+  /* How tall one beat of the flight is. Six of these are the journey. */
+  --l-beat: 112svh;
 
   position: relative;
   /*
-   * The ground is the surface, and that is not a contradiction: the stage is painted
-   * straight onto it and every section below the stage is an opaque sheet of
-   * `--l-bg` laid over it. Painting the base dark is what makes the first paint
-   * correct: the scene is a separate chunk, and a light base would show white text
-   * on a white page for as long as that chunk takes to arrive.
+   * The ground is the surface, and that is not a contradiction: the flight is painted
+   * straight onto it and every section below the flight is an opaque sheet of `--l-bg`
+   * laid over it. Painting the base dark is what makes the first paint correct: the
+   * scene is a separate chunk, and a light base would show white text on a white page
+   * for as long as that chunk takes to arrive.
    */
   background: var(--l-surface);
   color: var(--l-text);
@@ -112,15 +109,34 @@
 }
 
 /*
- * The landing is a light page inside an application whose shell is dark-first, so
- * the browser's own chrome (the scrollbar, and any form control a reader's browser
- * draws for them) follows the page rather than the console.
+ * The landing is a light page inside an application whose shell is dark-first, so the
+ * browser's own chrome (the scrollbar, and any form control the browser draws for the
+ * reader) follows the page rather than the console.
  */
 html:has(.landing) {
   color-scheme: light;
 }
 
-/* ---------------------------------------------------------------- the scene */
+/*
+ * Visually hidden, still read.
+ *
+ * The rail's chapters and the wordmark's way home are dots and a glyph on screen: a
+ * screen reader needs the words, and hiding them with `display: none` would hide them
+ * from it too.
+ */
+.lsr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------------------------------------------------------------- the flight */
 
 .linstrument {
   position: fixed;
@@ -149,56 +165,6 @@ html:has(.landing) {
     radial-gradient(90% 70% at 12% 82%, rgba(253, 186, 116, 0.2), transparent 62%),
     radial-gradient(60% 50% at 50% 55%, rgba(17, 24, 39, 0.55), transparent 72%),
     var(--l-surface);
-}
-
-/* ------------------------------------------------------- grain and vignette */
-
-/*
- * Grain over the whole page, and a vignette over the stage.
- *
- * Both are decoration and both are CSS: the scene behind them is expensive and the
- * flats of a large page are the one place a viewer notices that nothing is
- * physically there. Neither one takes a pointer event, and neither animates when the
- * reader has asked for stillness.
- *
- * The vignette belongs to the stage and is sized to it rather than fixed to the
- * viewport, because the page is two materials: a fixed one would darken the white
- * sections below the stage as well, which is how a depth cue turns into a grey band.
- */
-.lstage::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  pointer-events: none;
-  background: radial-gradient(125% 95% at 50% 0%, transparent 44%, rgba(4, 5, 10, 0.74) 100%);
-}
-
-/* The grain sits over both materials, so it is neither pearl nor ink: a neutral
-   dot, at a whisper, legible on the dark stage and on the white sheets alike. */
-.landing::after {
-  content: '';
-  position: fixed;
-  inset: -50%;
-  z-index: 35;
-  pointer-events: none;
-  opacity: 0.08;
-  background-image: radial-gradient(rgba(128, 132, 140, 1) 0.5px, transparent 0.5px);
-  background-size: 3px 3px;
-  animation: lgrain 6s steps(6) infinite;
-}
-
-@keyframes lgrain {
-  0% { transform: translate3d(0, 0, 0); }
-  20% { transform: translate3d(-2%, 1%, 0); }
-  40% { transform: translate3d(1%, -2%, 0); }
-  60% { transform: translate3d(-1%, 2%, 0); }
-  80% { transform: translate3d(2%, -1%, 0); }
-  100% { transform: translate3d(0, 0, 0); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .landing::after { animation: none; }
 }
 
 /* ------------------------------------------------------------------ reveal */
@@ -230,13 +196,13 @@ html:has(.landing) {
 /*
  * A split headline is only readable because of these two rules.
  *
- * The characters are boxes, because that is what a per-character stagger needs:
- * and a box is precisely what the sentence cannot survive: the browser will end a
- * line after any atomic inline (so "instrument" broke as "instrumen" / "t"), and
- * an inline-block holding a bare space collapses to no width at all (so the words
- * ran together as "Startfromarealinstrument"). The word is therefore one
- * unbreakable box, and the space between two words is a box that keeps its width
- * while carrying a real space, so lines break where a reader expects them to.
+ * The characters are boxes, because that is what a per-character stagger needs: and a
+ * box is precisely what the sentence cannot survive: the browser will end a line after
+ * any atomic inline (so "instrument" broke as "instrumen" / "t"), and an inline-block
+ * holding a bare space collapses to no width at all (so the words ran together as
+ * "Startfromarealinstrument"). The word is therefore one unbreakable box, and the space
+ * between two words is a box that keeps its width while carrying a real space, so lines
+ * break where a reader expects them to.
  */
 .lword {
   display: inline-block;
@@ -268,13 +234,12 @@ html:has(.landing) {
  * The headings say what colour they are, rather than inheriting it.
  *
  * This is not belt and braces. `styles.css` carries `h1, h2, h3, h4 { color:
- * var(--text) }` for every signed-in screen, and `--text` is the *console's* type
- * colour, `--ink` near-black, for anyone whose operating system is in light mode.
- * The landing page's headlines therefore inherited near-black on a near-black ground
- * for every light-mode visitor, and a screenshot taken in a light-scheme browser is
- * the one place that is not visible as a defect. The page is two materials, so its
- * headings inherit from the material they are printed on: white on the stage, ink on
- * the sheets below it.
+ * var(--text) }` for every signed-in screen, and `--text` is the console's type colour,
+ * near-black, for anyone whose operating system is in light mode. The landing page's
+ * headlines therefore inherited near-black on a near-black ground for every light-mode
+ * visitor, which is invisible in any screenshot taken in a dark-scheme browser and
+ * obvious in a light one. The page is two materials, so its headings inherit from the
+ * material they are printed on: white on the flight, ink on the sheets below it.
  */
 .landing h1,
 .landing h2,
@@ -292,10 +257,10 @@ html:has(.landing) {
 }
 
 /*
- * The eyebrow: a hairline, a number, a word.
+ * The eyebrow: a hairline, a word.
  *
- * It gets a margin block so it can never sit flush against the heading it belongs
- * to, which is the failure the reader sees as "everything is stuck together".
+ * It gets a margin block so it can never sit flush against the heading it belongs to,
+ * which is the failure a reader sees as "everything is stuck together".
  */
 .leyebrow {
   display: inline-flex;
@@ -317,12 +282,18 @@ html:has(.landing) {
   opacity: 0.5;
 }
 
+.lhero .leyebrow,
+.ljourney .leyebrow {
+  color: var(--l-muted-on-surface);
+}
+
 /*
  * The bar.
  *
- * It is the ground's material, not the surface's: it starts over the dark stage and
- * ends over the white sheets, so a light translucent bar reads on both, and the
- * hairline under it is what gives it an edge over white.
+ * It is the ground's material, not the surface's: the flight below it is dark and the
+ * sheets further down are white, so a light translucent bar reads on both, and the
+ * hairline under it is what gives it an edge over white. It carries the wordmark and
+ * the way in and nothing else: the journey's own navigation is the rail.
  */
 .lnav {
   position: fixed;
@@ -356,43 +327,12 @@ html:has(.landing) {
   box-shadow: 0 0 14px rgba(234, 88, 12, 0.55);
 }
 
-.lnav nav {
-  display: flex;
-  align-items: center;
-  gap: clamp(12px, 2vw, 28px);
-  font-size: 13.5px;
-}
-
-/*
- * The nav's links are controls, so they get a finger's worth of room rather than a
- * glyph's: a 13.5px line is a 22px box, which is two pixels short of the 24px a target
- * needs. The padding is taken straight back off with a negative margin, so the row
- * looks exactly as it did and only the thing you can hit got bigger.
- */
-.lnav nav a {
-  color: var(--l-muted);
-  padding: 6px 4px;
-  margin: -6px -4px;
-  transition: color 0.2s ease;
-}
-
-.lnav nav a:hover {
-  color: var(--l-text);
-}
-
-@media (max-width: 720px) {
-  .lnav nav a {
-    display: none;
-  }
-}
-
 /*
  * The primary action.
  *
- * The label is `--l-on-primary` rather than white: white on #ea580c is 3.6:1, which
- * is under what 14.5px text needs, and the honest way to keep the brand value on the
- * button is to put ink on it instead of a white that fails. The radius, the padding
- * and the lift are the same language as every other control on the page.
+ * The label is `--l-on-primary` rather than white: white on #ea580c is 3.6:1, which is
+ * under what 14.5px text needs, and the honest way to keep the brand value on the button
+ * is to put ink on it instead of a white that fails.
  */
 .lcta {
   appearance: none;
@@ -422,15 +362,19 @@ html:has(.landing) {
 }
 
 .lcta:focus-visible,
-.lghost:focus-visible {
+.lghost:focus-visible,
+.lrail-dot:focus-visible {
   outline: 2px solid var(--l-primary);
   outline-offset: 3px;
 }
 
-.lstage .lcta:focus-visible,
+.lhero .lcta:focus-visible,
+.ljourney .lcta:focus-visible,
 .lfooter .lcta:focus-visible,
-.lstage .lghost:focus-visible,
-.lfooter .lghost:focus-visible {
+.lhero .lghost:focus-visible,
+.ljourney .lghost:focus-visible,
+.lfooter .lghost:focus-visible,
+.lrail-dot:focus-visible {
   outline-color: var(--l-accent);
 }
 
@@ -454,83 +398,150 @@ html:has(.landing) {
 }
 
 /* The same control, on the surface rather than on the ground. */
-.lstage .lghost,
+.lhero .lghost,
+.ljourney .lghost,
 .lfooter .lghost {
   color: var(--l-on-surface);
   border-color: var(--l-line-control-on-surface);
 }
 
-.lstage .lghost:hover,
+.lhero .lghost:hover,
+.ljourney .lghost:hover,
 .lfooter .lghost:hover {
   color: var(--l-accent);
   border-color: var(--l-accent);
   background: rgba(253, 186, 116, 0.12);
 }
 
-/* ------------------------------------------------------------------- stage */
+/* -------------------------------------------------------------- progress rail */
 
 /*
- * The stage is the surface, so its type is on-surface type. This one line is what
- * keeps the hero legible: the headings inherit it, and the handful of rules inside
- * the stage that carry their own colour are set to the on-surface pair below.
- */
-.lstage {
-  position: relative;
-  z-index: 10;
-  color: var(--l-on-surface);
-}
-
-.lstage .leyebrow {
-  color: var(--l-muted-on-surface);
-}
-
-.lstage code {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--l-line-on-surface);
-}
-
-.lstage > section {
-  padding: 0 var(--l-gutter);
-}
-
-/*
- * The hero.
+ * Six chapters and a way home, fixed to the right edge.
  *
- * The two display lines are the page's whole argument, so they are set larger than
- * anything else and given a gap of their own: at 0.92 line height with nothing
- * between them, two 150px lines read as one grey block.
+ * It is the only navigation the flight has, which is why the bar above carries nothing
+ * but the wordmark and the way in. It is hidden on a narrow screen: six 10px targets
+ * down the side of a phone are not a control, they are an obstacle, and the beats are
+ * reached by scrolling on the device this page is built for.
+ */
+.lrail {
+  position: fixed;
+  right: clamp(14px, 2vw, 30px);
+  top: 50%;
+  z-index: 31;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--l-sp-5);
+}
+
+.lrail ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--l-sp-4);
+}
+
+.lrail-dot {
+  display: block;
+  width: 26px;
+  height: 2px;
+  border-radius: var(--l-radius-pill);
+  background: var(--l-line-control-on-surface);
+  transition: background 0.3s ease, width 0.3s ease, box-shadow 0.3s ease;
+}
+
+.lrail-dot:hover {
+  background: var(--l-accent);
+}
+
+.lrail-dot.in {
+  width: 40px;
+  background: var(--l-accent);
+  box-shadow: 0 0 14px rgba(253, 186, 116, 0.5);
+}
+
+/* A 2px rule is not a target, so the link is padded out to one without moving. */
+.lrail-dot {
+  padding: 11px 0;
+  background-clip: content-box;
+}
+
+.lrail-top {
+  display: block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--l-primary);
+  box-shadow: 0 0 14px rgba(234, 88, 12, 0.55);
+}
+
+@media (max-width: 1024px) {
+  .lrail {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------- the hero */
+
+/*
+ * Pure typography, on the empty surface.
+ *
+ * There is no 3D object in this screen: the scene fades in as the hero scrolls away
+ * (see `presenceAt`), so the first thing a reader meets is a sentence. The glow behind
+ * it is CSS rather than the scene, which is what keeps the first paint correct before
+ * the renderer chunk has even been asked for.
  */
 .lhero {
+  position: relative;
+  z-index: 10;
   min-height: 100svh;
   display: flex;
   flex-direction: column;
   justify-content: center;
   gap: var(--l-sp-5);
-  padding-top: 16vh;
-  padding-bottom: 14vh;
+  padding: 16vh var(--l-gutter) 14vh;
+  color: var(--l-on-surface);
 }
 
-.lhero-eyebrow {
-  margin-bottom: var(--l-sp-5);
+.lhero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(80% 60% at 82% 12%, rgba(234, 88, 12, 0.22), transparent 62%),
+    radial-gradient(70% 60% at 8% 88%, rgba(253, 186, 116, 0.12), transparent 66%);
 }
 
-.lhero h1 {
+.lhero-title {
   margin: 0;
   font-weight: 800;
-  font-size: clamp(46px, 10.4vw, 150px);
+  font-size: clamp(40px, 8.6vw, 124px);
   line-height: 1;
   letter-spacing: -0.045em;
 }
 
-.lhero-line2 {
+.lhero-line {
+  display: block;
+}
+
+.lhero-line + .lhero-line {
   margin-top: var(--l-line-gap);
-  /*
-   * The gradient runs from ink to the primary, and stops there: its lightest stop is
-   * #ea580c at 3.6:1 on white, which is over the 3:1 a display size is allowed and
-   * under the 4.5:1 a paragraph would need, so this treatment belongs to the two
-   * 150px lines and nowhere else. Measured in the contrast test.
-   */
-  background: linear-gradient(96deg, var(--l-text) 6%, var(--l-primary-text) 52%, var(--l-primary) 96%);
+}
+
+/*
+ * The last line runs from ink to the primary, and stops there: its lightest stop is
+ * #ea580c at 3.6:1 on the surface, which is over the 3:1 a display size is allowed and
+ * under the 4.5:1 a paragraph would need, so this treatment belongs to the display type
+ * and nowhere else. Measured in the contrast test.
+ */
+.lhero-line-accent {
+  background: linear-gradient(96deg, var(--l-on-surface) 8%, var(--l-accent) 58%, var(--l-primary) 96%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -539,8 +550,8 @@ html:has(.landing) {
 .lhero-sub {
   margin: var(--l-sp-5) 0 0;
   max-width: 62ch;
-  font-size: clamp(15px, 1.35vw, 18px);
-  line-height: 1.64;
+  font-size: clamp(15px, 1.3vw, 18px);
+  line-height: 1.66;
   color: var(--l-muted-on-surface);
 }
 
@@ -562,145 +573,154 @@ html:has(.landing) {
   padding-left: var(--l-sp-4);
 }
 
-.lclaim {
-  min-height: 78svh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--l-sp-6);
-}
-
-.lclaim-text {
-  margin: 0;
-  max-width: 22ch;
-  font-family: var(--l-serif);
-  font-style: italic;
-  font-weight: 400;
-  font-size: clamp(34px, 6.4vw, 92px);
-  line-height: 1.06;
-  letter-spacing: -0.02em;
-}
-
-.lclaim-body {
-  margin: 0;
-  max-width: var(--l-measure);
-  color: var(--l-muted-on-surface);
-  font-size: clamp(14.5px, 1.3vw, 17px);
-  line-height: 1.68;
-}
-
-/* ---------------------------------------------------------------- live band */
-
-.llive {
-  padding-bottom: 18vh;
-}
-
-.llive-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--l-sp-4);
-  border-bottom: 1px solid var(--l-line-on-surface);
-  padding-bottom: var(--l-sp-4);
-  margin-bottom: var(--l-sp-6);
-}
-
-.llive-state {
+.lscroll {
+  position: absolute;
+  left: var(--l-gutter);
+  bottom: var(--l-sp-7);
   display: inline-flex;
   align-items: center;
-  gap: var(--l-sp-2);
-  font-size: 12.5px;
+  gap: 0.7em;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
   color: var(--l-muted-on-surface);
 }
 
-/* The live dot is what the accent is for: #fdba74 is 10:1 on the surface and would
-   be 1.9:1 on white, so it appears here and never on a light ground. */
-.llive-state i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--l-accent);
-  box-shadow: 0 0 0 0 rgba(253, 186, 116, 0.6);
-  animation: lpulse 2.6s ease-out infinite;
+.lscroll i {
+  display: block;
+  width: 1px;
+  height: 22px;
+  background: linear-gradient(to bottom, transparent, var(--l-accent));
+  animation: lscroll 2.4s ease-in-out infinite;
 }
 
-.llive-state.bad i {
-  background: #dc2626;
-  animation: none;
-}
-
-@keyframes lpulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(253, 186, 116, 0.5);
-  }
-  70% {
-    box-shadow: 0 0 0 12px rgba(253, 186, 116, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(253, 186, 116, 0);
-  }
+@keyframes lscroll {
+  0%, 100% { transform: translateY(-4px); opacity: 0.5; }
+  50% { transform: translateY(4px); opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .llive-state i {
+  .lscroll i {
     animation: none;
   }
 }
 
-.llive-grid {
-  display: grid;
-  /* `min(100%, 220px)`: a bare 220px minimum overflows the column on a 320px phone,
-     which is the one width where a grid with a fixed minimum clips its content. */
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-  gap: 1px;
-  margin: 0;
-  background: var(--l-line-on-surface);
-  border: 1px solid var(--l-line-on-surface);
-  border-radius: var(--l-radius);
-  overflow: hidden;
-}
+/* ----------------------------------------------------------------- the journey */
 
-/* A sheet of the surface over the scene, not a hole in it: the figures stay
-   readable whatever the instrument behind them happens to be doing. */
-.llive-grid > div {
-  background: rgba(25, 28, 33, 0.78);
-  backdrop-filter: blur(16px);
-  padding: var(--l-sp-6) var(--l-sp-5);
-}
-
-.llive-grid dt {
-  font-size: clamp(26px, 3.4vw, 40px);
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.04;
+.ljourney {
+  position: relative;
+  z-index: 10;
   color: var(--l-on-surface);
 }
 
-.llive-grid dd {
-  margin: var(--l-sp-3) 0 0;
-  font-size: 12.5px;
-  line-height: 1.55;
+/*
+ * One beat: a screen and a bit, with the text column given a bed to sit on.
+ *
+ * The scrim is what makes white type on a moving scene legible without hiding the
+ * scene: it is opaque where the words are and gone before the middle of the screen, so
+ * the product is still the thing being watched. The corridor beat has no scrim at all,
+ * because it has no words to protect.
+ */
+.lbeat {
+  position: relative;
+  min-height: var(--l-beat);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--l-sp-5);
+  padding: 0 var(--l-gutter);
+}
+
+.lbeat::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(25, 28, 33, 0.94) 0%, rgba(25, 28, 33, 0.78) 38%, rgba(25, 28, 33, 0) 76%);
+}
+
+.lbeat > * {
+  position: relative;
+  max-width: 660px;
+}
+
+.lchapter {
+  font-family: var(--l-mono);
+  font-size: 12px;
+  letter-spacing: 0.32em;
+  color: var(--l-accent);
+}
+
+.lbeat h2 {
+  margin: 0;
+  font-size: clamp(30px, 4.6vw, 62px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  max-width: 18ch;
+}
+
+.lbeat-body {
+  margin: 0;
+  font-size: clamp(14.5px, 1.3vw, 17.5px);
+  line-height: 1.72;
   color: var(--l-muted-on-surface);
 }
 
-.llive-note {
-  margin: var(--l-sp-5) 0 0;
-  font-size: 13px;
-  line-height: 1.7;
-  color: var(--l-muted-on-surface);
-  max-width: 76ch;
+.lbeat-actions {
+  margin-top: var(--l-sp-3);
 }
-
-/* --------------------------------------------- after the stage: solid ground */
 
 /*
- * Below the stage the page is the light ground, and opaque: these sheets are what a
+ * The silent beat.
+ *
+ * Longer than the others, because it is the fly-through: nothing to read, nothing over
+ * the scene, and the camera banking down a corridor of forms. It is the breathing room
+ * between two scenes and it is the one place on the page with no words on it.
+ */
+.lbeat-silent {
+  min-height: 140svh;
+}
+
+.lbeat-silent::before {
+  display: none;
+}
+
+/*
+ * Where a claim can be checked, in the product rather than in a file.
+ *
+ * An instruction rather than prose, so it is separated by a hairline and a gap: a rule
+ * that ran the whole width would read as a correction to the sentence above it.
+ */
+.lwhere {
+  margin: var(--l-sp-3) 0 0;
+  padding-top: var(--l-sp-3);
+  border-top: 1px solid var(--l-line-on-surface);
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--l-muted-on-surface);
+  max-width: 62ch;
+}
+
+.lwhere span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--l-accent);
+}
+
+/* --------------------------------------------- after the flight: solid ground */
+
+/*
+ * Below the flight the page is the light ground, and opaque: these sheets are what a
  * reader actually reads, and painting them solid is also what keeps the fixed scene
  * behind them instead of through them.
  */
-.lcapabilities,
+.llive,
 .ltemplates,
 .lhonest,
 .lfooter {
@@ -712,19 +732,126 @@ html:has(.landing) {
   padding: clamp(72px, 9.5vw, 140px) var(--l-gutter);
 }
 
+/* ---------------------------------------------------------- the evidence band */
+
+.llive-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--l-sp-4);
+  border-bottom: 1px solid var(--l-line);
+  padding-bottom: var(--l-sp-4);
+  margin-bottom: var(--l-sp-6);
+}
+
+.llive-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--l-sp-2);
+  font-size: 12.5px;
+  color: var(--l-muted);
+}
+
+/* The live dot is what the accent is for: #fdba74 is 10:1 on the surface and would be
+   1.9:1 on white, so on paper it is the primary that marks a live reading. */
+.llive-state i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--l-primary);
+  box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.5);
+  animation: lpulse 2.6s ease-out infinite;
+}
+
+.llive-state.bad i {
+  background: #dc2626;
+  animation: none;
+}
+
+@keyframes lpulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(234, 88, 12, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(234, 88, 12, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(234, 88, 12, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .llive-state i {
+    animation: none;
+  }
+}
+
 /*
- * A section heading is three things in a column: a label, a headline, a sentence.
- * Each gets its own gap from the scale, so the block reads as three statements
- * rather than as a paragraph with a big first line.
+ * Four figures as a list, not as a panel of tiles.
+ *
+ * The page already carries a flight through the product; a grid of stat cards under it
+ * would be the one place where the product stops being the content. So the figures are
+ * set as a list on the sheet: the number first, the sentence that says what was
+ * measured under it, and a hairline between rows.
  */
-.lcapabilities header,
+.llive-figures {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.llive-figures > div {
+  display: grid;
+  grid-template-columns: minmax(0, 190px) minmax(0, 1fr);
+  gap: var(--l-sp-4) var(--l-sp-5);
+  align-items: baseline;
+  padding: var(--l-sp-5) 0;
+  border-bottom: 1px solid var(--l-line);
+}
+
+.llive-figures dt {
+  font-size: clamp(24px, 2.8vw, 34px);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
+.llive-figures dd {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.66;
+  color: var(--l-muted);
+  max-width: 58ch;
+}
+
+.llive-note {
+  margin: var(--l-sp-6) 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--l-muted);
+  max-width: 76ch;
+}
+
+.llive .lwhere {
+  border-top-color: var(--l-line);
+  color: var(--l-muted);
+}
+
+.llive .lwhere span {
+  color: var(--l-primary-text);
+}
+
+/* -------------------------------------------------------- sections on paper */
+
 .ltemplates header,
 .lhonest header,
 .lfooter > div:first-child {
   max-width: 74ch;
 }
 
-.lcapabilities h2,
 .ltemplates h2,
 .lhonest h2,
 .lfooter h2 {
@@ -735,7 +862,6 @@ html:has(.landing) {
   line-height: 1.06;
 }
 
-.lcapabilities header p,
 .ltemplates header p {
   margin: var(--l-sp-5) 0 0;
   color: var(--l-muted);
@@ -743,170 +869,71 @@ html:has(.landing) {
   line-height: 1.7;
 }
 
-.lcards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
-  gap: var(--l-sp-5);
-  margin-top: clamp(40px, 5vw, 68px);
-}
-
-.lcards article {
-  border: 1px solid var(--l-line);
-  border-radius: var(--l-radius);
-  padding: var(--l-sp-6) var(--l-sp-5) var(--l-sp-5);
-  background: var(--l-bg);
-  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
-  display: flex;
-  flex-direction: column;
-  gap: var(--l-sp-4);
-  transition:
-    border-color 0.3s ease,
-    transform 0.5s cubic-bezier(0.2, 0.75, 0.2, 1),
-    background 0.3s ease,
-    box-shadow 0.3s ease;
-}
-
-.lcards article:hover {
-  border-color: rgba(234, 88, 12, 0.45);
-  background: var(--l-panel);
-  box-shadow: 0 18px 40px rgba(17, 24, 39, 0.1);
-  transform: translateY(-3px);
-}
-
-.lcards h3 {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-}
-
-.lcards p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--l-muted);
-  flex: 1;
-}
-
 /*
- * Where a claim can be checked, in the product rather than in a file.
+ * The template library, as a list.
  *
- * Set apart from the sentence above it by a hairline and a gap, because it is an
- * instruction rather than prose. Two classes deep on purpose: `.lcards p` gives
- * every paragraph in a card `flex: 1` so the body fills the space, and this line
- * has to sit at the bottom without growing.
+ * A template is a definition, so what matters about it is the shape of it: how many
+ * questions, how it is grouped, how many languages it carries and which question types
+ * it uses. That is a few lines of text per template, and setting it as text is both
+ * smaller and more informative than three cards of the same three numbers.
  */
-.lcards .lwhere {
-  flex: none;
-  margin-top: var(--l-sp-2);
-  padding-top: var(--l-sp-3);
-  border-top: 1px solid var(--l-line);
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--l-muted);
-}
-
-.lcards .lwhere span {
-  display: block;
-  margin-bottom: 4px;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--l-primary-text);
-}
-
-.ltemplate-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: var(--l-sp-5);
-  margin-top: clamp(40px, 5vw, 68px);
-}
-
-/* Same radius, same border, same lift as the capability cards: two card grids on one
-   page are one card, and this is where that stops being a coincidence. */
-.ltemplate-grid article {
-  border: 1px solid var(--l-line);
-  border-radius: var(--l-radius);
-  padding: var(--l-sp-6) var(--l-sp-5);
-  background: var(--l-bg);
-  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
+.ltemplate-list {
+  margin: clamp(40px, 5vw, 68px) 0 0;
+  padding: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
-  gap: var(--l-sp-4);
-  transition:
-    border-color 0.3s ease,
-    transform 0.5s cubic-bezier(0.2, 0.75, 0.2, 1),
-    background 0.3s ease,
-    box-shadow 0.3s ease;
+  border-top: 1px solid var(--l-line);
 }
 
-.ltemplate-grid article:hover {
-  border-color: rgba(234, 88, 12, 0.45);
-  background: var(--l-panel);
-  box-shadow: 0 18px 40px rgba(17, 24, 39, 0.1);
-  transform: translateY(-3px);
+.ltemplate-list li {
+  padding: var(--l-sp-6) 0;
+  border-bottom: 1px solid var(--l-line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--l-sp-3);
 }
 
-.ltemplate-grid h3 {
+.ltemplate-list h3 {
   margin: 0;
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--l-sp-3);
 }
 
-.ltemplate-grid > article > p {
+.ltemplate-list p {
   margin: 0;
   font-size: 14px;
   line-height: 1.7;
   color: var(--l-muted);
+  max-width: 72ch;
+}
+
+.ltemplate-facts {
+  font-variant-numeric: tabular-nums;
 }
 
 .lpill {
-  align-self: flex-start;
-  margin: 0 0 var(--l-sp-1);
   font-family: var(--l-mono);
   font-size: 11.5px;
+  font-weight: 500;
   letter-spacing: 0.06em;
+  text-transform: none;
   color: var(--l-primary-text);
   border: 1px solid rgba(234, 88, 12, 0.36);
   border-radius: var(--l-radius-pill);
   padding: 3px 10px;
 }
 
-.ltemplate-grid dl {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
-  gap: var(--l-sp-5) var(--l-sp-4);
-  margin: 0;
-  padding-top: var(--l-sp-4);
-  border-top: 1px solid var(--l-line);
-}
-
-.ltemplate-grid dt {
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-}
-
-.ltemplate-grid dd {
-  margin: var(--l-sp-2) 0 0;
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--l-muted);
-}
-
 .ltypes {
   font-family: var(--l-mono);
-  font-size: 12px !important;
+  font-size: 12px;
   line-height: 2;
-  color: var(--l-muted) !important;
-  margin-top: var(--l-sp-2);
 }
 
 .lquiet {
@@ -915,11 +942,14 @@ html:has(.landing) {
   line-height: 1.7;
 }
 
+/* ------------------------------------------------------------------- the truth */
+
 .lhonest ul {
   margin: clamp(32px, 4vw, 50px) 0 var(--l-sp-6);
   padding: 0;
   list-style: none;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--l-sp-5);
   max-width: 88ch;
 }
@@ -936,9 +966,9 @@ html:has(.landing) {
  * A dot, not a dash.
  *
  * The marker used to be a 12px rule, which read as a long hyphen set beside the
- * sentence and made a list of honest statements look like a list of corrections.
- * The dot is the same mark the wordmark wears, so a bullet is now the brand's own
- * full stop rather than a second piece of punctuation in a paragraph.
+ * sentence and made a list of honest statements look like a list of corrections. The
+ * dot is the same mark the wordmark wears, so a bullet is the brand's own full stop
+ * rather than a second piece of punctuation in a paragraph.
  */
 .lhonest li::before {
   content: '';
@@ -959,9 +989,9 @@ html:has(.landing) {
 /* ------------------------------------------------------------------ footer */
 
 /*
- * The footer closes on the surface, the way the page opened on it: the stage is dark,
- * the middle is paper, and the last thing a reader sees is the same material the
- * first thing was. Everything on it is on-surface type.
+ * The footer closes on the surface, the way the page opened on it: the flight is dark,
+ * the middle is paper, and the last thing a reader sees is the same material the first
+ * thing was. Everything on it is on-surface type.
  */
 .lfooter {
   display: grid;
@@ -1015,6 +1045,8 @@ html:has(.landing) {
   color: var(--l-muted-on-surface);
 }
 
+/* ------------------------------------------------------------- small screens */
+
 @media (max-width: 860px) {
   .lfooter {
     grid-template-columns: 1fr;
@@ -1025,25 +1057,39 @@ html:has(.landing) {
     padding-top: 20vh;
   }
 
-  .lhero h1 {
-    font-size: clamp(42px, 13vw, 96px);
+  /* A phone gets the whole stage for one beat: the scrim covers the top of each panel
+     where the text sits, and the scene shows below it. */
+  .lbeat::before {
+    background: linear-gradient(180deg, rgba(25, 28, 33, 0.94) 0%, rgba(25, 28, 33, 0.7) 62%, rgba(25, 28, 33, 0) 100%);
+  }
+
+  .lbeat > * {
+    max-width: none;
+  }
+
+  .llive-figures > div {
+    grid-template-columns: 1fr;
+    gap: var(--l-sp-2);
   }
 }
 
 /*
  * A phone.
  *
- * Four things change, and each of them is a measurement rather than a preference.
- * The display type drops a step so the longest word in the headline still fits the
- * column it is given at 320px; the eyebrow loses tracking, which is worth more at
- * 11px on a narrow screen than the look is; the two calls to action in the hero and
- * the footer take the full width, because a 44px-tall target that cannot be missed
- * beats two buttons stacked off-centre; and the grids are already one column, which
- * is asserted in the audit rather than assumed here.
+ * Four things change, and each of them is a measurement rather than a preference. The
+ * display type drops a step so the longest line still fits the column it is given at
+ * 360px; the eyebrow loses tracking, which is worth more at 11px on a narrow screen than
+ * the look is; the calls to action take the full width, because a 44px-tall target that
+ * cannot be missed beats two buttons stacked off-centre; and the beats are shorter, so a
+ * reader is not scrolling for three screens to reach the next one.
  */
 @media (max-width: 560px) {
-  .lhero h1 {
-    font-size: clamp(38px, 12vw, 62px);
+  .landing {
+    --l-beat: 104svh;
+  }
+
+  .lhero-title {
+    font-size: clamp(34px, 11vw, 58px);
   }
 
   .leyebrow {
@@ -1052,19 +1098,25 @@ html:has(.landing) {
   }
 
   .lhero-actions,
+  .lbeat-actions,
   .lfooter-actions {
     width: 100%;
   }
 
   .lhero-actions .lcta,
   .lhero-actions .lghost,
+  .lbeat-actions .lcta,
   .lfooter-actions .lcta,
   .lfooter-actions .lghost {
     width: 100%;
     justify-content: center;
   }
 
-  .llive-grid > div {
-    padding: var(--l-sp-5) var(--l-sp-4);
+  .lscroll {
+    display: none;
+  }
+
+  .lbeat-silent {
+    min-height: 124svh;
   }
 }

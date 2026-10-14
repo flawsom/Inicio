@@ -63,6 +63,38 @@ export interface VersionSummary {
   published_at: string | null;
   created_at: string;
   question_count: number;
+  /** The version this one was forked from — a new draft's source, or a restore's. */
+  based_on: string | null;
+  created_by: string | null;
+}
+
+/**
+ * What one version changed against another, in the words the API computed.
+ *
+ * The console renders these sentences rather than deriving its own: a comparison
+ * re-made in the browser could disagree with the two definitions the server actually
+ * stored, and the whole value of a history is that it says what is in the database.
+ */
+export interface VersionComparison {
+  to: VersionLineage;
+  from: VersionLineage | null;
+  diff: {
+    identical: boolean;
+    counts: { added: number; removed: number; changed: number };
+    changes: string[];
+    questions: Array<{ name: string; kind: 'added' | 'removed' | 'changed'; details: string[] }>;
+    notes: string[];
+  } | null;
+}
+
+export interface VersionLineage {
+  id: string;
+  version: number;
+  status: string;
+  title: string;
+  based_on: string | null;
+  created_at: string;
+  published_at: string | null;
 }
 
 export interface Definition {
@@ -417,6 +449,18 @@ export const api = {
       { definition },
     ),
   newVersion: (formId: string) => request<{ version: { id: string } }>('POST', `/forms/${formId}/versions`, {}),
+  versionDiff: (formId: string, versionId: string, against?: string) =>
+    request<VersionComparison>(
+      'GET',
+      `/forms/${formId}/versions/${versionId}/diff${against ? `?against=${encodeURIComponent(against)}` : ''}`,
+    ),
+  // Restoring never rewrites the old version: it forks a new draft from it and the new
+  // row records where it came from, which is what keeps the history a graph.
+  restoreVersion: (formId: string, versionId: string) =>
+    request<{ version: { id: string; version: number; status: string; based_on: string | null } }>(
+      'POST',
+      `/forms/${formId}/versions/${versionId}/restore`,
+    ),
   publish: (formId: string, versionId: string) =>
     request<{ version: { version: number; status: string } | null; report: { errors: string[]; warnings: string[] } }>(
       'POST',
@@ -485,6 +529,12 @@ export const api = {
     request<{ key: ApiKey; secret: string }>('POST', `/orgs/${orgId}/api-keys`, payload),
   revokeApiKey: (orgId: string, keyId: string) =>
     request<void>('DELETE', `/orgs/${orgId}/api-keys/${keyId}`),
+  /** The old secret is refused on the next request; the new one keeps the same scopes and expiry. */
+  rotateApiKey: (orgId: string, keyId: string) =>
+    request<{ key: ApiKey; secret: string; revokedKeyId: string }>(
+      'POST',
+      `/orgs/${orgId}/api-keys/${keyId}/rotate`,
+    ),
 
   webhookEvents: () => request<{ events: Array<{ event: string; detail: string }> }>('GET', '/webhook-events'),
   webhooks: (orgId: string) => request<{ endpoints: WebhookEndpoint[] }>('GET', `/orgs/${orgId}/webhooks`),

@@ -5,15 +5,18 @@ import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Landing } from '../src/landing';
+import { BEAT_IDS } from '../src/immersive/choreography';
 
 /**
  * The landing page, mounted.
  *
- * Two claims are worth a test and neither is visible in a build log: that every
- * figure on the page is the API's rather than the author's, and that the page is
- * complete and readable when the scene cannot be created at all. The instrument is
- * mocked to resolve to null, which is exactly what it does on a device with no
- * WebGL, so this file also holds the fallback path honest.
+ * The page is a flight through six beats of the product, and what is worth a test is
+ * not the flight itself (a scene needs a GPU) but everything around it: that every
+ * figure on the page is the API's rather than the author's, that the hero really is
+ * typography with no 3D object in it, that one of the six beats really carries no words
+ * at all, and that the page is complete and readable when the scene cannot be created.
+ * The instrument is mocked to resolve to null, which is exactly what it does on a device
+ * with no WebGL, so this file also holds the fallback path honest.
  */
 vi.mock('../src/immersive/instrument', () => ({
   createInstrument: async () => null,
@@ -53,6 +56,8 @@ const SUMMARY = {
   },
 };
 
+const HEADLINE = 'Real logic. Offline collection. Analysis-ready data.';
+
 function jsonResponse(body: unknown, ok = true): Response {
   return { ok, status: ok ? 200 : 500, json: async () => body } as unknown as Response;
 }
@@ -77,12 +82,11 @@ function stubMatchMedia(matches: (query: string) => boolean): void {
 /**
  * What the reveal was actually handed, not just what it did with it.
  *
- * Revealing whatever it is given makes this stub blind to the defect it should
- * catch: content the observer was never given cannot be revealed by it, and a
- * stub that only ever reports success cannot tell "revealed" from "never
- * observed". Recording the targets is what lets a test ask whether the cards the
- * API renders — which exist only after the fetch resolves — were handed over at
- * all.
+ * Revealing whatever it is given makes this stub blind to the defect it should catch:
+ * content the observer was never given cannot be revealed by it, and a stub that only
+ * ever reports success cannot tell "revealed" from "never observed". Recording the
+ * targets is what lets a test ask whether the template rows the API renders, which exist
+ * only after the fetch resolves, were handed over at all.
  */
 const observed = new Set<Element>();
 
@@ -93,8 +97,8 @@ class StubObserver {
   constructor(private readonly callback: IntersectionObserverCallback) {}
   observe(target: Element): void {
     observed.add(target);
-    // Everything is in view immediately: the reveal is decoration, and a test
-    // should not have to scroll to see a word.
+    // Everything is in view immediately: the reveal is decoration, and a test should not
+    // have to scroll to see a word.
     this.callback([{ isIntersecting: true, target } as IntersectionObserverEntry], this as unknown as IntersectionObserver);
   }
   unobserve(): void {}
@@ -140,6 +144,7 @@ async function renderLanding(): Promise<void> {
 }
 
 const text = (): string => container.textContent ?? '';
+const journey = (): HTMLElement => container.querySelector<HTMLElement>('#landing-journey')!;
 
 describe('the landing page', () => {
   it('reads its figures from the API rather than printing its own', async () => {
@@ -148,9 +153,8 @@ describe('the landing page', () => {
     const requested = String(fetchMock.mock.calls[0]?.[0]);
     expect(requested.endsWith('/api/v1/public/summary')).toBe(true);
 
-    // The headline is real text, not a canvas.
-    expect(text()).toContain('Real logic.');
-    expect(text()).toContain('Real collection.');
+    // The headline is real text, not a canvas, and it is the product's own tagline.
+    expect(text()).toContain(HEADLINE);
 
     // Every live figure is the number the stub API returned.
     expect(text()).toContain('4.3 ms');
@@ -158,23 +162,60 @@ describe('the landing page', () => {
     expect(text()).toContain('migrations applied, latest 0009_mail.sql');
     expect(text()).toContain('question types the shipped templates actually use');
     expect(text()).toContain('Household roster');
-    expect(text()).toContain('12');
+    expect(text()).toContain('12 questions, 3 groups, 2 languages, 2 question types');
     // It says where the numbers came from.
     expect(text()).toContain('GET /api/v1/public/summary');
   });
 
-  it('reveals the template cards the API renders after the page has mounted', async () => {
+  it('opens with typography and no 3D object in the hero', async () => {
     await renderLanding();
 
-    // The cards in this band are the API's: they do not exist when the reveal
-    // effect runs, so an observer built there never sees them and they keep the
-    // hidden state for good. Measured on the live deployment before the fix: all
-    // three were `opacity: 0`, 26px down, and scrolled past by every visitor.
-    const cards = Array.from(container.querySelectorAll<HTMLElement>('#templates article'));
-    expect(cards.length).toBeGreaterThan(0);
-    for (const card of cards) {
-      expect(observed.has(card), 'the card was never handed to the reveal observer').toBe(true);
-      expect(card.classList.contains('in')).toBe(true);
+    const hero = container.querySelector<HTMLElement>('.lhero');
+    expect(hero).not.toBeNull();
+    // The scene is one canvas for the whole page, fixed behind it and never inside the
+    // hero: the beat the reader meets first is a sentence.
+    expect(hero?.querySelector('canvas')).toBeNull();
+    const canvas = container.querySelector('canvas');
+    expect(canvas).not.toBeNull();
+    expect(canvas?.getAttribute('aria-hidden')).toBe('true');
+    // The hero comes before the flight.
+    expect(hero?.compareDocumentPosition(journey())).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('flies through six beats in order, one of which carries no words at all', async () => {
+    await renderLanding();
+
+    const panels = Array.from(journey().children).map((child) => child.id);
+    expect(panels).toEqual([...BEAT_IDS]);
+
+    // The corridor is the breathing room between two scenes: no heading, no sentence,
+    // nothing for a screen reader either.
+    const silent = container.querySelector<HTMLElement>('#flythrough');
+    expect(silent).not.toBeNull();
+    expect(silent?.textContent).toBe('');
+    expect(silent?.querySelector('h1, h2, h3, p')).toBeNull();
+    expect(silent?.getAttribute('aria-hidden')).toBe('true');
+
+    // Every other beat says what it is, what it does and how to watch it work.
+    for (const id of BEAT_IDS.filter((beat) => beat !== 'flythrough')) {
+      const panel = container.querySelector<HTMLElement>(`#${id}`);
+      expect((panel?.querySelector('h2')?.textContent ?? '').length, `${id} has no heading`).toBeGreaterThan(0);
+      expect(panel?.querySelector('.lwhere'), `${id} has no way to check it`).not.toBeNull();
+    }
+    expect(container.querySelectorAll('.lwhere').length).toBeGreaterThanOrEqual(6);
+    expect(text()).toContain('Where to check it');
+  });
+
+  it('reveals the template rows the API renders after the page has mounted', async () => {
+    await renderLanding();
+
+    // The rows in this band are the API's: they do not exist when the reveal effect runs,
+    // so an observer built there never sees them and they keep the hidden state for good.
+    const rows = Array.from(container.querySelectorAll<HTMLElement>('#templates li'));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(observed.has(row), 'the row was never handed to the reveal observer').toBe(true);
+      expect(row.classList.contains('in')).toBe(true);
     }
 
     // And nothing anywhere on the page is left in the hidden state.
@@ -185,14 +226,23 @@ describe('the landing page', () => {
   it('is complete when the scene cannot be created', async () => {
     await renderLanding();
 
-    const canvas = container.querySelector('canvas');
-    expect(canvas).not.toBeNull();
-    // Decoration is hidden from assistive technology.
-    expect(canvas?.getAttribute('aria-hidden')).toBe('true');
-    // The mocked instrument returned null, so the fallback is on screen and the
-    // page is still readable underneath it.
+    // The mocked instrument returned null, so the fallback is on screen and the page is
+    // still readable underneath it.
     expect(container.querySelector('.lfallback')).not.toBeNull();
-    expect(text()).toContain('Real logic.');
+    expect(text()).toContain(HEADLINE);
+    for (const id of BEAT_IDS) expect(container.querySelector(`#${id}`)).not.toBeNull();
+  });
+
+  it('is complete and still when the reader has asked for no motion', async () => {
+    stubMatchMedia(() => true);
+    await renderLanding();
+
+    // Reduced motion is a complete path rather than a degraded one: every beat is there,
+    // in order, with its text.
+    expect(text()).toContain(HEADLINE);
+    for (const id of BEAT_IDS.filter((beat) => beat !== 'flythrough')) {
+      expect((container.querySelector(`#${id} h2`)?.textContent ?? '').length).toBeGreaterThan(0);
+    }
   });
 
   it('shows nothing rather than something old when the API does not answer', async () => {
@@ -201,8 +251,8 @@ describe('the landing page', () => {
 
     expect(text()).toContain('the API did not answer');
     expect(text()).toContain('could not be read from the API, so it is not being guessed at');
-    // No figure is printed at all: a stale number presented as live is worse than
-    // an empty band.
+    // No figure is printed at all: a stale number presented as live is worse than an
+    // empty band.
     expect(text()).not.toContain('migrations applied');
     expect(text()).not.toContain('Household roster');
   });
@@ -224,16 +274,13 @@ describe('the landing page', () => {
   it('keeps the words apart when the reveal splits a headline into characters', async () => {
     await renderLanding();
 
-    // The reveal gives every character its own box. That box is exactly the two
-    // things the sentence cannot survive: it is a line-break opportunity, and a
-    // space inside one collapses to no width — which is how the headlines
-    // rendered as "Startfromarealinstrument" with words broken mid-letter
-    // (`instrumen` / `t`), and how a comma ended up starting a line. No jsdom
-    // assertion noticed, because jsdom applies no stylesheet and `textContent`
-    // keeps its spaces either way. So the structure the split produces is
-    // asserted here, and the two declarations that make it lay out correctly are
-    // asserted from the stylesheet — the way this suite already checks anything
-    // CSS decides.
+    // The reveal gives every character its own box, and that box is exactly the two
+    // things the sentence cannot survive: it is a line-break opportunity, and a space
+    // inside one collapses to no width, which is how headlines once rendered as words
+    // broken mid-letter. No jsdom assertion notices, because jsdom applies no stylesheet
+    // and `textContent` keeps its spaces either way, so the structure the split produces
+    // is asserted here and the two declarations that make it lay out are asserted from
+    // the stylesheet.
     const split = Array.from(container.querySelectorAll<HTMLElement>('[data-split]'));
     expect(split.length).toBeGreaterThan(0);
 
@@ -254,8 +301,11 @@ describe('the landing page', () => {
       for (const space of spaces) expect(space.textContent).toBe(' ');
     }
 
-    // The headline a reader is meant to read, intact.
-    expect(container.querySelector('h1')?.textContent?.trim()).toBe('Real logic.');
+    // The sentence a reader is meant to read, intact.
+    expect(container.querySelector('h1')?.textContent?.trim()).toBe(HEADLINE);
+    // ... and announced as one sentence, because the character boxes would otherwise
+    // leave a screen reader reading the words with no spaces between them.
+    expect(container.querySelector('h1')?.getAttribute('aria-label')).toBe(HEADLINE);
 
     const css = readFileSync(join(__dirname, '..', 'src', 'landing.css'), 'utf8');
     expect(css).toMatch(/\.lword\s*\{[^}]*white-space:\s*nowrap/);
@@ -263,10 +313,10 @@ describe('the landing page', () => {
   });
 
   it('splits once, even though the effect runs twice in development', async () => {
-    // StrictMode mounts, unmounts and mounts again, so the splitting effect runs
-    // twice over markup it has already changed. A second pass is not idempotent:
-    // it wraps every existing character box in a word and a box of its own, which
-    // is what the browser was rendering as doubled, mis-staggered letters.
+    // StrictMode mounts, unmounts and mounts again, so the splitting effect runs twice
+    // over markup it has already changed. A second pass is not idempotent: it wraps every
+    // existing character box in a word and a box of its own, which is what the browser
+    // was rendering as doubled, mis-staggered letters.
     const strictContainer = document.createElement('div');
     document.body.appendChild(strictContainer);
     const strictRoot = createRoot(strictContainer);
@@ -293,7 +343,7 @@ describe('the landing page', () => {
         }
       }
       // And the sentence is still whole.
-      expect(strictContainer.querySelector('h1')?.textContent?.trim()).toBe('Real logic.');
+      expect(strictContainer.querySelector('h1')?.textContent?.trim()).toBe(HEADLINE);
     } finally {
       act(() => strictRoot.unmount());
       strictContainer.remove();
@@ -301,15 +351,15 @@ describe('the landing page', () => {
   });
 
   /**
-   * This deployment is one organisation's private application, so the public page
-   * is not allowed to point at where its source lives, and it is not allowed to
-   * point anywhere that is not the deployment itself.
+   * This deployment is one organisation's private application, so the public page is not
+   * allowed to point at where its source lives, and it is not allowed to point anywhere
+   * that is not the deployment itself.
    *
-   * Both are asserted rather than trusted to review: a link added to a card, or a
-   * status link pasted into a footer, is exactly the kind of change that reads as
-   * harmless in a diff and publishes a private repository's address to everyone
-   * who visits the login screen behind it. The rule is the whole page, so the test
-   * is the whole page: every anchor, resolved.
+   * Both are asserted rather than trusted to review: a link added to a beat, or a source
+   * link pasted into a footer, is exactly the kind of change that reads as harmless in a
+   * diff and publishes a private repository's address to everyone who visits the login
+   * screen behind it. The rule is the whole page, so the test is the whole page: every
+   * anchor, resolved.
    */
   it('links to nothing but this deployment', async () => {
     await renderLanding();
@@ -329,8 +379,8 @@ describe('the landing page', () => {
 
   it('renders no typographic dash a reader can see', async () => {
     await renderLanding();
-    // Em dash or en dash: both are the punctuation a generated paragraph reaches
-    // for, and this page is written for a reader rather than printed at them.
+    // Em dash or en dash: both are the punctuation a generated paragraph reaches for, and
+    // this page is written for a reader rather than printed at them.
     expect(text()).not.toMatch(/[\u2014\u2013]/);
   });
 
@@ -340,8 +390,10 @@ describe('the landing page', () => {
     const checks = Array.from(container.querySelectorAll('.lwhere'));
     expect(checks.length).toBeGreaterThanOrEqual(6);
     expect(text()).toContain('Where to check it');
-    // A path into the source was the thing this line used to hold.
-    expect(text()).not.toMatch(/\.(ts|tsx|sql)\b/);
+    // A path into the source was the thing this line used to hold. (`.sql` is not on the
+    // list on purpose: the migration the API reports is named `0009_mail.sql`, and that
+    // is a fact about the deployment rather than a path into a checkout.)
     expect(text()).not.toContain('packages/');
+    expect(text()).not.toMatch(/\.(ts|tsx|jsx|js)\b/);
   });
 });
