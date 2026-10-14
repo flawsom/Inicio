@@ -184,6 +184,10 @@ export function CursorTrail(): JSX.Element {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    // Asked before the chunk is fetched, not after it is evaluated: see
+    // `wantsCursorTrail`. A phone has no fine pointer, and the module can only tell it
+    // so by being downloaded first.
+    if (!wantsCursorTrail()) return;
     let handle: { dispose(): void } | null = null;
     let disposed = false;
 
@@ -204,6 +208,27 @@ export function CursorTrail(): JSX.Element {
   }, []);
 
   return <canvas ref={canvasRef} className="cursor-trail" aria-hidden="true" />;
+}
+
+/**
+ * Whether this device is going to be shown a trail — asked *before* the chunk is fetched.
+ *
+ * `shouldDrawCursorTrail`, inside that chunk, asks the same two questions before it
+ * mounts, and the difference between the two call sites is the whole cost of getting it
+ * wrong: `import()` runs wherever the canvas is rendered, so a device that would never
+ * draw a trail still downloaded the module and evaluated twenty springs of physics to be
+ * told so. Reduced motion and no fine pointer now fetch nothing at all.
+ *
+ * The two queries are written out here rather than imported, because importing the
+ * predicate would put the chunk on the critical path — the one thing the split exists to
+ * prevent. If the two ever disagree, the price is a fetch that bought nothing: the module
+ * refuses to draw on its own, and the stylesheet hides the canvas there. The reverse
+ * cannot happen, because nothing fetches it on a device this says no to.
+ */
+export function wantsCursorTrail(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+  return window.matchMedia('(any-pointer: fine)').matches;
 }
 
 /**

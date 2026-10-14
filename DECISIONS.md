@@ -1286,7 +1286,21 @@ would have told anybody. So the mount lives where the routing does, and the test
 `cursor-trail-everywhere.test.tsx` mounts the app at each route the router resolves and requires **exactly one** trail,
 mounted exactly once per route even under StrictMode's double mount, disposed by reference when the route
 goes. The decoration's other three properties are held elsewhere: it stays off the critical path
-(`check-budgets.mjs` fails if a critical chunk contains `quadraticCurveTo` or `any-pointer: fine`, and the
+(`check-budgets.mjs` fails if a critical chunk contains `quadraticCurveTo` or `hsla(`, and the
 chunk has its own 4 kB budget), it stays hidden under reduced motion (both the script and the stylesheet,
 asserted in `shell.test.ts`), and it takes no pointer events, so every control underneath still gets its
 click.
+
+**Where the lazy gate lives is part of the decision, not an implementation detail.** The first revision
+asked the question inside the chunk — `mountCursorTrail` returns a no-op handle when there is no fine
+pointer or motion is reduced — which is correct about what is *drawn* and wrong about what is *paid*: the
+`import()` is what costs, and it ran on every device that rendered the canvas. A finger therefore
+downloaded and evaluated twenty springs of physics to be told there is no trail. The question is now asked
+twice: `shouldDrawCursorTrail` inside the chunk, as the authority for what may be drawn, and
+`wantsCursorTrail` in `App.tsx` ahead of the fetch, which is the only copy that can save the request.
+Importing the predicate instead of repeating it would put the chunk on the critical path — the exact thing
+the split exists to prevent — so the two are held together by direction rather than by the compiler: the
+second can only ever be *more* conservative than the first in the sense that matters, and if it is not, the
+cost is a fetch nobody used, because the module still refuses to draw. `cursor-trail-lazy.test.tsx` is what
+makes that a measurement: it counts the mocked module's evaluation and requires none on a coarse pointer,
+under reduced motion, or with no `matchMedia`, and one where a mouse is present.

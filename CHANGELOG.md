@@ -34,10 +34,11 @@ what changed and why.
   and its stylesheet rules are gone; `landing-cursor.ts` became `cursor-trail.ts` and `.lcursor` became
   `.cursor-trail` because the old names had stopped being true; and the canvas rule moved out of
   `landing.css` into `styles.css`, since a canvas styled by a stylesheet only one route loads is an
-  unstyled box in the flow of every other route. It stays decoration: imported on demand, so nobody
-  downloads it to read a page, with its own **4 kB** budget and an assertion that no critical chunk contains
-  it; hidden under reduced motion by both the script and the stylesheet; and `pointer-events: none`, so
-  every control underneath still receives its click. `cursor-trail-everywhere.test.tsx` mounts the app at
+  unstyled box in the flow of every other route. It stays decoration: imported on demand **and only by a
+  device that will draw it** — the gate is ahead of the `import()`, so a finger, a reader who asked for less
+  motion and a browser that cannot answer the question fetch nothing — with its own **4 kB** budget and an
+  assertion that no critical chunk contains it; hidden under reduced motion by both the script and the
+  stylesheet; and `pointer-events: none`, so every control underneath still receives its click. `cursor-trail-everywhere.test.tsx` mounts the app at
   each route and requires **exactly one** trail, mounted once even under StrictMode's double mount, disposed
   by reference when the route goes.
 - **The four public pages are listed in a sitemap, with `robots.txt` closing everything else.** The console,
@@ -360,7 +361,7 @@ rather than reckless, and it now matters more than it did: see D37.
   ground becomes `#191c21`; the Node, pnpm, TypeScript, React, Fastify and PostgreSQL badges keep their
   vendors' colours, because repainting those would be a claim about somebody else's brand. The counts were
   stale in the same pass and in three different ways: the suite said 332 in one document and 333 in another
-  (361 now), and the contrast suite was described as **31** pairs in two places and **25** in a third when
+  (366 now), and the contrast suite was described as **31** pairs in two places and **25** in a third when
   it measures **26**.
 - **One palette and two materials, everywhere in the product, not only on the marketing page.** The
   workspace was the last surface still built in the theme the brand replaced: near-black ground, pearl type,
@@ -463,6 +464,26 @@ rather than reckless, and it now matters more than it did: see D37.
 
 ### Fixed
 
+- **The trail's chunk was downloaded by every device, including the ones that would never draw it.** The
+  component's own comment — and the README's budget table — promised the decoration was fetched on demand
+  "so a device with no fine pointer, which is also the device least able to afford the frames, never
+  downloads it". A browser pass over the deployment found the promise false in the least visible way there
+  is: `import()` ran wherever the canvas was rendered, the chunk came down and was evaluated, and only then
+  did `mountCursorTrail` answer with a no-op handle, because the pointer is a finger. Nothing failed, no
+  screen broke, and every phone paid for a trail it cannot see. The gate is now ahead of the fetch
+  (`wantsCursorTrail` in `App.tsx`), asking the same two questions the module asks itself; the predicate is
+  written twice on purpose, because importing it would put the chunk back on the critical path, and its
+  failure mode is one-directional — if the two ever disagree the cost is a fetch that bought nothing, since
+  the module still refuses to draw on its own. `apps/web/test/cursor-trail-lazy.test.tsx` counts the mocked
+  module's own evaluation, which is the only honest way to ask "was it downloaded?" from jsdom: zero on a
+  coarse pointer, zero under reduced motion, zero in a browser with no `matchMedia` at all, and exactly one
+  evaluation with exactly one mount where a mouse is present.
+  The same pass is how the other half of the claim was established, and how it had to be: headless Chromium
+  reports `any-pointer: none`, so the first run "failed" every route by correctly refusing to draw. With the
+  browser's own pointer emulation (`--blink-settings=…availablePointerTypes=4,primaryPointerType=4`), all
+  seven routes — `/`, `/login`, `/console`, `/terms`, `/privacy` and both token routes — size the canvas to
+  its own box (1440×900, not the 300×150 default) and **paint**, with the chunk answered `200`; under
+  `prefers-reduced-motion` the canvas is hidden, and now not requested at all.
 - **The deployment answered from a database in a different Neon project entirely, and migration `0010` is
   now applied there.** The published summary reported nine migrations where this workspace's production
   connection had ten, and the reason was not a missing migration but two databases: read from each side,

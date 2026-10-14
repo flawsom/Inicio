@@ -164,14 +164,20 @@ if (!instrument) {
      * And the trail, on the same argument: a decoration on every route is exactly the thing
      * somebody is tempted to import statically because "it is only a canvas".
      *
-     * The markers are the curve call and the media query the effect asks for, both of which
-     * exist nowhere else in the app and both of which survive minification (a canvas method
-     * is a property name, and a media query is a string). `mountCursorTrail` deliberately
-     * is *not* a marker: the call site — `module.mountCursorTrail(canvas)` — is in the entry
-     * chunk by definition, because the property being called on a dynamically imported
-     * module cannot be renamed. That is the call, not the code.
+     * The markers are the curve call and the ribbon's own colour string — `hsla(`, written
+     * once, with a hue that walks a slow sine. Both exist nowhere else in the app and both
+     * survive minification, because a canvas method is a property name and an `hsla()`
+     * string is a string. `mountCursorTrail` deliberately is *not* a marker: the call site —
+     * `module.mountCursorTrail(canvas)` — is in the entry chunk by definition, because the
+     * property being called on a dynamically imported module cannot be renamed. That is the
+     * call, not the code.
+     *
+     * `any-pointer: fine` was the second marker and is not one any more, for the reason this
+     * build made it wrong: the shell now asks that question itself, ahead of the fetch
+     * (`wantsCursorTrail`), so the query string is *supposed* to be in the entry chunk — it is
+     * what stops a phone downloading the chunk at all.
      */
-    for (const marker of ['quadraticCurveTo', 'any-pointer: fine']) {
+    for (const marker of ['quadraticCurveTo', 'hsla(']) {
       if (source.includes(marker)) {
         fail(`${entry.name} contains "${marker}": the pointer trail has leaked into the critical path`);
       }
