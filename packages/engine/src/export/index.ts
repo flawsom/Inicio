@@ -3,6 +3,10 @@ import { buildDataset, type BuildOptions, type ExportDataset, type ExportRespons
 import { csvBundle, jsonBundle, xlsxBundle, type BundleFile } from './writers.js';
 
 export * from './dataset.js';
+export {
+  statisticalPayload, missingCodeTable,
+  type StatisticalPayload, type StatisticalColumn, type StatisticalValueLabel, type StatisticalMissingCode,
+} from './statistical.js';
 export { toCsv, toJsonExport, sanitizeSpreadsheetCell, csvBundle, xlsxBundle, jsonBundle, zipFiles, type BundleFile, type JsonExport } from './writers.js';
 
 export type ExportFormat = 'csv' | 'xlsx' | 'json';

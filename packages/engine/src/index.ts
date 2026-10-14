@@ -10,4 +10,5 @@ export {
   type AdapterNote, type XlsFormImport, type XlsFormExport, type XlsFormSheets,
 } from './adapters/xlsform.js';
 export { readWorkbook, writeWorkbook, colName, colIndex, escapeXml, decodeXml, type CellValue, type OutSheet, type Sheet, type Workbook } from './adapters/xlsx.js';
+export { diffDefinitions, type DefinitionDiff } from './diff.js';
 export * from './export/index.js';
