@@ -1786,3 +1786,107 @@ audit with a screen reader (axe-core and the measured contrast pairs are not the
 Lighthouse budget, both still outstanding. And the immersive bar is deliberately **not** applied to the
 console: DP-3 puts the authenticated product on paper, dense and fast, with the dark material reserved for
 focus moments, so the flight is a marketing surface rather than a direction the workspace should follow.
+
+## D49 — Every email opens on the product's own material, the code email says where and when it was asked for, and no two messages share a thread
+
+**Chosen:** the four messages in `apps/api/src/mail/templates.ts` keep one layout, and it now opens the way
+every other dark surface in this product opens: a band across the top of the card in the brand's own dark
+material (`#191c21` in the light design, one step above the card's `#1f242b` in the dark one), carrying the
+kind of message on the left and its one piece of standing metadata on the right — `Sign-in code · Expires in
+10 minutes`, `New account · Member access`, `Sign-in notice · Completed`, `Submission receipt · Received`. It
+is the first thing rendered and the only element that is not white, so an inbox holding four of these reads
+as ours before a word of the body is read. The code email gained the record a reader deciding "was that me?"
+actually needs: the instant the code was requested, the address it was requested from, and the instant it
+dies, **computed** from `OTP_TTL_MINUTES` rather than typed beside it, so the sentence in the message and the
+lifetime the server enforces cannot disagree. The welcome states the account, the organisation, the role and
+the instant the invitation was accepted, and says out loud that there is no password, which is the second
+thing a new member cannot guess and would otherwise spend an afternoon looking for. Every message's last line
+names the mailbox it left from, read out of `MAIL_FROM` (`Sent by Inicio from inicio@unifies.codes.` on this
+deployment), and adds a reply target only when `MAIL_REPLY_TO` names a mailbox somebody reads. And `sendMail`
+stamps every message with its own `X-Entity-Ref-ID`.
+
+**Why the details ride with the request instead of being looked up.** The instant and the source address are
+facts the request already holds, so both OTP call sites (`platform/auth.ts` for a login, `auth/routes.ts` for
+a submission) hand them to the template rather than the template reaching for a clock or a session. Each
+part is optional with the message: a caller that knows neither still gets the complete design and the
+details panel is omitted entirely rather than printed with empty rows, which is the same rule the tenant
+header follows in the workspace (§9: absent evidence is absent, not blank).
+
+**Why a header that repeats.** These subjects repeat by design — ask for a second sign-in code and the
+subject is word for word the one already in the inbox — and modern clients group by subject, so the reader is
+shown a thread containing the stale code with the fresh one hidden above the fold: a product that appears to
+have sent a code that does not work. `X-Entity-Ref-ID` is the header the relay documents for exactly this,
+and it is generated inside `sendMail` rather than at a call site, because a header only some paths set is a
+header that quietly stops being sent the first time a fifth template is added. It is carried by both
+transports: the SMTP adapter passes it through, and `resend.ts` posts the job's `headers` as the provider's
+own field rather than dropping it on the floor. A message that keeps its own thread over SMTP and loses it
+over HTTPS is the same product behaving two ways depending on which port the network allowed.
+
+**Why the footer reads `MAIL_FROM`.** A reader who has never heard of this product is being asked to type a
+code out of a message they did not ask for, and the one thing that makes that reasonable is being able to see
+which address sent it. A line that states an identity is only worth printing if it is the identity the relay
+actually used, so it is read from the environment rather than written into the template. The reply clause is
+conditional for the reason D32 already gives: naming a mailbox nobody watches is a claim the operator never
+made, and an instruction that bounces is worse than no instruction.
+
+**Verified, not assumed.** Text cannot see whether a media query applied or whether something overflowed a
+phone, so `apps/api/.run/render-mail.ts` renders all four messages in a real Chromium at 360, 600 and 1440 px
+in both colour schemes — **24 renders** — and fails on any sideways overflow, a band that does not separate
+from its card, a band that wraps to a second line, a code that leaves its panel or drops below 28 px on a
+phone, an unhidden preheader, and any text/background pair under 4.5:1 read from `getComputedStyle` rather
+than from the stylesheet. All 24 pass: 0 px of overflow and 0 px of card bleed at every width, the band one
+line everywhere, the code at 38 px down to 600 px and 30 px at 360 px, and the dark scheme's band a real step
+above its card (`rgb(38, 44, 52)` against `rgb(31, 36, 43)`) rather than the card with different words on it.
+`mail-templates.test.ts` (31 tests) pins the band, the request record, both absences — the code is not in the
+subject and is not in the band either, because the band is the line somebody glancing at a screen would see —
+and the two conditional clauses. The transport is asserted at both layers: `mail.test.ts` reads the composed
+nodemailer message and finds the id, and two sends are asserted to carry **different** ids, while
+`mail-https.test.ts` reads the body actually posted and finds the same header in the provider's own field.
+And the wiring is asserted where it can only be the wiring: a test drives the real
+`POST /api/v1/auth/otp/request` with a recording sender, reads the message that route produced, and requires
+the instant in it to be within a minute of the request and the expiry to be exactly `OTP_TTL_MINUTES` after
+that instant — a template can only print what its call site hands it, so this is the test that says the
+login route hands it the request rather than a template that could print a record nobody sends. The four
+mail files pass together: 43 tests. The identity line this workspace prints is read back from the
+rendered message as `Inicio <inicio@unifies.codes>`, which is the mailbox the deployment sends under.
+
+**What this does not fix.** Measured is Chromium's rendering of the document, not what Outlook's Word
+renderer or an Apple Mail dark-mode inversion does with it; the table-and-inline-style stance is the reason
+to expect them to survive, and it is not evidence that they did. The one tagline in the layout ("School
+ranking surveys") is written into the template rather than taken from the product's own name, so a
+deployment for another study would need that line changed by hand. `MAIL_REPLY_TO` is empty on this
+deployment originally, so no message promised a reply that could not arrive; it now names
+`Inicio <inicio@unifies.codes>` — the address the messages leave from — which is a statement that somebody
+reads that mailbox, and is worth exactly as much as that being true. And a client that strips the single
+`<style>` block renders the light design, which is complete by design, but loses the dark palette rather than
+being told it did.
+
+**The sign-in screen had the same defect in miniature, and it is where it was noticed.** The card said "It
+expires in 10 minutes": a number typed into a React component, standing beside the lifetime the API enforces
+and the lifetime the message now states. Three places, one fact, and any two of them could drift — so the
+public mail-status answer carries the two things a reader needs and the server owns (`from`, reduced exactly
+the way the footer reduces it, and `otpTtlMinutes`), and the card says nothing about either until the server
+has answered. A test answers that endpoint twice with different values and requires the card to move both
+times, which is what makes "the page states the server's numbers" a fact rather than a habit. Driving the
+running app in a browser then found the part the jsdom suite could not: clicked *before* the mount-time read
+had answered, the notice came out without its second sentence, because the handler read state that was still
+empty rather than the answer that had just travelled with the code — and a slower earlier read could land
+afterwards and overwrite a fresher answer. The card now states what the request itself reported, and the
+mount-time read only fills a gap; both orderings are held by the test, and `.run/check-signin-copy.mjs`
+measures the result in Chromium at 390px and 1280px, where the sentence is stated once, the line is 13.5px at
+6.73:1 on the card, and nothing scrolls sideways.
+
+**Verified against the network, not only against a stub.** `apps/api/.run/render-mail.ts` measures the four
+messages in Chromium (24 renders, the numbers above); `mail-templates.test.ts` and `mail-https.test.ts` hold
+the structure and both transports; and `.run/verify-delivery.mjs` sends all four through the live relay into
+a throwaway mailbox and reads them back — **4/4 delivered, 37/37 content checks**, including the band, the
+footer's sender line, the request record in the code email, and the reply target in the relay's own record of
+the message (`from=Inicio <inicio@unifies.codes>`, `reply_to=["Inicio <inicio@unifies.codes>"]`). The one
+claim that harness cannot make is the delivered `Reply-To` header itself: the inbox API it can reach returns a
+parsed message rather than headers, and it says so rather than passing quietly.
+
+**One step that is configuration rather than code.** A deployment reads its environment where it is deployed,
+not from this checkout, so the reply target set in the workspace reaches the messages sent from here and the
+messages the live origin sends only once the same variable is set there (`MAIL_REPLY_TO` on the Vercel
+project). The footer and the welcome's reply invitation both key off it, so until then the live product's
+messages still name no reply target — honestly, rather than naming one that would bounce.

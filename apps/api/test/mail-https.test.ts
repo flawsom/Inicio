@@ -2,8 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { closePool, pool } from '../src/db/pool.js';
+import { env } from '../src/env.js';
 import { MailProviderError, createResendSender } from '../src/mail/resend.js';
 import { otpEmail } from '../src/mail/templates.js';
+import type { MailJob } from '../src/mail/transport.js';
 import { readLiveOtp } from './helpers/fixtures.js';
 import {
   deliverForLogin,
@@ -90,6 +92,13 @@ describe('resend over HTTPS', () => {
     // No reply target configured, so the field is not sent at all rather than
     // sent empty.
     expect('reply_to' in sent).toBe(false);
+    // The header that keeps two codes from collapsing into one thread has to
+    // travel over the API as well as over SMTP, or the same product behaves two
+    // ways depending on which one its network allowed.
+    const headers = sent.headers as Record<string, string>;
+    expect(headers['X-Entity-Ref-ID']).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
 
     expect(delivery.ok).toBe(true);
     expect(delivery.id).toBe('01a13009-0cfd-73fc-a20c-02aa994a25b0');
@@ -208,4 +217,83 @@ describe('login over an HTTPS relay (HTTP surface)', () => {
 
     await app.close();
   });
+
+  /**
+   * The record a reader deciding "was that me?" actually needs.
+   *
+   * The template can only print what the call site hands it, and the call sites
+   * are two routes that each hold the request's own instant and source address.
+   * So this drives the real login route and reads the message it produced: the
+   * facts have to arrive from the request, and the expiry has to be the server's
+   * own arithmetic on the lifetime it enforces rather than a second number typed
+   * beside it.
+   */
+  it('carries the request itself — when it came in, and from where — into the message it sends', async () => {
+    const jobs: MailJob[] = [];
+    setSenderForTest({
+      kind: 'resend',
+      endpoint: { host: 'api.resend.com', port: 443 },
+      async send(job: MailJob) {
+        jobs.push(job);
+        return { id: 'id-record' };
+      },
+    });
+    app = await buildApp();
+    await app.ready();
+
+    const email = `https-record-${Date.now()}@example.com`;
+    const requestedAt = Date.now();
+    const requested = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/otp/request',
+      payload: { email },
+    });
+    expect(requested.statusCode, requested.body).toBe(200);
+
+    const message = jobs[0]!;
+    expect(message.html).toContain('Requested');
+    expect(message.html).toContain('Network address');
+    expect(message.text).toContain('Network address: 127.0.0.1');
+
+    const askedFor = instant(message.text, 'Requested: ');
+    const dies = instant(message.text, 'Expires: ');
+    // The instant the reader is shown is the request that just happened, and the
+    // lifetime beside it is the one the server will enforce when it checks the
+    // code — not a second number typed into a template.
+    expect(Math.abs(askedFor - requestedAt)).toBeLessThan(60_000);
+    expect(dies - askedFor).toBe(env.OTP_TTL_MINUTES * 60_000);
+    expect(message.text).toContain(`expires in ${env.OTP_TTL_MINUTES} minutes`);
+
+    await app.close();
+  });
 });
+
+/** `14 October 2026 at 09:03 UTC` — the format the template prints — as a number. */
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+function instant(text: string, label: string): number {
+  const line = text.split('\n').find((l) => l.trim().startsWith(label));
+  expect(line, `${label} is not in the message`).toBeTruthy();
+  const m = /(\d{1,2}) (\w+) (\d{4}) at (\d{2}):(\d{2}) UTC/.exec(line!);
+  expect(m, `"${line}" is not a readable instant`).toBeTruthy();
+  return Date.UTC(
+    Number(m![3]),
+    MONTHS.indexOf(m![2]!),
+    Number(m![1]),
+    Number(m![4]),
+    Number(m![5]),
+  );
+}

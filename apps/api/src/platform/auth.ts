@@ -4,7 +4,7 @@ import { pool } from '../db/pool.js';
 import { env } from '../env.js';
 import { generateOtpCode, sha256Hex, timingSafeEqualHex } from '../lib/crypto.js';
 import { deliverForLogin, deliverInBackground, mailStatus, type MailStatus } from '../mail/transport.js';
-import { otpEmail, otpVerifiedEmail, welcomeEmail } from '../mail/templates.js';
+import { bareAddress, otpEmail, otpVerifiedEmail, welcomeEmail } from '../mail/templates.js';
 import { issueSession, revokeSession } from '../auth/session.js';
 import { termsSatisfied } from './terms.js';
 import { sessionCookieOptions } from '../auth/routes.js';
@@ -68,18 +68,31 @@ async function findOrCreateUser(email: string): Promise<UserRow> {
  * A visitor learns whether a code can be sent and how that was established.
  * The relay, the transport and the provider's own error text are operational
  * detail: they belong in the admin console, not in a response anybody can read.
+ *
+ * Two facts travel with that answer because the sign-in screen has to state
+ * them and neither can be typed into a component: `from` is the mailbox the
+ * code will arrive from (the same reduction the message's own footer prints,
+ * from the same variable, so the page cannot name a sender the relay did not
+ * use) and `otpTtlMinutes` is the lifetime the server enforces. A page that
+ * hard-codes "expires in 10 minutes" is stating a number it does not own, and
+ * that is exactly the second number beside the first the emails were just
+ * relieved of.
  */
 function publicMailStatus(status: MailStatus): {
   configured: boolean;
   reachable: boolean;
   basis: MailStatus['basis'];
   transport: MailStatus['transport'];
+  from: string;
+  otpTtlMinutes: number;
 } {
   return {
     configured: status.configured,
     reachable: status.reachable,
     basis: status.basis,
     transport: status.transport,
+    from: bareAddress(status.from),
+    otpTtlMinutes: env.OTP_TTL_MINUTES,
   };
 }
 
@@ -146,7 +159,11 @@ export const platformAuthRoutes: FastifyPluginAsync = async (app) => {
     // inside the request (the message id, or the provider's refusal); SMTP keeps
     // its verdict to a probe, because waiting on a dead relay there costs
     // seconds.
-    const delivery = await deliverForLogin(otpEmail(email, code));
+    // The request's own instant and its source address ride with the code, so
+    // the message can say when it was asked for and from where. Both are facts
+    // this request already has, and a reader deciding whether a sign-in attempt
+    // was them is the one reader who needs them.
+    const delivery = await deliverForLogin(otpEmail(email, code, { at: new Date(), ip: req.ip }));
 
     // Whether an email can actually be delivered is part of the answer, not a
     // detail the client has to infer from an empty inbox. Only the HTTPS relay
@@ -253,9 +270,10 @@ export const platformAuthRoutes: FastifyPluginAsync = async (app) => {
   app.get('/mail-status', async (_req: FastifyRequest, reply: FastifyReply) => {
     const status = await mailStatus(true);
     // Public, so it carries only what a visitor can act on: whether codes can be
-    // sent, and how that answer was reached. The relay, the transport and the
-    // provider's error text are operational detail and live behind the admin
-    // console instead. (No echo field, ever: that shortcut made email optional.)
+    // sent, how that answer was reached, which mailbox a code arrives from, and
+    // how long it lives. The relay, the transport and the provider's error text
+    // are operational detail and live behind the admin console instead. (No echo
+    // field, ever: that shortcut made email optional.)
     return reply.code(200).send(publicMailStatus(status));
   });
 
@@ -325,7 +343,11 @@ export const platformAuthRoutes: FastifyPluginAsync = async (app) => {
     // into a failure. `schoolId` stays empty for the same reason as above — the
     // log's column is a school, and this is an organisation.
     deliverInBackground({
-      ...welcomeEmail(joined.email, { organisation: joined.org_name, role: joined.role }),
+      ...welcomeEmail(joined.email, {
+        organisation: joined.org_name,
+        role: joined.role,
+        at: new Date(),
+      }),
     });
 
     return reply.send({

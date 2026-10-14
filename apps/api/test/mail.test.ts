@@ -66,12 +66,38 @@ describe('email delivery (§7.9, §9)', () => {
     expect(composed.replyTo).toBe(env.MAIL_REPLY_TO);
     expect(composed.html).toBeTypeOf('string');
     expect(composed.text).toBeTypeOf('string');
+    expect((composed.headers as Record<string, string>)['X-Entity-Ref-ID']).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
 
     const { rows } = await pool.query<{ status: string; template: string }>(
       `SELECT status, template FROM email_log WHERE school_id = $1 ORDER BY id DESC LIMIT 1`,
       [schoolId],
     );
     expect(rows[0]).toEqual({ status: 'sent', template: 'welcome' });
+  });
+
+  /**
+   * Two sign-in codes share a subject word for word, so an inbox that groups by
+   * subject shows the reader one thread with the older code in it. The header
+   * that stops that is composed by the transport rather than by the template,
+   * because it is a fact about this message rather than about its words.
+   */
+  it('gives every message its own id, so two codes are two threads', async () => {
+    const email = uniqueEmail('thread');
+    const schoolId = await seedSchool(email, 'Thread School');
+    const { transport, sent } = captureTransport();
+    setTransportForTest(transport);
+
+    await sendMail({ ...otpEmail(email, '111111'), schoolId });
+    await sendMail({ ...otpEmail(email, '222222'), schoolId });
+
+    const ids = sent.map(
+      (mail) => (mail.headers as Record<string, string> | undefined)?.['X-Entity-Ref-ID'],
+    );
+    expect(ids[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(ids[1]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(ids[0]).not.toBe(ids[1]);
   });
 
   it('records a failed send as failed without throwing at the caller of deliverInBackground', async () => {

@@ -42,7 +42,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // Off the response path: SMTP latency/outage must not block the respondent.
-    deliverInBackground({ ...otpEmail(result.school.registered_email, result.code), schoolId: result.school.id });
+    deliverInBackground({
+      ...otpEmail(result.school.registered_email, result.code, { at: new Date(), ip: req.ip }),
+      schoolId: result.school.id,
+    });
 
     // The code is delivered by mail and nowhere else. There is no debug echo:
     // a code that reaches the browser is a login anybody can complete.

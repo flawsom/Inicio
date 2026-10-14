@@ -184,6 +184,10 @@ export interface PublicMailStatus {
   reachable: boolean;
   basis: 'smtp-verify' | 'last-send' | 'none';
   transport: MailTransportKind;
+  /** The mailbox a code arrives from — the same value the message's footer prints. */
+  from: string;
+  /** The lifetime the server enforces on a code. */
+  otpTtlMinutes: number;
 }
 
 export interface MailStatus {

@@ -64,8 +64,8 @@ what changed and why.
   are now the ones the README carries: the app chunk is **252.3 kB raw / 78.7 kB over the wire**, not the
   239.9 / 75.1 the table and the performance footnote still claimed (the integration and quality screens, the
   version history and this rotation had all landed since that reading), with the landing and instrument rows
-  corrected in the same pass. `docs/ROADMAP.md` said `pnpm test` was 388 tests; it is 461 (engine 87, api 167,
-  web 207) and the api/web rows and the "what the tests cover" entry now say what the rotation tests hold.
+  corrected in the same pass. `docs/ROADMAP.md` said `pnpm test` was 388 tests; it is 477 (engine 87, api 178,
+  web 212) and the api/web rows and the "what the tests cover" entry now say what the rotation tests hold.
   Worth flagging rather than burying: the app chunk has **1.3 kB of headroom** under its 80 kB gzip ceiling,
   so the next feature that adds to the console is the one that trips it, and the honest fix there is a
   decision about what leaves the critical path rather than a raised ceiling.
@@ -81,7 +81,7 @@ that answers `200` with bad news in the body is one no probe can fail on, so the
 them the build" and "fail the check". Three tests, including one that makes the round trip reject and
 asserts both the status code and that `reason` is a sentence.
 - **Five documented inconsistencies resolved against the code, one of them already closed.** (1) The test
-  count: the suite runs **461** (engine 87, web 207, api 167, the web test being the Netlify
+  count: the suite runs **477** (engine 87, web 212, api 178, the web test being the Netlify
   canonical-host guard D44 added), and no stale count remains. (2) The migration
   ledger, which was the interesting one: the audit note said production was at 9 migrations with `0010`
   unapplied and therefore API keys, webhooks and flags not live. `pnpm drift` says otherwise today — the
@@ -378,10 +378,11 @@ asserts both the status code and that `reason` is a sentence.
   a push naming its aggregate refetches the screen, a push naming another one does not, two pushes
   inside a frame cost one read, and a minute of clock passes while the stream is live without a single
   timed request. `pnpm test` is the suite these entries describe; it stood at 169 tests when the push
-  channel shipped, and it is 461 now: 87 engine, 167 API, 207 web — the web figure having grown with the
+  channel shipped, and it is 477 now: 87 engine, 178 API, 212 web — the web figure having grown with the
   flight's own suite (the choreography as arithmetic, the hero carrying no 3D object, the six beats in
   order with the fly-through panel empty, every other beat naming where to check its claim, no anchor
-  leaving this deployment, and the scene falling back without a canvas).
+  leaving this deployment, and the scene falling back without a canvas). It is **477** now (87 engine, 178 API,
+  212 web), the web figure having grown again with the sign-in card's copy test.
 - **File uploads: presigned, bounded, scanned, and picked from the browser.** An `image`, `audio`,
   `video` or `file` question can be authorised, uploaded around the server and verified — and now from
   the product's own interface, which was the half that was missing. A respondent gets a real file input,
@@ -567,11 +568,69 @@ asserts both the status code and that `reason` is a sentence.
 
 ### Changed
 
+- **Every email opens on the product's own material, and the one carrying a code now says when it was asked
+  for, from where, and when it dies.** The sign-in code, the welcome, the sign-in notice and the submission
+  receipt were a wordmark above a white card with a heading on it: complete, readable and anonymous, which is
+  the wrong property for the first thing most people ever see from this product. Each message now opens with
+  the brand's dark material as a header band — the kind of message on the left, its one piece of standing
+  metadata on the right (the code's lifetime, the role a new account was granted at) — which is the
+  relationship DP-3 draws between a focus moment and paper, and the only element in a white document that
+  reads as ours at a glance. The code email gained the record a reader deciding "was that me?" actually
+  needs: the instant the code was requested, the address it was requested from, and the instant it dies,
+  computed from `OTP_TTL_MINUTES` rather than typed next to it, so the sentence and the server cannot
+  disagree. Both OTP call sites now hand the request over with the message, and the details panel is omitted
+  entirely when a caller knows neither rather than printed empty. The welcome states the account address
+  beside the role and the instant the invitation was accepted, and says out loud that there is no password,
+  which is the second thing a new member cannot guess and would otherwise go looking for. Measured rather
+  than admired: `apps/api/.run/render-mail.ts` renders all four messages at 360, 600 and 1440 px in both
+  colour schemes — 24 renders — and fails on any sideways overflow, a band that does not separate from its
+  card, a band that wraps to two lines, a code that leaves its panel or drops below 28 px on a phone, an
+  unhidden preheader, or any text and background pair under 4.5:1 read from `getComputedStyle` rather than
+  from the stylesheet. All 24 pass: 0 px of overflow, the code at 38 px and 30 px, the band one line at every
+  width, and the dark scheme's band a real step above its card.
+- **Every message says whose hand it left, and two sign-in codes can no longer collapse into one thread.**
+  These subjects repeat by design: ask for a second code and the subject is word for word the one already in
+  the inbox, so a client that groups by subject shows the reader a thread holding the older code with the
+  fresh one hidden above the fold, which is a product that appears to have sent a code that does not work.
+  The transport now stamps every message with `X-Entity-Ref-ID`, the header the relay documents for exactly
+  this, generated per message inside `sendMail` rather than at a call site, and carried by the SMTP adapter
+  and the HTTPS one alike so the same product does not behave two ways depending on which transport its
+  network allowed. The footer of every message names the address it left from, read out of `MAIL_FROM` rather
+  than written into the template, so the line cannot claim an identity the relay did not use, and it adds the
+  reply target only when `MAIL_REPLY_TO` names a mailbox somebody reads, for the same reason the welcome's
+  invitation to reply is conditional (D32). On this deployment that line reads `Sent by Inicio from
+  inicio@unifies.codes.` Held at both layers: the composed nodemailer message and the posted Resend body each
+  carry the header, and two sends are asserted to carry different ids. See [DECISIONS.md](DECISIONS.md) D49.
+- **The sign-in card stated a lifetime it did not own, and every message now says where a reply reaches.**
+  The card said "It expires in 10 minutes" — a number typed into a React component, standing beside the
+  lifetime the API enforces and the lifetime the code email now states. Three places, one fact, and any two of
+  them could drift. The public mail-status answer carries the two facts the server owns (`from`, reduced
+  exactly the way the message footer reduces it, and `otpTtlMinutes`), and the card says nothing about either
+  until the server has answered; `signin-copy.test.tsx` answers that endpoint twice with different values and
+  requires the card to follow both times, which is what makes "the screen states the server's numbers"
+  checkable rather than a habit. `MAIL_REPLY_TO` is set on this deployment (`Inicio <inicio@unifies.codes>`,
+  the address the messages leave from), so the footer's second clause and the welcome's reply invitation are
+  now true sentences instead of absent ones — and they were absent before precisely because an instruction
+  that bounces is worse than no instruction. Verified the way that claim has to be: all four messages sent
+  through the live relay into a throwaway mailbox and read back — 4/4 delivered, 37/37 content checks, with
+  the band, the sender line, the request record and the reply target each found in what the reader actually
+  received (`from=Inicio <inicio@unifies.codes>`, `reply_to=["Inicio <inicio@unifies.codes>"]` in the relay's
+  own record of the message). One step is configuration rather than code: the live origin reads its
+  environment from the Vercel project, so `MAIL_REPLY_TO` has to be set there too before production's
+  messages name a reply target —  until then they honestly name none. A browser pass over the running app found one thing the jsdom test could
+  not: the card clicked *before* its mount-time mail-status read had answered rendered the notice without its
+  second sentence, because the handler read state that was still empty instead of the answer that had just
+  travelled with the code — and a slower earlier read could overwrite a fresher answer afterwards. The card now
+  states the numbers the request itself reported, and the mount-time read only fills a gap; `signin-copy.test.tsx`
+  holds the ordering both ways, and `.run/check-signin-copy.mjs` measures the result in Chromium at 390px and
+  1280px (the lifetime stated once, the line at 13.5px and 6.73:1 on the card, no sideways scroll, no page
+  error). See [DECISIONS.md](DECISIONS.md) D49.
 - **The numbers in this document, and in the README, are this build's numbers.** Rebuilding the page changed
   what the suite covers and what the bundle weighs, so each figure quoted above and beside it was measured
-  rather than carried forward: `pnpm test` is **461** (engine 87, API 167, web 207), `pnpm coverage` is
-  engine **89.9 %** statements / 81.7 % branches / 94.3 % functions, API **84.3 / 79.1 / 92.3**, web
-  **62.5 / 77.9 / 61.4** over the whole package and **88.6 %** over the offline core
+  rather than carried forward: `pnpm test` is **477** (engine 87, API 178, web 212), `pnpm coverage` is
+  engine **89.9 %** statements / 81.7 % branches / 94.3 % functions, API **84.5 / 79.5 / 92.6**, web
+  **63.6 / 78.5 / 61.7** over the whole package and **88.6 %** over the offline core (the web figure's
+  statements moved 62.5 to 63.6 in this pass, which is the sign-in card being exercised at last)
   (`--coverage.include='src/offline/**'`), and `pnpm budgets` reports 78.7 kB of critical JavaScript, 5.1 kB
   of critical CSS, 6.6 kB for the landing chunk (3.6 kB of it stylesheet), 7.3 kB for the studio, 122.2 kB for
   the renderer and 1.4 kB for the cursor trail — all inside their ceilings, with 1.3 kB of headroom under the

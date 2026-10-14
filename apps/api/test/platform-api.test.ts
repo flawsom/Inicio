@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { strFromU8, unzipSync } from 'fflate';
 import { buildApp } from '../src/app.js';
+import { env } from '../src/env.js';
 import { PRIVACY, TERMS } from '../src/legal/documents.js';
 import { Client } from 'pg';
 import { readLiveOtp, uniqueEmail } from './helpers/fixtures.js';
@@ -127,13 +128,29 @@ describe('platform sign-in', () => {
   it('says plainly when email cannot be delivered instead of claiming it was sent', async () => {
     const status = await app.inject({ method: 'GET', url: '/api/v1/auth/mail-status' });
     expect(status.statusCode).toBe(200);
-    const mail = status.json() as { reachable: boolean; basis: string; detail?: string };
+    const mail = status.json() as {
+      reachable: boolean;
+      basis: string;
+      detail?: string;
+      from: string;
+      otpTtlMinutes: number;
+    };
     // There is no SMTP server in the test environment, and the API says so.
     expect(mail.reachable).toBe(false);
     expect(mail.basis).toBe('smtp-verify');
     // The public reply says whether, not why: the relay and the provider's own
     // error text are behind the administrator's console.
     expect(mail.detail).toBeUndefined();
+    // The two facts the sign-in card states are the server's: the mailbox a code
+    // arrives from, reduced exactly the way the message's footer reduces it, and
+    // the lifetime the API enforces when it checks a code. A page that typed
+    // either of them would be stating something nobody asked the server.
+    expect(mail.from).toBe((/<([^>]+)>/.exec(env.MAIL_FROM)?.[1] ?? env.MAIL_FROM).trim());
+    expect(mail.otpTtlMinutes).toBe(env.OTP_TTL_MINUTES);
+    // The relay and the transport are absent from the public view for the same
+    // reason the provider's error text is.
+    expect('host' in mail).toBe(false);
+    expect('port' in mail).toBe(false);
     // The dev echo is gone for good: the API offers no on-screen shortcut into
     // an inbox that does not exist.
     expect('echoesCodes' in mail).toBe(false);
@@ -143,17 +160,23 @@ describe('platform sign-in', () => {
     expect(requested.statusCode).toBe(200);
     const body = requested.json() as {
       status: string;
-      mail: { reachable: boolean; detail?: string; host?: string; from?: string };
+      mail: { reachable: boolean; detail?: string; host?: string; port?: number; from: string; otpTtlMinutes: number };
       delivery: { ok: boolean; detail: string };
     };
     // "not_delivered", not a reassuring "sent" that never arrives.
     expect(body.status).toBe('not_delivered');
     expect(body.mail.reachable).toBe(false);
-    // The anonymous reply carries no relay, transport or provider detail, and
-    // the delivery verdict itself reaches only the signed in administrator.
+    // The anonymous reply carries no relay or provider detail, and the delivery
+    // verdict itself reaches only the signed in administrator. The mailbox a code
+    // arrives from is the one fact that stays: a reader about to look for a
+    // message has to be told which address sent it, and it is the address the
+    // message itself prints. Whatever a code's lifetime is, the same answer
+    // states it, so the page never has to guess one.
     expect(body.mail.detail).toBeUndefined();
     expect(body.mail.host).toBeUndefined();
-    expect(body.mail.from).toBeUndefined();
+    expect(body.mail.port).toBeUndefined();
+    expect(body.mail.from).toBe((/<([^>]+)>/.exec(env.MAIL_FROM)?.[1] ?? env.MAIL_FROM).trim());
+    expect(body.mail.otpTtlMinutes).toBe(env.OTP_TTL_MINUTES);
     expect(body.delivery.ok).toBe(false);
     // And no code is ever handed back to the client — signing in requires the
     // email that never arrived, which is the honest answer here.

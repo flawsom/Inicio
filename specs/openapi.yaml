@@ -2740,6 +2740,8 @@ components:
         reachable: { type: boolean }
         basis: { type: string, description: How that answer was established. }
         transport: { type: string, enum: [resend, smtp] }
+        from: { type: string, description: The mailbox a code arrives from, reduced the way the message's own footer reduces it, so the sign-in screen and the email cannot name two different senders. }
+        otpTtlMinutes: { type: integer, description: The lifetime the server enforces on a code, so the page states the real number rather than one typed into a component. }
 
     LegalDocument:
       type: object

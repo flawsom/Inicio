@@ -428,7 +428,9 @@ function OtpInput({
   );
 }
 
-function Login({ onSignedIn }: { onSignedIn: () => void }): JSX.Element {
+/** Exported for `signin-copy.test.tsx`: the copy on this card states facts the
+ *  server owns, and the test is what keeps them coming from the server. */
+export function Login({ onSignedIn }: { onSignedIn: () => void }): JSX.Element {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [stage, setStage] = useState<'email' | 'code'>('email');
@@ -436,6 +438,13 @@ function Login({ onSignedIn }: { onSignedIn: () => void }): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [mail, setMail] = useState<PublicMailStatus | null>(null);
+  // What the *request* answered, kept apart from the mount-time read on purpose.
+  // The two arrive in whichever order the network chooses, and a slow read that
+  // landed after a fast request used to be able to overwrite the fresher answer
+  // — the card would then name a sender from before the code was asked for. The
+  // answer that travelled with the code wins, and the other one only fills the
+  // gap while there is one.
+  const [answered, setAnswered] = useState<PublicMailStatus | null>(null);
   const [delivery, setDelivery] = useState<MailDelivery | null>(null);
 
   // Ask whether email works *before* anyone waits for an inbox. An environment
@@ -462,8 +471,20 @@ function Login({ onSignedIn }: { onSignedIn: () => void }): JSX.Element {
       const res = await api.requestOtp(email);
       setStage('code');
       setDelivery(res.delivery);
+      setAnswered(res.mail);
       if (res.delivery.ok) {
-        setNotice(`We sent a 6 digit code to ${email}. It expires in 10 minutes.`);
+        // The sender and the lifetime are the server's own facts, reported by
+        // `/auth/mail-status` and stated in the message itself. They are read
+        // from *this* response rather than from the read that ran when the card
+        // mounted, because this is the answer that belongs to this code — and
+        // because a sentence nobody has the numbers for is better left unsaid
+        // than filled in from the server's defaults.
+        const sender = res.mail?.from;
+        const ttl = res.mail?.otpTtlMinutes;
+        setNotice(
+          `We sent a 6 digit code to ${email}.` +
+            (sender && Number.isFinite(ttl) ? ` It comes from ${sender} and expires in ${ttl} minutes.` : ''),
+        );
       } else {
         setNotice(null);
         // No provider text and no echo here: the login page is public, and the
@@ -518,6 +539,10 @@ function Login({ onSignedIn }: { onSignedIn: () => void }): JSX.Element {
       ) : (
         <>
           <label>{delivery?.ok ? `Six-digit code sent to ${email}` : `Code for ${email}`}</label>
+          {/* Which message to open, on the screen where somebody is looking at a
+              phone. The lifetime is already stated above; saying it twice on one
+              screen is how a reader starts wondering which one is true. */}
+          {delivery?.ok && answered?.from && <p className="muted small">Look for the message from {answered.from}.</p>}
           <OtpInput code={code} onCode={(v) => setCode(v)} onSubmit={() => void verify()} disabled={busy} />
           <button type="button" onClick={() => void verify()} disabled={busy || code.length !== 6}>
             {busy ? 'Checking…' : 'Sign in'}

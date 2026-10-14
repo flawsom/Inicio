@@ -24,10 +24,22 @@ import {
 
 const ALL: Array<[string, () => RenderedMail]> = [
   ['otp', () => otpEmail('owner@example.com', '482913')],
+  ['otp with the request it came from', () => otpEmail('owner@example.com', '482913', { at: new Date('2026-10-14T09:03:00Z'), ip: '203.0.113.7' })],
   ['welcome', () => welcomeEmail('member@example.com', { organisation: 'Kampala Schools Study', role: 'member' })],
+  ['welcome with the instant it was accepted', () =>
+    welcomeEmail('member@example.com', {
+      organisation: 'Kampala Schools Study',
+      role: 'owner',
+      at: new Date('2026-10-14T09:03:00Z'),
+    })],
   ['otp_verified', () => otpVerifiedEmail('owner@example.com', { at: new Date('2026-10-14T09:03:00Z'), ip: '203.0.113.7' })],
   ['submission_confirmation', () => submissionConfirmationEmail('respondent@example.com', 'f2c1-4a', '14 October 2026 at 09:03 UTC')],
 ];
+
+/** `Name <addr>` to `addr`, the same reduction the footer prints. */
+function mailbox(value: string): string {
+  return (/<([^>]+)>/.exec(value)?.[1] ?? value).trim();
+}
 
 describe('the emails never fetch anything', () => {
   /**
@@ -97,6 +109,93 @@ describe('the sign-in code stays in the body', () => {
     expect(mail.text).toContain(`${env.OTP_TTL_MINUTES} minutes`);
     // And says the two things a reader needs to trust it: once, and expiring.
     expect(mail.html.toLowerCase()).toContain('works once');
+  });
+
+  /**
+   * The header band is the first line of the message, and the one place a code
+   * would be seen by anyone glancing at a screen rather than reading the mail.
+   */
+  it('is not in the header band either', () => {
+    const { html } = otpEmail('owner@example.com', '482913');
+    const band = html.slice(html.indexOf('class="e-band"'), html.indexOf('class="e-pad"'));
+    expect(band.length).toBeGreaterThan(0);
+    expect(band).toContain('Sign-in code');
+    expect(band).not.toContain('482913');
+  });
+});
+
+describe('the sign-in code carries the request it came from', () => {
+  it('prints the instant it was asked for, the address it came from, and when it dies', () => {
+    const at = new Date('2026-10-14T09:03:00Z');
+    const mail = otpEmail('owner@example.com', '482913', { at, ip: '203.0.113.7' });
+    expect(mail.html).toContain('14 October 2026 at 09:03 UTC');
+    expect(mail.html).toContain('203.0.113.7');
+    expect(mail.text).toContain('203.0.113.7');
+    expect(mail.text).toContain('Requested: 14 October 2026 at 09:03 UTC');
+    expect(mail.html).toContain('class="e-panel"');
+    // The expiry is the server's own arithmetic on the lifetime it enforces, not
+    // a second number typed next to it: a message that states an instant is
+    // making a promise, and this is the only way it can keep one.
+    const dies = formatUtcDateTime(new Date(at.getTime() + env.OTP_TTL_MINUTES * 60_000));
+    expect(mail.html).toContain(`Expires ${dies}`);
+    expect(mail.html).toContain(`Expires in ${env.OTP_TTL_MINUTES} minutes`);
+  });
+
+  it('omits the record rather than printing an empty one, and still states the lifetime', () => {
+    const mail = otpEmail('owner@example.com', '482913');
+    expect(mail.html).not.toContain('Network address');
+    expect(mail.html).not.toContain('Requested');
+    // The panel itself is gone rather than rendered with nothing in it.
+    expect(mail.html).not.toContain('class="e-panel"');
+    expect(mail.text).not.toContain('Network:');
+    expect(mail.html).toContain(`Expires in ${env.OTP_TTL_MINUTES} minutes`);
+    expect(mail.text).toContain(`expires in ${env.OTP_TTL_MINUTES} minutes`);
+  });
+});
+
+describe('every message says what it is and whose hand it left', () => {
+  it('opens the card on the product surface, naming the kind of message it is', () => {
+    const cases: Array<[string, RenderedMail, string]> = [
+      ['otp', otpEmail('owner@example.com', '482913'), 'Sign-in code'],
+      ['welcome', welcomeEmail('m@example.com', { organisation: 'Org', role: 'admin' }), 'New account'],
+      ['otp_verified', otpVerifiedEmail('owner@example.com'), 'Sign-in notice'],
+      ['submission_confirmation', submissionConfirmationEmail('r@example.com', 'f2c1-4a', 'now'), 'Submission receipt'],
+    ];
+    for (const [name, mail, eyebrow] of cases) {
+      // The band is the first thing in the card and the only element that is not
+      // white: it is what makes a message recognisable at a glance, before a
+      // single word of the body has been read.
+      expect(mail.html, name).toMatch(/<td class="e-band" bgcolor="#191c21"/);
+      expect(mail.html, name).toContain(eyebrow);
+      expect(mail.html, name).toContain('class="e-band-eyebrow"');
+    }
+  });
+
+  it('names the mailbox it left under, from the environment rather than from the template', () => {
+    const { html, text } = otpEmail('owner@example.com', '482913');
+    const from = mailbox(env.MAIL_FROM);
+    expect(from.length).toBeGreaterThan(3);
+    // The name is read from MAIL_FROM, so the footer cannot state an identity the
+    // relay did not use. `mail.test.ts` asserts the transport agrees with it.
+    expect(html).toContain(`Sent by Inicio from ${from}.`);
+    expect(text).toContain(`Sent by Inicio from ${from}.`);
+  });
+
+  it('names a reply target only when the operator has promised one is read', () => {
+    const saved = env.MAIL_REPLY_TO;
+    try {
+      env.MAIL_REPLY_TO = 'Inicio <reply@inicio.example>';
+      const withReplies = otpEmail('owner@example.com', '482913');
+      expect(withReplies.html).toContain('Replies reach reply@inicio.example.');
+      expect(withReplies.text).toContain('Replies reach reply@inicio.example.');
+
+      env.MAIL_REPLY_TO = undefined;
+      const without = otpEmail('owner@example.com', '482913');
+      expect(without.html).not.toContain('Replies reach');
+      expect(without.text).not.toContain('Replies reach');
+    } finally {
+      env.MAIL_REPLY_TO = saved;
+    }
   });
 });
 
@@ -193,6 +292,12 @@ describe('the palette is the product palette', () => {
     expect(html).toContain('.e-body { background:#191c21 !important; }');
   });
 
+  it('keeps the band one step above the dark card, so it reads as a band there too', () => {
+    const { html } = otpEmail('owner@example.com', '482913');
+    expect(html).toContain('.e-band { background:#262c34 !important; }');
+    expect(html).toContain('.e-card { background:#1f242b !important;');
+  });
+
   it('labels the primary button in ink, because white on #ea580c is 3.6:1', () => {
     const { html } = otpEmail('owner@example.com', '482913');
     expect(ratio('#ffffff', '#ea580c')).toBeLessThan(4.5);
@@ -219,6 +324,10 @@ describe('the palette is the product palette', () => {
       ['link on dark card', '#fdba74', '#1f242b'],
       ['footer on dark ground', '#9ca3af', '#191c21'],
       ['footer on light ground', '#4b5563', '#ffffff'],
+      ['band kind on the band', '#fdba74', '#191c21'],
+      ['band metadata on the band', '#9ca3af', '#191c21'],
+      ['band kind on the dark band', '#fdba74', '#262c34'],
+      ['code note on the tint', '#c2410c', '#fff7ed'],
     ];
     for (const [label, foreground, background] of pairs) {
       expect(ratio(foreground, background), `${label} ${foreground} on ${background}`).toBeGreaterThanOrEqual(4.5);
@@ -277,6 +386,31 @@ describe('the welcome says what to do next and what the role means', () => {
   it('says the one thing a new member would otherwise hunt for: there is no sign-up page', () => {
     const { html } = welcomeEmail('member@example.com', { organisation: 'Kampala Schools Study', role: 'member' });
     expect(html).toContain('invitation only');
+  });
+
+  /**
+   * The other thing a new member cannot guess: an account with no password has
+   * no password field to look for, and the address itself is the way back in.
+   */
+  it('says the address is the credential, so nobody goes looking for a password', () => {
+    const { html, text } = welcomeEmail('member@example.com', { organisation: 'Org', role: 'member' });
+    expect(html).toContain('There is no password on this account');
+    expect(html).toContain('member@example.com');
+    expect(text).toContain('There is no password on this account');
+  });
+
+  it('records the instant the invitation was accepted, and nothing when it is not known', () => {
+    const known = welcomeEmail('m@example.com', {
+      organisation: 'Org',
+      role: 'member',
+      at: new Date('2026-10-14T09:03:00Z'),
+    });
+    expect(known.html).toContain('14 October 2026 at 09:03 UTC');
+    expect(known.text).toContain('Joined: 14 October 2026 at 09:03 UTC');
+
+    const unknown = welcomeEmail('m@example.com', { organisation: 'Org', role: 'member' });
+    expect(unknown.html).not.toContain('Joined');
+    expect(unknown.text).not.toContain('Joined');
   });
 
   /**

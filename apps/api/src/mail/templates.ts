@@ -18,7 +18,7 @@ export interface RenderedMail {
  * the standard of the landing page rather than as a paragraph with a heading on
  * it — same palette, same voice, same one-screen-one-idea composition.
  *
- * Five rules, each of them a decision rather than a habit:
+ * Six rules, each of them a decision rather than a habit:
  *
  * 1. **No remote anything.** No image, no tracking pixel, no web font, no
  *    linked stylesheet. An email that fetches a file from a server is a read
@@ -46,6 +46,20 @@ export interface RenderedMail {
  * 5. **The plain-text part is written, not generated.** The clients that ask for
  *    text/plain are watches, terminals and screen readers, and the HTML with the
  *    tags stripped is unreadable in all three.
+ * 6. **Every message says who it is from.** The footer names the mailbox the
+ *    message left under, because a reader who has never heard of this product is
+ *    being asked to type a code from a message they did not ask for: the one
+ *    thing that makes that reasonable is being able to see which address sent
+ *    it. The name is read from `MAIL_FROM` rather than written here, so the
+ *    footer cannot claim an identity the relay did not use.
+ *
+ * Each card opens with the product's own dark material as a header band — the
+ * one dark mark in a light document, the same relationship DP-3 describes
+ * between a focus moment and paper — carrying the message's kind on the left and
+ * its one piece of standing metadata on the right (the code's lifetime, the role
+ * a workspace was granted at). It is the first thing rendered and the only
+ * element that is not white, which is what makes an inbox full of white cards
+ * read as ours at a glance.
  */
 
 /**
@@ -65,8 +79,12 @@ const BRAND = {
   tint: '#fff7ed',
   /** Dark-mode card: the surface plus one step, so a card is still a card. */
   cardDark: '#1f242b',
+  /** Dark-mode band: one step above the card, so the band is still a band. */
+  bandDark: '#262c34',
   lineDark: '#2e343c',
   textDark: '#d1d5db',
+  /** The band's own muted ink. The same grey the footer uses on the surface. */
+  bandMuted: '#9ca3af',
 } as const;
 
 /** No web fonts — Outlook, Gmail and Apple Mail all drop them differently. */
@@ -107,6 +125,33 @@ function appHost(): string {
 }
 
 /**
+ * The bare mailbox out of `Name <addr>`, or the value as written.
+ *
+ * Exported because the sign-in screen names the same mailbox in its own
+ * sentence, and two reductions of one address is how a page and a message start
+ * disagreeing about who sent what.
+ */
+export function bareAddress(value: string): string {
+  const named = /<([^>]+)>/.exec(value);
+  return (named?.[1] ?? value).trim();
+}
+
+/**
+ * The mailbox the message leaves under, and the one a reply reaches, if any.
+ *
+ * Read from the environment rather than written into the design: a footer that
+ * states an identity is only worth printing if it is the identity the relay
+ * actually used, and `MAIL_FROM` is the only thing that knows that.
+ */
+function senderMailbox(): string {
+  return bareAddress(env.MAIL_FROM);
+}
+
+function replyMailbox(): string | null {
+  return env.MAIL_REPLY_TO ? bareAddress(env.MAIL_REPLY_TO) : null;
+}
+
+/**
  * A fixed, readable instant.
  *
  * Written out rather than localised on purpose: "14 October 2026 at 09:03 UTC"
@@ -130,6 +175,18 @@ export function formatUtcDateTime(at: Date): string {
   ];
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${at.getUTCDate()} ${months[at.getUTCMonth()]} ${at.getUTCFullYear()} at ${pad(at.getUTCHours())}:${pad(at.getUTCMinutes())} UTC`;
+}
+
+/**
+ * When the code the reader is looking at stops working.
+ *
+ * Derived from the issue instant and `OTP_TTL_MINUTES`, never typed: a message
+ * that states an expiry is making a promise about the server's own arithmetic,
+ * and the only way it can keep that promise is by computing it. Without a known
+ * issue instant the sentence falls back to the lifetime, which is still true.
+ */
+function formatExpiry(at: Date, minutes: number): string {
+  return formatUtcDateTime(new Date(at.getTime() + minutes * 60_000));
 }
 
 /**
@@ -165,12 +222,20 @@ function strong(value: string): string {
   return `<strong class="e-strong" style="font-weight:650;color:${BRAND.text};">${value}</strong>`;
 }
 
-/** The code, as the one thing on the screen that is not prose. */
-function codeBlock(code: string): string {
+/**
+ * The code, as the one thing on the screen that is not prose.
+ *
+ * Sized so it can be read off a phone held at arm's length while being typed
+ * into a laptop, and shipped with the instant it dies on its own line: the two
+ * questions a reader has are "what is it" and "have I still got time", and the
+ * answer to the second one is a fact the server already knows.
+ */
+function codeBlock(code: string, note: string): string {
   return `<tr><td style="padding:2px 0 22px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-      <tr><td class="e-code" align="center" style="background:${BRAND.tint};border:1px solid ${BRAND.accent};border-radius:12px;padding:20px 10px;">
-        <span class="e-code-inner" style="font:700 34px/1 ${MONO};letter-spacing:.26em;color:${BRAND.text};">${escapeHtml(code)}</span>
+      <tr><td class="e-code" align="center" style="background:${BRAND.tint};border:1px solid ${BRAND.accent};border-radius:14px;padding:22px 10px 18px;">
+        <span class="e-code-inner" style="font:700 38px/1 ${MONO};letter-spacing:.26em;color:${BRAND.text};">${escapeHtml(code)}</span>
+        <div class="e-code-note" style="margin-top:12px;font:600 12px/1.4 ${FONT};color:${BRAND.primaryText};">${escapeHtml(note)}</div>
       </td></tr>
     </table>
   </td></tr>`;
@@ -253,12 +318,39 @@ function whyLine(text: string): string {
   return `<p class="e-muted" style="margin:0 0 10px;font:400 12px/1.6 ${FONT};color:${BRAND.muted};">${text}</p>`;
 }
 
+/**
+ * The last line of every message: who sent it.
+ *
+ * The reply clause is printed only when a reply target exists, for the same
+ * reason the welcome's invitation to reply is: naming a mailbox nobody reads
+ * would be a claim the operator never made.
+ */
+function identityLine(): string {
+  const reply = replyMailbox();
+  return reply
+    ? `Sent by Inicio from ${escapeHtml(senderMailbox())}. Replies reach ${escapeHtml(reply)}.`
+    : `Sent by Inicio from ${escapeHtml(senderMailbox())}.`;
+}
+
+function textFooter(): string {
+  return `Inicio - school ranking surveys. This is a service message about your account.\n${identityLine()}`;
+}
+
 /* ------------------------------------------------------------------ layout */
+
+/** The dark strip that opens every card: the kind of message, and one fact. */
+interface Band {
+  /** What this message is, in two or three words. */
+  eyebrow: string;
+  /** The one piece of standing metadata worth putting on the first line. */
+  right?: string;
+}
 
 interface Card {
   /** `<title>` and the client's tab: kept short, never the code. */
   title: string;
   preheader: string;
+  band: Band;
   heading: string;
   /** First line — the reason the mail exists, before any detail. */
   leadLine: string;
@@ -280,10 +372,12 @@ interface Card {
  * The rule is enforced by `mail-templates.test.ts`, which fails if any of the
  * data-bearing fields can carry a tag into the document.
  */
-
 function layout(card: Card): string {
   const signIn = appUrl('/login');
   const host = escapeHtml(appHost());
+  const right = card.band.right
+    ? `<td class="e-band-right" align="right" style="font:500 11px/1.5 ${FONT};color:${BRAND.bandMuted};"><span style="white-space:nowrap;">${escapeHtml(card.band.right)}</span></td>`
+    : '<td></td>';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -301,13 +395,15 @@ function layout(card: Card): string {
   body { margin:0 !important; padding:0 !important; width:100% !important; }
   a { text-decoration:none; }
   @media (max-width: 480px) {
-    .e-pad { padding:26px 20px !important; }
+    .e-pad { padding:24px 20px 28px !important; }
+    .e-band { padding:11px 20px !important; }
     .e-h1 { font-size:22px !important; }
     .e-code-inner { font-size:30px !important; }
   }
   @media (prefers-color-scheme: dark) {
     .e-body { background:${BRAND.surface} !important; }
     .e-card { background:${BRAND.cardDark} !important; border-color:${BRAND.lineDark} !important; }
+    .e-band { background:${BRAND.bandDark} !important; }
     .e-wordmark, .e-h1, .e-strong { color:#ffffff !important; }
     .e-lead, .e-text { color:${BRAND.textDark} !important; }
     .e-muted { color:#9ca3af !important; }
@@ -315,6 +411,7 @@ function layout(card: Card): string {
     .e-panel { background:#22272e !important; border-color:${BRAND.lineDark} !important; }
     .e-code { background:#241a10 !important; border-color:#7c3a10 !important; }
     .e-code span { color:${BRAND.accent} !important; }
+    .e-code-note { color:${BRAND.accent} !important; }
     .e-step { background:#2a1c0d !important; border-color:#7c3a10 !important; color:${BRAND.accent} !important; }
     .e-btn { background:${BRAND.primary} !important; border-color:${BRAND.primary} !important; }
     .e-quiet { background:${BRAND.cardDark} !important; border-color:${BRAND.lineDark} !important; }
@@ -328,31 +425,48 @@ function layout(card: Card): string {
      sentence of the body up into it instead. -->
 <div class="e-preheader" style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#ffffff;opacity:0;">${escapeHtml(card.preheader)}&#8203;&#8199;&#65279;&#8203;&#8199;&#65279;&#8203;&#8199;&#65279;&#8203;&#8199;&#65279;</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="e-body" style="background:#ffffff;">
-<tr><td align="center" style="padding:34px 16px 10px;">
+<tr><td align="center" style="padding:32px 16px 10px;">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">
 
-  <tr><td style="padding:0 4px 16px;">
-    <span class="e-wordmark" style="font:700 18px/1 ${FONT};letter-spacing:-.01em;color:${BRAND.text};"><span style="color:${BRAND.primary};">&#9679;</span> Inicio</span>
-    <span class="e-muted" style="font:600 11px/1 ${FONT};letter-spacing:.16em;text-transform:uppercase;color:${BRAND.muted};">&nbsp;&nbsp;School ranking surveys</span>
-  </td></tr>
-
-  <tr><td class="e-card e-pad" style="background:#ffffff;border:1px solid ${BRAND.line};border-radius:16px;padding:36px 40px;">
+  <tr><td style="padding:0 4px 14px;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-      <tr><td style="padding:0 0 20px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="44" height="3" bgcolor="${BRAND.primary}" style="background:${BRAND.primary};border-radius:2px;font-size:0;line-height:0;">&nbsp;</td></tr></table></td></tr>
-      <tr><td><h1 class="e-h1" style="margin:0 0 12px;font:700 26px/1.22 ${FONT};letter-spacing:-.02em;color:${BRAND.text};">${escapeHtml(card.heading)}</h1></td></tr>
-      ${lead(card.leadLine)}
-      ${card.rows.join('\n      ')}
-      ${
-        card.smallPrint
-          ? `<tr><td style="padding:24px 0 0;"><p class="e-muted" style="margin:0;font:400 12.5px/1.6 ${FONT};color:${BRAND.muted};">${card.smallPrint}</p></td></tr>`
-          : ''
-      }
+      <tr>
+        <td align="left"><span class="e-wordmark" style="font:700 19px/1 ${FONT};letter-spacing:-.02em;color:${BRAND.text};"><span style="color:${BRAND.primary};">&#9679;</span> Inicio</span></td>
+        <td class="e-muted" align="right" style="font:600 10.5px/1 ${FONT};letter-spacing:.16em;text-transform:uppercase;color:${BRAND.muted};">School ranking surveys</td>
+      </tr>
     </table>
   </td></tr>
 
-  <tr><td style="padding:20px 6px 0;">
+  <tr><td class="e-card" style="background:#ffffff;border:1px solid ${BRAND.line};border-radius:16px;padding:0;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr><td class="e-band" bgcolor="${BRAND.surface}" style="background:${BRAND.surface};border-radius:15px 15px 0 0;padding:13px 24px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td class="e-band-eyebrow" align="left" style="font:700 10.5px/1.5 ${FONT};letter-spacing:.18em;text-transform:uppercase;color:${BRAND.accent};">${escapeHtml(card.band.eyebrow)}</td>
+            ${right}
+          </tr>
+        </table>
+      </td></tr>
+      <tr><td class="e-pad" style="padding:30px 40px 34px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr><td style="padding:0 0 20px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="44" height="3" bgcolor="${BRAND.primary}" style="background:${BRAND.primary};border-radius:2px;font-size:0;line-height:0;">&nbsp;</td></tr></table></td></tr>
+          <tr><td><h1 class="e-h1" style="margin:0 0 12px;font:700 26px/1.22 ${FONT};letter-spacing:-.02em;color:${BRAND.text};">${escapeHtml(card.heading)}</h1></td></tr>
+          ${lead(card.leadLine)}
+          ${card.rows.join('\n          ')}
+          ${
+            card.smallPrint
+              ? `<tr><td style="padding:24px 0 0;"><p class="e-muted" style="margin:0;font:400 12.5px/1.6 ${FONT};color:${BRAND.muted};">${card.smallPrint}</p></td></tr>`
+              : ''
+          }
+        </table>
+      </td></tr>
+    </table>
+  </td></tr>
+
+  <tr><td style="padding:18px 6px 0;">
     ${whyLine(card.why)}
-    <p class="e-muted" style="margin:0;font:400 12px/1.6 ${FONT};color:${BRAND.muted};">Inicio &#183; <a class="e-link" href="${signIn ?? escapeHtml(env.APP_ORIGIN)}" style="color:${BRAND.primaryText};">${host}</a> &#183; This is a service message about your account.</p>
+    <p class="e-muted" style="margin:0 0 8px;font:400 12px/1.6 ${FONT};color:${BRAND.muted};">Inicio &#183; <a class="e-link" href="${signIn ?? escapeHtml(env.APP_ORIGIN)}" style="color:${BRAND.primaryText};">${host}</a> &#183; This is a service message about your account.</p>
+    <p class="e-muted" style="margin:0;font:400 12px/1.6 ${FONT};color:${BRAND.muted};">${identityLine()}</p>
   </td></tr>
 
 </table>
@@ -369,15 +483,34 @@ function layout(card: Card): string {
  *
  * The code is the whole message and gets the only treatment nothing else in the
  * card gets: a monospaced block on the tinted panel, sized so it can be read off
- * a phone at arm's length while typing it into a laptop. One quiet button
- * returns the reader to the sign-in screen — a link back is the difference
- * between two taps and hunting for the tab — and it is deliberately *not* the
- * primary orange: the code is the action here, and two competing calls to action
- * is how a reader clicks the wrong one.
+ * a phone at arm's length while typing it into a laptop, with the instant it
+ * dies printed underneath it. One quiet button returns the reader to the sign-in
+ * screen — a link back is the difference between two taps and hunting for the
+ * tab — and it is deliberately *not* the primary orange: the code is the action
+ * here, and two competing calls to action is how a reader clicks the wrong one.
+ *
+ * The context is optional and each part of it is optional with it: the issue
+ * instant buys a "requested at" line and an absolute expiry, the network address
+ * buys a line about where the request came from. A caller that knows neither
+ * still gets the complete message, and the details panel is omitted entirely
+ * rather than printed empty.
  */
-export function otpEmail(to: string, code: string): RenderedMail {
+export function otpEmail(
+  to: string,
+  code: string,
+  context: { at?: Date; ip?: string } = {},
+): RenderedMail {
   const minutes = env.OTP_TTL_MINUTES;
+  const at = context.at ?? null;
+  const requested = at ? formatUtcDateTime(at) : null;
+  const expires = at ? formatExpiry(at, minutes) : null;
   const signIn = appUrl('/login');
+  const address = escapeHtml(to);
+  const details = [
+    { label: 'Account', value: to },
+    ...(requested ? [{ label: 'Requested', value: requested }] : []),
+    ...(context.ip ? [{ label: 'Network address', value: context.ip }] : []),
+  ];
   return {
     template: 'otp',
     to,
@@ -385,31 +518,44 @@ export function otpEmail(to: string, code: string): RenderedMail {
     html: layout({
       title: `Your Inicio sign-in code`,
       preheader: `Expires in ${minutes} minutes. If you did not ask for it, you can ignore this email.`,
+      band: { eyebrow: 'Sign-in code', right: `Expires in ${minutes} minutes` },
       heading: 'Your sign-in code',
-      leadLine: `Enter this code to finish signing in as ${strong(escapeHtml(to))}.`,
+      leadLine: `Enter this code to finish signing in as ${strong(address)}.`,
       rows: [
-        codeBlock(code),
-        paragraph(`This code works once and expires in ${strong(`${minutes} minutes`)}.`),
+        codeBlock(code, expires ? `Expires ${expires}` : `Expires in ${minutes} minutes`),
+        paragraph(
+          `This code works once and expires in ${strong(`${minutes} minutes`)}. If it has already expired, ask for another from the sign-in screen.`,
+        ),
+        ...(details.length > 1 ? [facts(details)] : []),
         paragraph(
           `If you did not try to sign in, nothing has happened to your account: nobody can sign in without this code, and you can ignore this email.`,
         ),
         ...(signIn ? [button('Back to the sign-in screen', signIn, 'quiet')] : []),
       ],
       smallPrint: `Inicio will never ask you for this code by phone, chat or email. If someone does, it is not us.`,
-      why: `You are reading this because someone entered <strong>${escapeHtml(to)}</strong> on the sign-in screen.`,
+      why: `You are reading this because someone entered <strong>${address}</strong> on the sign-in screen.`,
     }),
     text: `Your Inicio sign-in code
 
     ${code}
 
-It works once and expires in ${minutes} minutes. Enter it on the sign-in screen
-to finish signing in as ${to}.
+Enter it on the sign-in screen to finish signing in as ${to}.
+
+This code works once and expires in ${minutes} minutes. If it has already expired,
+ask for another from the sign-in screen.
+
+${[
+      `  Account: ${to}`,
+      ...(requested ? [`  Requested: ${requested}`] : []),
+      ...(expires ? [`  Expires: ${expires}`] : []),
+      ...(context.ip ? [`  Network address: ${context.ip}`] : []),
+    ].join('\n')}
 
 If you did not try to sign in, nothing has happened to your account: nobody can
 sign in without this code, and you can ignore this email. Inicio will never ask
 you for this code by phone, chat or email.
 
-Inicio - school ranking surveys${signIn ? `\n${signIn}` : ''}`,
+${signIn ? `Back to the sign-in screen: ${signIn}\n\n` : ''}${textFooter()}`,
   };
 }
 
@@ -418,19 +564,21 @@ Inicio - school ranking surveys${signIn ? `\n${signIn}` : ''}`,
  *
  * Sent when an invitation is redeemed, which is the moment somebody stops being
  * a name on a list and becomes a person with a workspace — and it is the only
- * email they will get that is not about a code. It answers the three questions a
- * new member actually has, in order: what this is, what I can do here, and what
- * my role means. It also says out loud that there is no sign-up page, because a
- * reader who does not know that will spend their first afternoon trying to find
- * one.
+ * email they will get that is not about a code. It answers the four questions a
+ * new member actually has, in order: what this is, what I can do here, what my
+ * role means, and how I get back in. It also says out loud that there is no
+ * sign-up page and that the address itself is the credential, because a reader
+ * who does not know either will spend their first afternoon looking for a
+ * password field.
  */
 export function welcomeEmail(
   to: string,
-  context: { organisation: string; role?: string },
+  context: { organisation: string; role?: string; at?: Date },
 ): RenderedMail {
   const organisation = context.organisation;
   const role = context.role ?? 'member';
   const blurb = ROLE_BLURB[role] ?? '';
+  const joined = context.at ? formatUtcDateTime(context.at) : null;
   const open = appUrl('/console');
   const display = titleCase(role);
   return {
@@ -440,6 +588,7 @@ export function welcomeEmail(
     html: layout({
       title: `Welcome to ${organisation}`,
       preheader: `You have joined ${organisation} on Inicio as ${display.toLowerCase()}. Three things to try first.`,
+      band: { eyebrow: 'New account', right: `${display} access` },
       heading: 'Welcome to Inicio',
       leadLine: `${strong(escapeHtml(organisation))} has a place for you as ${strong(display)}. Here is what you can do with it.`,
       rows: [
@@ -447,6 +596,12 @@ export function welcomeEmail(
           `Inicio builds school ranking surveys from end to end: author the questionnaire, circulate it to the schools in your sample, and read the answers back as they arrive, including the ones collected where there is no network at all.`,
         ),
         ...(blurb ? [paragraph(escapeHtml(blurb))] : []),
+        facts([
+          { label: 'Organisation', value: organisation },
+          { label: 'Account', value: to },
+          { label: 'Your role', value: display },
+          ...(joined ? [{ label: 'Joined', value: joined }] : []),
+        ]),
         divider(),
         steps([
           {
@@ -463,6 +618,10 @@ export function welcomeEmail(
           },
         ]),
         ...(open ? [button('Open your workspace', open)] : []),
+        paragraph(
+          `There is no password on this account. To come back later, enter this address on the sign-in screen and use the six digit code that arrives.`,
+          { last: true },
+        ),
       ],
       smallPrint: `Accounts here are created by invitation only, so there is no sign-up page to pass around. If a colleague needs access, an owner or an admin can invite them from the members list, and ${unclearAdvice()}`,
       why: `This address was invited to <strong>${escapeHtml(organisation)}</strong> and the invitation was accepted.`,
@@ -471,6 +630,10 @@ export function welcomeEmail(
 
 ${organisation} has a place for you as ${display}.
 ${blurb ? `\n${blurb}\n` : ''}
+  Organisation: ${organisation}
+  Account: ${to}
+  Your role: ${display}${joined ? `\n  Joined: ${joined}` : ''}
+
 What you can do with it:
 
   1. Start from the questionnaire you already have
@@ -486,11 +649,14 @@ What you can do with it:
      XLSX when the study is ready for analysis.
 
 ${open ? `Open your workspace: ${open}\n` : ''}
+There is no password on this account. To come back later, enter this address on
+the sign-in screen and use the six digit code that arrives.
+
 Accounts here are created by invitation only, so there is no sign-up page to
 pass around. If a colleague needs access, an owner or an admin can invite them
 from the members list, and ${unclearAdvice()}
 
-Inicio - school ranking surveys. This is a service message about your account.`,
+${textFooter()}`,
   };
 }
 
@@ -530,6 +696,7 @@ export function otpVerifiedEmail(
     html: layout({
       title: 'New sign-in to your Inicio account',
       preheader: `${when}. If this was you, there is nothing to do.`,
+      band: { eyebrow: 'Sign-in notice', right: 'Completed' },
       heading: 'You are signed in',
       leadLine: 'This is a record of a sign-in that just finished.',
       rows,
@@ -547,7 +714,7 @@ that was sent to this address for it to be used, so the thing to review is the
 security of the email account itself: its password, its recovery address, and
 any device still signed in. Then let an owner of your organisation know.
 
-Inicio - school ranking surveys. This is a service message about your account.`,
+${textFooter()}`,
   };
 }
 
@@ -578,7 +745,10 @@ export function submissionConfirmationEmail(
     html: layout({
       title: 'Inicio survey: submission received',
       preheader: `Received ${at}. Keep the submission ID for your records.`,
-      heading: 'Submission received',      leadLine: 'Your questionnaire reached us complete and is now read-only. No further answers can be added to it.',
+      band: { eyebrow: 'Submission receipt', right: 'Received' },
+      heading: 'Submission received',
+      leadLine:
+        'Your questionnaire reached us complete and is now read-only. No further answers can be added to it.',
       rows: [
         facts(items),
         paragraph(
@@ -598,6 +768,6 @@ ${items.map((i) => `  ${i.label}: ${i.value}`).join('\n')}
 Keep this message: the submission ID above is what to quote if a question
 about this response ever comes up.
 
-Inicio - school ranking surveys. This is a service message about your account.`,
+${textFooter()}`,
   };
 }

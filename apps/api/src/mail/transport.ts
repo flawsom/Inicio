@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { env } from '../env.js';
 import { pool } from '../db/pool.js';
@@ -6,6 +7,8 @@ import { createResendSender } from './resend.js';
 
 export interface MailJob extends RenderedMail {
   schoolId?: string | null;
+  /** Message headers the transport has to carry. See `threadHeaders`. */
+  headers?: Record<string, string>;
 }
 
 export type MailTransportKind = 'smtp' | 'resend';
@@ -50,6 +53,22 @@ export function setSenderForTest(s: MailSender | null): void {
   senderForTest = s;
 }
 
+/**
+ * A per-message id, so that an inbox does not fold two messages into one.
+ *
+ * Modern clients group by subject, and these subjects repeat by design: ask for
+ * a second sign-in code and the subject is word for word the one you already
+ * have, so Gmail happily collapses the two. The collapse is spectacular here —
+ * the reader sees a thread that appears to contain a stale code, with the fresh
+ * one hidden above the fold, and the product looks like it sent a code that does
+ * not work. `X-Entity-Ref-ID` is the header the relay documents for exactly
+ * this, and it is generated rather than derived from the code, the address or the
+ * template: two messages that share any of those must still be two messages.
+ */
+function threadHeaders(): Record<string, string> {
+  return { 'X-Entity-Ref-ID': randomUUID() };
+}
+
 function getSmtpTransport(): Transporter {
   if (!smtp) {
     smtp = nodemailer.createTransport({
@@ -79,6 +98,7 @@ function smtpSender(transporter: Transporter): MailSender {
         html: job.html,
         text: job.text,
         ...(env.MAIL_REPLY_TO ? { replyTo: env.MAIL_REPLY_TO } : {}),
+        ...(job.headers && Object.keys(job.headers).length > 0 ? { headers: job.headers } : {}),
       });
       return {};
     },
@@ -126,13 +146,17 @@ export function resetDeliveryForTest(): void {
  */
 export async function sendMail(job: MailJob): Promise<MailDelivery> {
   const sender = activeSender();
+  // One id per message, composed here rather than at the call site: a header
+  // that only some paths set is a header that silently stops being sent the
+  // first time a fifth template is added.
+  const outgoing: MailJob = { ...job, headers: { ...threadHeaders(), ...job.headers } };
   const inserted = await pool.query<{ id: string }>(
     `INSERT INTO email_log (school_id, template, status) VALUES ($1, $2, 'queued') RETURNING id`,
     [job.schoolId ?? null, job.template],
   );
   const logId = inserted.rows[0]?.id;
   try {
-    const outcome = await sender.send(job);
+    const outcome = await sender.send(outgoing);
     if (logId) await pool.query(`UPDATE email_log SET status = 'sent' WHERE id = $1`, [logId]);
     lastDelivery = {
       ok: true,
