@@ -60,10 +60,18 @@ export async function requireActor(
         403,
         'key_not_permitted',
         'this endpoint is session-only; it is not part of the machine API',
+        { actor: `key:${key.keyId}`, meta: { orgId: key.orgId, grantedScopes: key.scopes } },
       );
     }
     if (!key.scopes.includes(options.scope)) {
-      throw new HttpError(403, 'insufficient_scope', `this key does not have ${options.scope}`);
+      throw new HttpError(403, 'insufficient_scope', `this key does not have ${options.scope}`, {
+        actor: `key:${key.keyId}`,
+        meta: {
+          orgId: key.orgId,
+          requiredScope: options.scope,
+          grantedScopes: key.scopes,
+        },
+      });
     }
     return { userId: key.userId, via: 'api_key', scopes: key.scopes, orgId: key.orgId, keyId: key.keyId };
   }
@@ -98,7 +106,12 @@ export async function requireActor(
  */
 export function assertActorOrg(actor: ApiActor, orgId: string): void {
   if (actor.via === 'api_key' && actor.orgId !== orgId) {
-    throw new HttpError(403, 'key_org_mismatch', 'this key belongs to another organisation');
+    throw new HttpError(403, 'key_org_mismatch', 'this key belongs to another organisation', {
+      actor: `key:${actor.keyId}`,
+      // The organisation the key was issued for, which is the interesting half: the
+      // refused one is in the request path the handler records as the target.
+      meta: { keyOrgId: actor.orgId },
+    });
   }
 }
 

@@ -60,6 +60,7 @@ const MACHINE_SURFACE: Array<{ operation: string; scope: string }> = [
   { operation: 'get /api/v1/forms', scope: 'forms:read' },
   { operation: 'get /api/v1/forms/{formId}', scope: 'forms:read' },
   { operation: 'get /api/v1/forms/{formId}/versions/{versionId}', scope: 'forms:read' },
+  { operation: 'get /api/v1/forms/{formId}/versions/{versionId}/diff', scope: 'forms:read' },
   { operation: 'get /api/v1/forms/{formId}/xlsform', scope: 'forms:read' },
   { operation: 'get /api/v1/forms/{formId}/responses', scope: 'responses:read' },
   { operation: 'get /api/v1/forms/{formId}/analytics', scope: 'analytics:read' },

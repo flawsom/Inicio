@@ -4,6 +4,8 @@ import type { PoolClient } from 'pg';
 import { z } from 'zod';
 import {
   buildExportBundle,
+  csvBundle,
+  diffDefinitions,
   exportXlsForm,
   importXlsForm,
   validateForm,
@@ -109,6 +111,46 @@ export async function publishedVersion(client: PoolClient, formId: string): Prom
     [formId],
   );
   return rows[0] ?? null;
+}
+
+/**
+ * One version in full, for the two routes that compare versions.
+ *
+ * `definition` is selected because a diff computed from anything other than the stored
+ * rows could disagree with the version that actually collected the data.
+ */
+interface VersionDetail {
+  id: string;
+  version: number;
+  status: string;
+  title: string;
+  definition: FormDefinition;
+  based_on: string | null;
+  created_at: Date;
+  published_at: Date | null;
+}
+
+const VERSION_DETAIL_COLUMNS = 'id, version, status, title, definition, based_on, created_at, published_at';
+
+async function versionDetail(client: PoolClient, formId: string, versionId: string): Promise<VersionDetail | null> {
+  const { rows } = await client.query<VersionDetail>(
+    `SELECT ${VERSION_DETAIL_COLUMNS} FROM form_version WHERE id = $1 AND form_id = $2`,
+    [versionId, formId],
+  );
+  return rows[0] ?? null;
+}
+
+/** What the console shows beside a version: enough to name it, and nothing more. */
+function versionLabel(row: VersionDetail): Record<string, unknown> {
+  return {
+    id: row.id,
+    version: row.version,
+    status: row.status,
+    title: row.title,
+    based_on: row.based_on,
+    created_at: row.created_at,
+    published_at: row.published_at,
+  };
 }
 
 async function nextVersionNumber(client: PoolClient, formId: string): Promise<number> {
@@ -338,6 +380,64 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
       });
       if (!version) throw new HttpError(404, 'not_found');
       return reply.send({ version });
+    },
+  );
+
+  /**
+   * What changed between two versions of this form, in words.
+   *
+   * The history is a graph and not a list: a version is based on whichever version it
+   * was forked from (`based_on`), and restoring an old one adds an edge to the version
+   * it was taken from, so the console cannot assume the version before it in number is
+   * the one it descends from. The comparison is computed here, from the two stored
+   * definitions, and named in the same plain words the analyser uses — a browser that
+   * re-derived it could disagree with what is actually stored, and a diff nobody can
+   * read is the same as no diff at all.
+   */
+  app.get(
+    '/forms/:formId/versions/:versionId/diff',
+    async (
+      req: FastifyRequest<{ Params: { formId: string; versionId: string }; Querystring: { against?: string } }>,
+      reply: FastifyReply,
+    ) => {
+      const actor = await requireActor(req, { scope: 'forms:read' });
+      const payload = await withUser(actor.userId, async (client) => {
+        const form = await loadForm(client, req.params.formId);
+        assertActorOrg(actor, form.org_id);
+
+        const to = await versionDetail(client, form.id, req.params.versionId);
+        if (!to) throw new HttpError(404, 'not_found');
+
+        // Which version to compare against, in the order the graph answers it: the one
+        // asked for, then the one this version was forked from, then the one immediately
+        // before it. A first draft has none of the three, and that is an answer rather
+        // than an error — it is simply where the instrument started.
+        let from: VersionDetail | null = null;
+        if (req.query.against) {
+          from = await versionDetail(client, form.id, req.query.against);
+          if (!from) throw new HttpError(404, 'not_found');
+        } else if (to.based_on) {
+          from = await versionDetail(client, form.id, to.based_on);
+        } else {
+          const { rows } = await client.query<VersionDetail>(
+            `SELECT ${VERSION_DETAIL_COLUMNS} FROM form_version
+              WHERE form_id = $1 AND version < $2
+              ORDER BY version DESC LIMIT 1`,
+            [form.id, to.version],
+          );
+          from = rows[0] ?? null;
+        }
+
+        return {
+          to: versionLabel(to),
+          from: from ? versionLabel(from) : null,
+          // `null` rather than an empty diff, so the console can say "this is where the
+          // form started" instead of "nothing changed".
+          diff: from ? diffDefinitions(from.definition, to.definition) : null,
+        };
+      });
+      reply.header('cache-control', 'private, no-store');
+      return reply.send(payload);
     },
   );
 
@@ -653,7 +753,14 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
     async (
       req: FastifyRequest<{
         Params: { formId: string };
-        Querystring: { format?: string; multiSelect?: string; includeInProgress?: string; language?: string };
+        Querystring: {
+          format?: string;
+          multiSelect?: string;
+          includeInProgress?: string;
+          language?: string;
+          /** `codebook=1` ships the codebook beside a `.sav`/`.dta` instead of the bare file. */
+          codebook?: string;
+        };
       }>,
       reply: FastifyReply,
     ) => {
@@ -734,18 +841,55 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
       if (isStatFormat(format)) {
         try {
           const file = await writeStatisticalFile(format, payload.bundle.dataset, payload.bundle.dataset.meta.title);
-          return reply
-            .code(200)
-            .header('content-type', STAT_CONTENT_TYPES[format])
-            .header('content-disposition', `attachment; filename="${payload.slug}.${format}"`)
-            // What the writer had to change to satisfy SPSS or Stata, in the same
-            // place the XLSForm export reports what the adapter could not carry.
-            .header('x-export-notes', String(file.notes.length))
+          // What the writer had to change to satisfy SPSS or Stata, in the same
+          // place the XLSForm export reports what the adapter could not carry.
+          const notes = {
+            'x-export-notes': String(file.notes.length),
             // ASCII only: a header is latin-1, and a note quoting a label with an
             // accented character in it would otherwise throw on the way out.
-            .header('x-export-notes-detail', file.notes.join(' | ').replace(/[^\x20-\x7e]/g, '?').slice(0, 900))
+            'x-export-notes-detail': file.notes.join(' | ').replace(/[^\x20-\x7e]/g, '?').slice(0, 900),
+          };
+
+          // The bare file stays the default: a researcher downloading a `.sav` wants to
+          // double-click it. `codebook=1` is for the one who has to *document* the data —
+          // and for Stata in particular, where the value labels of every string variable
+          // cannot live in the file at all (see `services/pyreadstat`), so the codebook is
+          // the only place the option codes are written down.
+          if (req.query.codebook !== '1') {
+            return reply
+              .code(200)
+              .header('content-type', STAT_CONTENT_TYPES[format])
+              .header('content-disposition', `attachment; filename="${payload.slug}.${format}"`)
+              .headers(notes)
+              .header('cache-control', 'private, no-store')
+              .send(file.bytes);
+          }
+
+          // The codebook files, and not the data twice: the CSV bundle's own data files
+          // are dropped, because the statistical file *is* the data here.
+          const codebookFiles = csvBundle(payload.bundle.dataset).filter(
+            (entry) => entry.name !== 'data.csv' && entry.name !== 'spreadsheet-view.csv',
+          );
+          const archive = zipFiles(
+            [
+              {
+                name: `${payload.slug}.${format}`,
+                contentType: STAT_CONTENT_TYPES[format],
+                bytes: new Uint8Array(file.bytes),
+                description: 'The data, written by the pyreadstat worker.',
+              },
+              ...codebookFiles,
+            ],
+            payload.slug,
+          );
+          return reply
+            .code(200)
+            .header('content-type', 'application/zip')
+            .header('content-disposition', `attachment; filename="${payload.slug}-${format}-bundle.zip"`)
+            .headers(notes)
+            .header('x-export-codebook', String(codebookFiles.length))
             .header('cache-control', 'private, no-store')
-            .send(file.bytes);
+            .send(Buffer.from(archive));
         } catch (err) {
           if (err instanceof ExportWorkerError) {
             // Sent rather than thrown: `app.ts` collapses every 5xx body to

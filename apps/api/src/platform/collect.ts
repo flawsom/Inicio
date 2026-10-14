@@ -19,6 +19,8 @@ import {
 import { scanBytes, scannerConfigured, unscannedAccepted } from '../storage/scan.js';
 import { flagSubmission } from './flags.js';
 import { drainAsCollector, emitWebhook } from './webhooks/dispatch.js';
+import { env } from '../env.js';
+import { registerDurableLimit } from '../lib/rate-limit.js';
 
 /**
  * Public collection. Nothing here requires a session — the bearer token *is* the
@@ -334,6 +336,25 @@ function screenedOut(definition: FormDefinition, values: Record<string, unknown>
 }
 
 export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
+  // A second, independent ceiling for public collection, keyed on the distribution
+  // link rather than on the address.
+  //
+  // The per-address limit registered in app.ts still applies to every route here (two
+  // registrations, two counters, both consulted), so this one exists for the thing a
+  // single address cannot see: one link being hammered, from anywhere. A link is what a
+  // flood targets, and it is also the unit a field team shares, so it is capped at a
+  // value a busy team never reaches and a flood does.
+  //
+  // Registered inside this plugin on purpose. `onRoute` is encapsulated, so a nested
+  // registration covers the routes of this plugin and nothing else: the header the rest
+  // of the API is told about stays the per-address one (probed, not assumed: see the
+  // `link` tests).
+  await registerDurableLimit(app, {
+    max: env.COLLECT_RATE_LIMIT_MAX,
+    namespace: 'link',
+    subject: (req) => (req.params as { token?: string } | undefined)?.token ?? 'unknown',
+  });
+
   /** What the renderer needs before a response exists. */
   app.get('/:token', async (req: FastifyRequest<{ Params: { token: string } }>, reply: FastifyReply) => {
     const link = await requireLink(req.params.token);

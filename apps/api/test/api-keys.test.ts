@@ -398,6 +398,250 @@ describe('API keys', () => {
     expect(revoked.statusCode).toBe(403);
   });
 
+  it('rotates a key: the old secret is refused on the next request and the new one inherits the grant', async () => {
+    const owner = await signInPlatform(app, uniqueEmail('keys-rotate'));
+    const orgId = await createOrgFor(app, owner, 'Rotate org');
+    const { key, secret } = await mintKey(owner, orgId, {
+      name: 'nightly export',
+      scopes: ['flags:read'],
+      expiresInDays: 90,
+    });
+
+    const before = await app.inject({
+      method: 'GET',
+      url: `/api/v1/orgs/${orgId}/flags`,
+      headers: bearer(secret),
+    });
+    expect(before.statusCode, before.body).toBe(200);
+
+    const rotated = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orgs/${orgId}/api-keys/${key.id}/rotate`,
+      headers: { cookie: owner.cookie },
+    });
+    expect(rotated.statusCode, rotated.body).toBe(201);
+    const body = rotated.json() as { key: IssuedKey; secret: string; revokedKeyId: string };
+
+    expect(body.secret).toMatch(/^ik_[0-9a-f]{64}$/);
+    expect(body.secret).not.toBe(secret);
+    expect(body.revokedKeyId).toBe(key.id);
+    expect(body.key.id).not.toBe(key.id);
+    expect(body.key.active).toBe(true);
+    // Rotation changes the secret and nothing else: same name, same scopes, same
+    // expiry, so it can neither widen the authority nor extend the grant.
+    expect(body.key.name).toBe('nightly export');
+    expect(body.key.scopes).toEqual(['flags:read']);
+    expect(body.key.expiresAt).toBe(key.expiresAt);
+
+    // Refused on the very next request rather than after a grace window.
+    const withOld = await app.inject({
+      method: 'GET',
+      url: `/api/v1/orgs/${orgId}/flags`,
+      headers: bearer(secret),
+    });
+    expect(withOld.statusCode).toBe(401);
+    expect(withOld.json()).toMatchObject({ error: 'invalid_api_key' });
+
+    const withNew = await app.inject({
+      method: 'GET',
+      url: `/api/v1/orgs/${orgId}/flags`,
+      headers: bearer(body.secret),
+    });
+    expect(withNew.statusCode, withNew.body).toBe(200);
+
+    // Two rows: the old one kept and revoked (the audit trail's target), the new one
+    // live, and only a hash on disk for either.
+    const rows = await adminQuery<{
+      id: string;
+      user_id: string;
+      active: boolean;
+      revoked_at: Date | null;
+      key_hash: string;
+    }>(`SELECT id, user_id, active, revoked_at, key_hash FROM api_key WHERE org_id = $1`, [orgId]);
+    expect(rows).toHaveLength(2);
+    const previous = rows.find((row) => row.id === key.id)!;
+    const successor = rows.find((row) => row.id === body.key.id)!;
+    expect(previous.active).toBe(false);
+    expect(previous.revoked_at).not.toBeNull();
+    expect(successor.active).toBe(true);
+    expect(successor.revoked_at).toBeNull();
+    expect(successor.key_hash).not.toBe(body.secret);
+    // The successor is still the original creator's credential: rotating as an admin
+    // can never move a key's authority onto the admin.
+    expect(successor.user_id).toBe(previous.user_id);
+
+    // The audit row names both prefixes, so a trail reads as a rotation rather than
+    // as an unexplained revocation plus a new key. The secrets are nowhere in it.
+    const audits = await adminQuery<{ meta: Record<string, unknown> }>(
+      `SELECT meta FROM audit_log WHERE action = 'api_key.rotated' AND target = $1`,
+      [body.key.id],
+    );
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.meta).toMatchObject({ previousPrefix: key.prefix, prefix: body.key.prefix });
+    expect(JSON.stringify(audits[0]!.meta)).not.toContain(secret);
+    expect(JSON.stringify(audits[0]!.meta)).not.toContain(body.secret);
+  });
+
+  it('refuses a rotation by a member, and cannot rotate a key that is already revoked', async () => {
+    const owner = await signInPlatform(app, uniqueEmail('keys-rotate-roles'));
+    const orgId = await createOrgFor(app, owner, 'Rotate roles org');
+    const { key } = await mintKey(owner, orgId, { name: 'shared', scopes: ['flags:read'] });
+
+    const memberEmail = uniqueEmail('keys-rotate-member');
+    const invited = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orgs/${orgId}/members`,
+      headers: { cookie: owner.cookie },
+      payload: { email: memberEmail, role: 'member' },
+    });
+    expect(invited.statusCode, invited.body).toBe(201);
+    const member = await signInPlatform(app, memberEmail);
+
+    const byMember = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orgs/${orgId}/api-keys/${key.id}/rotate`,
+      headers: { cookie: member.cookie },
+    });
+    expect(byMember.statusCode).toBe(403);
+
+    // Revoked first, then rotated: the second call is about a key that is no longer
+    // rotatable rather than a second rotation, so it is a 404 and nothing is minted.
+    const revoked = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/orgs/${orgId}/api-keys/${key.id}`,
+      headers: { cookie: owner.cookie },
+    });
+    expect(revoked.statusCode, revoked.body).toBe(204);
+
+    const afterRevoke = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orgs/${orgId}/api-keys/${key.id}/rotate`,
+      headers: { cookie: owner.cookie },
+    });
+    expect(afterRevoke.statusCode).toBe(404);
+
+    const rows = await adminQuery<{ count: number }>(
+      `SELECT count(*)::int AS count FROM api_key WHERE org_id = $1`,
+      [orgId],
+    );
+    expect(rows[0]!.count).toBe(1);
+  });
+
+  it('refuses to rotate a key whose creator has left, and changes nothing when it does', async () => {
+    const owner = await signInPlatform(app, uniqueEmail('keys-rotate-gone'));
+    const orgId = await createOrgFor(app, owner, 'Rotate gone org');
+
+    // A key belongs to the person who minted it, so the only way to have one whose
+    // creator is gone is to have that person mint it and then leave.
+    const adminEmail = uniqueEmail('keys-rotate-admin');
+    const invited = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orgs/${orgId}/members`,
+      headers: { cookie: owner.cookie },
+      payload: { email: adminEmail, role: 'admin' },
+    });
+    expect(invited.statusCode, invited.body).toBe(201);
+    const { userId } = invited.json() as { userId: string };
+    const admin = await signInPlatform(app, adminEmail);
+    const { key } = await mintKey(admin, orgId, { name: 'their pipeline', scopes: ['flags:read'] });
+
+    const removed = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/orgs/${orgId}/members/${userId}`,
+      headers: { cookie: owner.cookie },
+    });
+    expect(removed.statusCode, removed.body).toBe(204);
+
+    const refused = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orgs/${orgId}/api-keys/${key.id}/rotate`,
+      headers: { cookie: owner.cookie },
+    });
+    expect(refused.statusCode, refused.body).toBe(409);
+    const refusedBody = refused.json() as { error: string; message?: string };
+    expect(refusedBody.error).toBe('creator_not_a_member');
+    // The sentence names what happened and what to do instead, because the caller's
+    // next move is not obvious from the fact alone.
+    expect(refusedBody.message).toContain('revoke it and create a new one');
+
+    // Refused inside the transaction, so the revocation rolled back with it: the
+    // organisation is not left holding a rotated-away key and no replacement.
+    const rows = await adminQuery<{ active: boolean; revoked_at: Date | null }>(
+      `SELECT active, revoked_at FROM api_key WHERE id = $1`,
+      [key.id],
+    );
+    expect(rows[0]!.active).toBe(true);
+    expect(rows[0]!.revoked_at).toBeNull();
+  });
+
+  it('records a refusal by a named actor, and records nothing for an anonymous one', async () => {
+    const owner = await signInPlatform(app, uniqueEmail('keys-denied'));
+    const orgId = await createOrgFor(app, owner, 'Denied org');
+    const { key, secret } = await mintKey(owner, orgId, { name: 'read only', scopes: ['flags:read'] });
+
+    // A refused *write* by a key: the response is a 403 naming the missing scope, and
+    // the attempt is in the audit trail against the key that made it.
+    const refused = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orgs/${orgId}/api-keys`,
+      headers: bearer(secret),
+      payload: { name: 'escalation', scopes: ['flags:read'] },
+    });
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json()).toMatchObject({ error: 'key_not_permitted' });
+
+    const rows = await adminQuery<{ actor: string; target: string; meta: Record<string, unknown> }>(
+      `SELECT actor, target, meta FROM audit_log
+        WHERE action = 'access.denied' AND actor = $1
+        ORDER BY ts DESC LIMIT 1`,
+      [`key:${key.id}`],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.target).toContain(`/orgs/${orgId}/api-keys`);
+    expect(rows[0]!.meta).toMatchObject({
+      code: 'key_not_permitted',
+      method: 'POST',
+      orgId,
+      grantedScopes: ['flags:read'],
+    });
+
+    // A session refusal is attributable too: a member attempting an owner action.
+    const memberEmail = uniqueEmail('keys-denied-member');
+    const invited = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orgs/${orgId}/members`,
+      headers: { cookie: owner.cookie },
+      payload: { email: memberEmail, role: 'member' },
+    });
+    expect(invited.statusCode, invited.body).toBe(201);
+    const member = await signInPlatform(app, memberEmail);
+    const denied = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/orgs/${orgId}/api-keys/${key.id}`,
+      headers: { cookie: member.cookie },
+    });
+    expect(denied.statusCode).toBe(403);
+    const memberRows = await adminQuery<{ meta: Record<string, unknown> }>(
+      `SELECT meta FROM audit_log WHERE action = 'access.denied' AND meta->>'role' = 'member' AND meta->>'orgId' = $1`,
+      [orgId],
+    );
+    expect(memberRows.length).toBeGreaterThan(0);
+
+    // Nothing is attributable for a credential that does not resolve, so an anonymous
+    // guess leaves no audit row rather than one per attempt.
+    const anonymous = await app.inject({
+      method: 'GET',
+      url: `/api/v1/orgs/${orgId}/flags`,
+      headers: { authorization: `Bearer ik_${'0'.repeat(64)}` },
+    });
+    expect(anonymous.statusCode).toBe(401);
+    const none = await adminQuery<{ actor: string }>(
+      `SELECT actor FROM audit_log WHERE action = 'access.denied' AND actor = $1`,
+      [`key:${'0'.repeat(64)}`],
+    );
+    expect(none).toHaveLength(0);
+  });
+
   it('rejects an unknown, malformed or non-existent key the same way', async () => {
     const owner = await signInPlatform(app, uniqueEmail('keys-invalid'));
     const orgId = await createOrgFor(app, owner, 'Invalid org');

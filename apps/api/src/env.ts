@@ -125,7 +125,20 @@ const schema = z.object({
 
   // Requests per minute per address. The default protects a single-IP burst (and
   // the free tiers underneath); tests raise it because they share one address.
+  //
+  // Counted in PostgreSQL (migration 0011), so this is one ceiling for the whole
+  // deployment rather than one per process: see `src/lib/rate-limit.ts`.
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
+
+  // Requests per minute for one distribution link on the public collection routes.
+  //
+  // Higher than the per-address ceiling on purpose, and not a replacement for it.
+  // A link is handed to a whole team of devices, which in the field share one mobile
+  // or office address; a ceiling of its own is what stops a single link's traffic
+  // from being a way to consume the whole API's capacity, while the per-address
+  // limit on top of it keeps one source from turning token guessing into load. The
+  // value is set where a legitimately busy link never sees it and a flood does.
+  COLLECT_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(1200),
 
   // Closed by default: an unknown email only gets an account through an
   // organisation invitation (owner/admin, via the SECURITY DEFINER function).

@@ -381,6 +381,85 @@ describe('authoring, publishing and the XLSForm round trip', () => {
     expect(restored.version).toBeGreaterThan(1);
   });
 
+  it('compares a version along the version it was forked from, not the one numbered before it', async () => {
+    const owner = await signIn(`graph-${Date.now()}@example.com`);
+    const orgId = await createOrg(owner, 'History Org');
+    const formId = await createForm(owner, orgId, 'History', validDefinition);
+    const detail = await app.inject({ method: 'GET', url: `/api/v1/forms/${formId}`, headers: { cookie: owner.cookie } });
+    const v1 = (detail.json() as { versions: Array<{ id: string; version: number }> }).versions[0]!;
+    expect(v1.version).toBe(1);
+    await app.inject({ method: 'POST', url: `/api/v1/forms/${formId}/versions/${v1.id}/publish`, headers: { cookie: owner.cookie } });
+
+    // A second version, forked from v1, with one question's wording changed.
+    const drafted = await app.inject({
+      method: 'POST',
+      url: `/api/v1/forms/${formId}/versions`,
+      headers: { cookie: owner.cookie },
+      payload: { basedOn: v1.id },
+    });
+    expect(drafted.statusCode, drafted.body).toBe(201);
+    const v2 = (drafted.json() as { version: { id: string } }).version;
+    const renamed: FormDefinition = {
+      ...validDefinition,
+      questions: validDefinition.questions.map((question) =>
+        question.name === 'score' ? { ...question, label: { en: 'Score out of ten' } } : question,
+      ),
+    };
+    const saved = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/forms/${formId}/versions/${v2.id}`,
+      headers: { cookie: owner.cookie },
+      payload: { definition: renamed },
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+    await app.inject({ method: 'POST', url: `/api/v1/forms/${formId}/versions/${v2.id}/publish`, headers: { cookie: owner.cookie } });
+
+    // v3 is a restore of v1: numbered after v2, and descended from v1.
+    const restore = await app.inject({
+      method: 'POST',
+      url: `/api/v1/forms/${formId}/versions/${v1.id}/restore`,
+      headers: { cookie: owner.cookie },
+    });
+    expect(restore.statusCode, restore.body).toBe(201);
+    const v3 = (restore.json() as { version: { id: string; version: number; based_on: string | null } }).version;
+    expect(v3.based_on).toBe(v1.id);
+
+    // With no `?against=`, the graph decides — and the answer is not the same as the one
+    // v2 would give, which is the whole reason the edge is stored rather than inferred
+    // from the version number: against v2's wording this would report an edit.
+    const along = await app.inject({ method: 'GET', url: `/api/v1/forms/${formId}/versions/${v3.id}/diff`, headers: { cookie: owner.cookie } });
+    expect(along.statusCode, along.body).toBe(200);
+    const comparison = along.json() as {
+      from: { id: string; version: number };
+      to: { id: string };
+      diff: { identical: boolean; changes: string[] };
+    };
+    expect(comparison.from.id).toBe(v1.id);
+    expect(comparison.from.version).toBe(1);
+    expect(comparison.to.id).toBe(v3.id);
+    expect(comparison.diff.identical).toBe(true);
+    expect(comparison.diff.changes).toEqual([]);
+
+    // Asked for explicitly, the other comparison is a different answer, in words the
+    // console renders verbatim.
+    const against = await app.inject({
+      method: 'GET',
+      url: `/api/v1/forms/${formId}/versions/${v3.id}/diff?against=${v2.id}`,
+      headers: { cookie: owner.cookie },
+    });
+    const other = against.json() as { from: { id: string }; diff: { identical: boolean; changes: string[] } };
+    expect(other.from.id).toBe(v2.id);
+    expect(other.diff.identical).toBe(false);
+    expect(other.diff.changes.join(' ')).toContain('Score out of ten');
+
+    // A first version has nothing before it, and that is `null` rather than an empty
+    // comparison, so the console can say where the form started.
+    const first = await app.inject({ method: 'GET', url: `/api/v1/forms/${formId}/versions/${v1.id}/diff`, headers: { cookie: owner.cookie } });
+    expect(first.statusCode, first.body).toBe(200);
+    expect((first.json() as { from: unknown; diff: unknown }).from).toBeNull();
+    expect((first.json() as { from: unknown; diff: unknown }).diff).toBeNull();
+  });
+
   it('exports XLSForm and re-imports it into a new form without loss', async () => {
     const owner = await signIn(`xlsform-${Date.now()}@example.com`);
     const orgId = await createOrg(owner, 'Spreadsheet Org');

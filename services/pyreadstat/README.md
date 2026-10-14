@@ -113,24 +113,44 @@ Every one of these comes back in `x-inicio-notes`:
   spelling, because a codebook that names a variable the data does not contain is
   worse than a longer name.
 - **A truncated label.** 256 characters for `.sav`, 80 for `.dta`.
-- **A dropped value label.** Value labels are numeric in both formats, so a
-  non-numeric code on a numeric variable cannot be carried; it is reported instead
-  of being attached to the wrong number.
-- **A missing-range omission**, if the installed `pyreadstat` does not accept the
-  argument.
+- **A dropped value label.** Two ways, both reported: a non-numeric code on a
+  numeric variable cannot be carried, and a label for a **string variable in a
+  `.dta`** cannot either — Stata attaches value labels to numbers, and pyreadstat
+  does not refuse such a label, it writes it against the value `0`. So every option
+  of every select question in a Stata export would arrive as "the label of 0", with
+  nothing to say which option was which. The worker drops them, names the variable
+  and counts them, and the codebook that ships beside the file is where they are
+  documented.
+- **A missing-range omission.** A `.sav` carries the declared missing values
+  (`-99`…`-96`) per numeric variable as **one contiguous range**. That is exact for
+  four adjacent integer codes, and it is what the format allows: SPSS takes at most
+  three *discrete* values per variable, so four separate codes would be refused
+  outright — which is what happened before this was checked. A set SPSS cannot express
+  in one range is truncated to three codes and the omission is named. See below for how
+  far this can be verified, which is not all the way. A `.dta` receives no declaration at all, because
+  `pyreadstat.write_dta` has no argument for one: Stata's equivalent is the extended
+  missing values (`.a`…`.z`), which the writer does not produce. That is reported in
+  the notes of every Stata export rather than left for a reader to discover.
 
 ## What it does not do
 
 - **It does not invent missing values.** A blank cell is written as missing
-  (system-missing for a numeric column — never `0`), and the missing *codes*
-  travel as declared missing ranges rather than being written into the data. The
-  kind of missingness per cell is in the CSV bundle's missing table; the `.sav`
-  and `.dta` carry the definitions so a statistics package shows them correctly.
+  (system-missing for a numeric column — never `0`). The missing *codes* are
+  declared in a `.sav` as discrete missing values on every numeric variable, so
+  SPSS reports them as missing rather than as a value somebody answered; a `.dta`
+  cannot carry that declaration, and the notes say so. The kind of missingness per
+  cell is in the CSV bundle's missing table either way, and the codebook export
+  names each code and what it means — which is what a `.dta` reader has to go by.
 - **It does not write labels into the data.** Values stay as stored codes;
   the value-label dictionary is what maps them.
-- **It does not verify the file it produced.** Round-tripping the bytes back
-  through `pyreadstat.read_sav` belongs in this service's own test suite, which is
-  not yet written — see the note below.
+- **It does not verify the file it produced.** The worker returns the bytes;
+  reading them back through `pyreadstat.read_sav` / `read_dta` is
+  `test_roundtrip.py` beside it, which holds every property `build()` claims — the
+  names, the column labels, the value labels, a blank cell staying blank, every
+  collected answer — to a real read-back. Two of the claims **cannot** be checked
+  that way, and the script says so instead of counting them as passes: pyreadstat's
+  reader never reports declared missing ranges (even for a file it wrote itself), and
+  a `.dta` has none to report.
 - **It has no authentication.** It is meant to sit on a private network or behind
   the platform's own ingress. It holds no data at rest and writes to a temporary
   directory that is removed before the response is sent.
@@ -141,6 +161,75 @@ The API-side wiring and both branches (the honest `501` with no worker, a real
 file with one) are covered by `apps/api/test/pyreadstat-export.test.ts`, which
 stubs this worker over a local HTTP server. The worker's own Python logic —
 name sanitisation, label truncation, value-label attachment, the missing ranges —
-is **not yet exercised by a test**, because this repository's test runner is Node
-and the worker is deliberately a separate service. That is the first thing to add
-here (`pytest` + a round-trip through `pyreadstat.read_sav`).
+is exercised by `test_roundtrip.py` (see *Round-trip test* below), which writes
+both formats through `build()` and reads them back through `pyreadstat`. It is a
+script rather than a CI job for the same reason the worker is a separate service:
+this repository's test runner is Node, and the build image has no Python in it.
+
+## Round-trip test
+
+`test_roundtrip.py` is the other half of the promise `worker.py` makes: that a
+reader opens the file and finds what the dataset said. It builds a representative
+payload — a repeat group's contact, two languages in the labels, value labels on
+a numeric *and* on a string variable, the four declared missing codes, a blank
+numeric cell, a blank string cell, a short row, and names that need sanitising —
+writes both formats through the worker's own `build()`, reads the bytes back with
+`pyreadstat.read_sav` / `read_dta`, and prints one line per property:
+
+```
+$ python3 services/pyreadstat/test_roundtrip.py
+[roundtrip] the statistical export worker's output, read back
+[roundtrip] python <version>, pyreadstat <version>, pandas <version>
+[roundtrip] the files it writes are kept in /tmp/inicio-roundtrip-xxxxxx
+
+--- sav ---
+  12 variables x 3 cases, 8 value labels, 4 missing codes
+  ok              the writer produces a file              <n> bytes, 12 variable(s), 3 case(s), <n> note(s)
+  ok              the file reads back through pyreadstat  <n> bytes, 3 case(s), 12 variable(s)
+  ...
+
+<checks> checks, <failures> failures
+```
+
+The versions, the byte sizes and the totals are the only things this example does
+not state, because they are what a run decides. Everything else — the instrument,
+the counters and the sentence on each line — is what the script prints, and
+nothing here records a run that has not happened.
+
+Against files a deployed worker really produced, for a payload the API built:
+
+```
+python3 services/pyreadstat/test_roundtrip.py --payload body.json --sav export.sav --dta export.dta \
+    --notes notes.json
+```
+
+`--notes` carries the worker's own `x-inicio-notes` for those files, as
+`{"sav": [...], "dta": [...]}` — what the API read off the response headers. Without
+it a few checks report `not verifiable` for a reason that has nothing to do with the
+file: a value label Stata cannot carry is correct **because the writer said so**, and
+"absent and unmentioned" is the same silent loss as "present and wrong".
+`apps/api/scripts/roundtrip-statistical.ts` (`pnpm --filter @inicio/api
+roundtrip:statistical`) is what writes all three files: it starts the worker itself,
+composes the body with the API's own `statisticalPayload`, and hands the files and the
+notes to this script — the whole chain, from the school-ranking template to a
+read-back.
+
+Each line is one of three things, and the difference between the last two is the
+point of the script:
+
+- `ok` — the property was checked and holds.
+- `FAIL` — the worker claims it and the file does not carry it. The raw evidence is
+  printed (`what the file holds`), and the exit status becomes 1. Nothing here is
+  weakened to make a run green: a `.sav` whose labels are lost is a file a
+  researcher discovers is broken at the import step.
+- `not verifiable` — pyreadstat's own API cannot show the property, or this
+  payload does not exercise it. It is printed as loudly as a failure and is **not**
+  counted as a pass, so a claim cannot become true by being unreadable.
+
+The exit status is 1 when anything failed, 2 when `pyreadstat` or `pandas` is not
+installed, and the temporary directory holding the files it wrote is printed so
+the bytes can be opened in SPSS or Stata by hand afterwards.
+
+`requirements.txt` pins `pyreadstat==1.3.2` and `pandas==2.2.3`; the script prints
+the versions it actually ran against, so a run under a different pair says so
+rather than implying it checked the pinned ones.

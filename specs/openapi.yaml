@@ -97,7 +97,12 @@ paths:
     get:
       tags: [Health]
       operationId: health
-      summary: Liveness, including a real database round trip
+      summary: Liveness, the application version, and a real database round trip
+      description: |
+        The version is reported whether or not the database answers, because "which build is serving
+        this?" is the first question of an incident and it must not depend on the dependency that just
+        failed. A database that does not answer is a `503` and not a `200` carrying bad news: a health
+        check that cannot fail is not a health check.
       security: []
       responses:
         '200':
@@ -109,7 +114,25 @@ paths:
                 properties:
                   status: { type: string, const: ok }
                   dbTime: { type: [string, 'null'], format: date-time }
-                required: [status]
+                  version:
+                    type: string
+                    description: The application version answering this request.
+                    example: 0.1.0
+                required: [status, version]
+        '503':
+          description: The database did not answer, and the version is still reported.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: degraded }
+                  dbTime: { type: 'null' }
+                  reason:
+                    type: string
+                    description: What the database said, so a probe cannot mistake a dead pool for a dead process.
+                  version: { type: string }
+                required: [status, version, reason]
 
   # ---------------------------------------------------------------------------
   # Phase-1 school authentication. Kept mounted so nothing that was verified stops
@@ -1050,6 +1073,48 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
 
+  /api/v1/forms/{formId}/versions/{versionId}/diff:
+    get:
+      tags: [Forms, versions and publishing]
+      operationId: compareVersion
+      summary: What changed between two versions, in words
+      description: |
+        Requires `forms:read` when called with a key. Computed from the two **stored** definitions, along
+        the graph's own edge: the version named in `?against=` when given, else the version this one was
+        forked from (`based_on`), else the version numbered immediately before it. `from` and `diff` are
+        `null` for a version with nothing before it, which is what lets the console say the form started
+        there instead of showing an empty comparison.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/FormId'
+        - $ref: '#/components/parameters/VersionId'
+        - name: against
+          in: query
+          required: false
+          description: The version to compare against, instead of the graph's own edge.
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The two versions and what changed between them.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  to: { $ref: '#/components/schemas/VersionSummary' }
+                  from:
+                    oneOf:
+                      - { $ref: '#/components/schemas/VersionSummary' }
+                      - { type: 'null' }
+                  diff:
+                    description: The changes in words, or null when there is nothing to compare with.
+                    oneOf:
+                      - $ref: '#/components/schemas/DefinitionDiff'
+                      - { type: 'null' }
+        '404': { $ref: '#/components/responses/Error' }
+
   /api/v1/forms/{formId}/versions/{versionId}/publish:
     post:
       tags: [Forms, versions and publishing]
@@ -1599,14 +1664,21 @@ paths:
     get:
       tags: [Exports]
       operationId: exportResponses
-      summary: Export responses as a CSV bundle, XLSX or JSON
+      summary: Export responses as a CSV bundle, XLSX, JSON, SPSS .sav or Stata .dta
       description: |
         Generated from the **published** version that actually collected the data.
         `csv` returns a zip bundle (data, codebook, value labels, missing codes and
         metadata) rather than five separate downloads; `xlsx` and `json` return a
-        single file. `.sav` and `.dta` answer `501 format_not_available` with a reason,
-        because a file that only fails once a researcher imports it into SPSS is worse
-        than an honest refusal. Requires `responses:export` when called with a key.
+        single file. `sav` and `dta` are written by the pyreadstat export worker
+        (`services/pyreadstat`), which is deployed separately: with no
+        `PYREADSTAT_WORKER_URL` they answer `501 format_not_available` naming that
+        variable, and a worker that does not answer is `502 export_worker_unavailable`.
+        Neither ever produces a file, because a file that only fails once a researcher
+        imports it into SPSS is worse than an honest refusal. Add `codebook=1` to receive
+        the codebook, value labels, missing table and metadata beside the statistical
+        file, in a zip with it — for a `.dta` that is the only place a string variable's
+        value labels can be written down at all. Requires `responses:export` when called
+        with a key.
       security:
         - cookieAuth: []
         - bearerApiKey: []
@@ -1629,9 +1701,19 @@ paths:
           required: false
           schema: { type: string }
           description: Which language's labels to write.
+        - name: codebook
+          in: query
+          required: false
+          schema: { type: string, enum: ['1'] }
+          description: |
+            `sav`/`dta` only: ship the codebook files beside the data file, in one zip.
+            Ignored for the formats that already carry it.
       responses:
         '200':
-          description: The file. CSV arrives as `application/zip`, XLSX as a spreadsheet, JSON as `application/json`.
+          description: |
+            The file. CSV arrives as `application/zip`, XLSX as a spreadsheet, JSON as `application/json`,
+            `.sav`/`.dta` as their own binary types — or, with `codebook=1`, as a zip holding the data file
+            and the codebook.
           content:
             application/zip:
               schema: { type: string, format: binary }
@@ -1639,6 +1721,12 @@ paths:
               schema: { type: string, format: binary }
             application/json:
               schema: { type: object }
+            application/x-spss-sav:
+              schema: { type: string, format: binary }
+              example: written by the pyreadstat worker
+            application/x-stata-dta:
+              schema: { type: string, format: binary }
+              example: written by the pyreadstat worker
         '400': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409':
@@ -1647,7 +1735,15 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
         '501':
-          description: A format that is deliberately not implemented yet, with a reason.
+          description: |
+            `format_not_available`: a statistical format was asked for and this deployment has no export
+            worker configured, naming `PYREADSTAT_WORKER_URL` as the thing to set. Nothing is written.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502':
+          description: |
+            `export_worker_unavailable`: a worker is configured and did not answer, so no file was produced.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -1754,6 +1850,49 @@ paths:
         '204': { description: Revoked. }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/api-keys/{keyId}/rotate:
+    post:
+      tags: [Integrations]
+      operationId: rotateApiKey
+      summary: Rotate an API key (owner or admin)
+      description: |
+        Revokes the key and issues its successor in one transaction, returning the new secret once. The
+        successor keeps the original creator, the same scopes and the same expiry: rotation changes the
+        secret and nothing else, so it can never widen a credential's authority or quietly extend a grant.
+        The revoked secret is refused on the very next request rather than after a grace window, which is
+        what an integration rotating a key expects and is strictly stronger than the "within 60 seconds"
+        the requirement asks for. A key whose creator is no longer a member of the organisation is
+        refused rather than rotated, because the successor would authenticate and then reach nothing.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: keyId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Rotated. The previous secret no longer works; this one does.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key: { $ref: '#/components/schemas/ApiKey' }
+                  secret:
+                    type: string
+                    description: '`ik_` plus 64 hex characters. Stored only as a hash, and returned by this call alone.'
+                  revokedKeyId:
+                    type: string
+                    format: uuid
+                    description: The key this one replaced, which is now revoked.
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409':
+          description: The key's creator is no longer a member of this organisation. Nothing was changed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /api/v1/webhook-events:
     get:
@@ -2401,6 +2540,38 @@ components:
         published_at: { type: [string, 'null'], format: date-time }
         created_at: { type: string, format: date-time }
         question_count: { type: integer }
+
+    DefinitionDiff:
+      type: object
+      description: What changed between two definitions, as sentences an organiser can read.
+      properties:
+        identical: { type: boolean }
+        counts:
+          type: object
+          properties:
+            added: { type: integer }
+            removed: { type: integer }
+            changed: { type: integer }
+        changes:
+          type: array
+          description: The changes, in a stable order; removals, then additions, then changes.
+          items: { type: string }
+        questions:
+          type: array
+          description: The same changes, grouped per question.
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              kind: { type: string, enum: [added, removed, changed] }
+              details: { type: array, items: { type: string } }
+        notes:
+          type: array
+          description: |
+            What the comparison could not put into words — an option list a version does not declare, or
+            options drawn from different sources. A note is why `changes` may be empty while `identical`
+            is false.
+          items: { type: string }
 
     DistributionLink:
       type: object

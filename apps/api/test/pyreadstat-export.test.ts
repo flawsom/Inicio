@@ -2,6 +2,7 @@ import { createServer, type Server } from 'node:http';
 import { createServer as createNetServer } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import type { FastifyInstance } from 'fastify';
+import { strFromU8, unzipSync } from 'fflate';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FormDefinition } from '@inicio/engine';
 import { buildApp } from '../src/app.js';
@@ -227,6 +228,66 @@ describe('statistical exports', () => {
     expect(failure.error).toBe('export_worker_unavailable');
     // A 502 with no body would be a download that fails halfway; this is a refusal.
     expect(response.rawPayload.length).toBeGreaterThan(0);
+  });
+
+  it('ships the codebook beside the file when it is asked for, and the data only once', async () => {
+    const scenario = await published('sav-codebook');
+    env.PYREADSTAT_WORKER_URL = workerUrl;
+    // A note of the shape a `.dta` really produces: the labels Stata cannot carry are
+    // named, and "the codebook has them" is the sentence that makes them recoverable.
+    workerReply = {
+      status: 200,
+      body: DTA_BYTES,
+      notes: ['Stata attaches value labels to numbers, so the 1 label(s) of the string variable "consent" are not in the .dta; the codebook exported with it has them'],
+    };
+
+    // The bare file stays the default, because a researcher downloading a `.sav` wants
+    // to double-click it rather than open an archive first.
+    const bare = await exportAs(scenario, 'dta');
+    expect(bare.statusCode, bare.body).toBe(200);
+    expect(bare.headers['content-type']).toBe('application/x-stata-dta');
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/forms/${scenario.formId}/responses/export?format=dta&codebook=1`,
+      headers: { cookie: scenario.cookie },
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.headers['content-type']).toBe('application/zip');
+    expect(response.headers['content-disposition']).toContain('-dta-bundle.zip');
+    // Four codebook files beside the data: the codebook, the value labels, the missing
+    // table and the metadata.
+    expect(response.headers['x-export-codebook']).toBe('4');
+    // And the writer's notes travel with the archive, because in this download "the
+    // codebook has them" is the answer to a label the format cannot carry.
+    expect(String(response.headers['x-export-notes-detail'])).toContain('codebook exported with it has them');
+
+    const files = unzipSync(new Uint8Array(response.rawPayload));
+    const names = Object.keys(files);
+    const ending = (suffix: string): string[] => names.filter((name) => name.endsWith(suffix));
+
+    // The data file is the worker's bytes, unchanged, inside the archive.
+    expect(ending('.dta')).toHaveLength(1);
+    expect(Buffer.from(files[ending('.dta')[0]!]!).equals(DTA_BYTES)).toBe(true);
+    expect(ending('codebook.csv')).toHaveLength(1);
+    expect(ending('value-labels.csv')).toHaveLength(1);
+    expect(ending('missing.csv')).toHaveLength(1);
+    expect(ending('meta.json')).toHaveLength(1);
+    // The data is not in there twice: the statistical file *is* the data, so the CSV
+    // bundle's own copies of it stay out of this archive.
+    expect(ending('data.csv')).toHaveLength(0);
+    expect(ending('spreadsheet-view.csv')).toHaveLength(0);
+
+    // The codebook describes the same dataset the file was written from — the questions
+    // that were asked, not a fresh read of something else.
+    const codebook = strFromU8(files[ending('codebook.csv')[0]!]!);
+    expect(codebook).toContain('consent');
+    expect(codebook).toContain('not_asked');
+    expect(strFromU8(files[ending('meta.json')[0]!]!)).toContain('Clinic visit');
+
+    // Two requests, two worker calls: the archive is not a cached copy of the bare file.
+    expect(captured).toHaveLength(2);
+    expect(captured[1]?.body.format).toBe('dta');
   });
 
   it('treats a worker that produces nothing as a failure, not an empty download', async () => {

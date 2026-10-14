@@ -17,10 +17,13 @@ What it refuses to do
 Three things, all of which are the reason this is trustworthy rather than merely
 convenient:
 
-  * **It never invents data.** A blank cell stays missing. The missing *codes*
-    (-99 not asked, -98 skipped by logic, -97 refused, -96 don't know) travel as
-    declared missing ranges, so SPSS and Stata know what those numbers mean
-    without any of them being written into a respondent's answer.
+  * **It never invents data.** A blank cell stays missing (never `0`). The missing
+    *codes* (-99 not asked, -98 skipped by logic, -97 refused, -96 don't know) are
+    declared as missing values in a `.sav`, so SPSS knows what those numbers mean
+    without any of them being written into a respondent's answer. A `.dta` cannot
+    carry that declaration: Stata's own equivalent is the extended missing values
+    (`.a`…`.z`), which pyreadstat does not write, so for Stata the codes live in the
+    codebook that is exported beside the file and are named in `x-inicio-notes`.
   * **It reports every change it had to make.** SPSS and Stata have their own cap
     on name length, their own reserved words and their own limit on label length,
     and a variable silently renamed is a codebook that no longer matches the data.
@@ -77,6 +80,71 @@ RESERVED = {"all", "and", "by", "eq", "ge", "gt", "le", "lt", "ne", "not", "or",
 # A response header has a practical size limit; the notes are a summary, and the
 # API logs the full list.
 MAX_NOTES = 40
+
+# Arguments that only some pyreadstat releases accept under the name this worker
+# uses. They are dropped one at a time, and each one is named in the notes: a file
+# that quietly lost its value labels *and* its missing-value declaration would be
+# discovered at the import step, which is the failure this worker exists to avoid.
+OPTIONAL_ARGUMENTS = ("missing_ranges", "file_label")
+
+
+def _dropped_note(argument: str) -> str:
+    if argument == "missing_ranges":
+        return "this pyreadstat build does not accept declared missing ranges; the file carries values only"
+    if argument == "file_label":
+        return "this pyreadstat build does not accept a file label; the file carries values only"
+    return f"this pyreadstat build does not accept {argument}; the file carries values only"
+
+
+def _missing_declaration(codes: list[object]) -> tuple[list[dict[str, object]], str | None]:
+    """SPSS's declaration of which numbers mean "missing", and what it could not take.
+
+    SPSS accepts at most **three discrete values** per variable, or one range. The
+    engine's codes (-99, -98, -97, -96) are contiguous integers, so one range states
+    them exactly and nothing is dropped — and a range is what a reader sees in the
+    missing-values dialog, which is the point of declaring them at all. A set that is
+    neither small enough nor contiguous is truncated to three values and the omission
+    is reported, because a missing code that silently stops being missing is a
+    respondent's non-answer arriving in the analysis as a value.
+    """
+    numeric = sorted(code for code in codes if isinstance(code, (int, float)))
+    if not numeric:
+        return [], None
+    if len(numeric) <= 3:
+        return [{"lo": code, "hi": code} for code in numeric], None
+    contiguous = all(float(later) - float(earlier) == 1 for earlier, later in zip(numeric, numeric[1:]))
+    if contiguous:
+        return [{"lo": numeric[0], "hi": numeric[-1]}], None
+    kept, dropped = numeric[:3], numeric[3:]
+    omission = (
+        "SPSS accepts at most three discrete missing values per variable, so only "
+        + ", ".join(str(code) for code in kept)
+        + " are declared missing in the .sav; "
+        + ", ".join(str(code) for code in dropped)
+        + " are documented in the codebook but not declared in the file"
+    )
+    return [{"lo": code, "hi": code} for code in kept], omission
+
+
+def _write(writer, frame, path: str, kwargs: dict, notes: list[str]) -> None:
+    """Write the file, dropping and naming only the argument the writer refuses.
+
+    A `TypeError` is the only signal an optional argument is unsupported, and the
+    message names the argument in every pyreadstat release that has one, so the
+    argument it names is the argument that goes — not all of them. A `TypeError`
+    that names none of them is re-raised: at that point the worker does not know
+    what it is dropping, and guessing is how a file becomes quietly wrong.
+    """
+    try:
+        writer(frame, path, **kwargs)
+        return
+    except TypeError as exc:
+        named = next((key for key in OPTIONAL_ARGUMENTS if key in kwargs and key in str(exc)), None)
+        if named is None:
+            raise
+        kwargs.pop(named)
+        notes.append(_dropped_note(named))
+        _write(writer, frame, path, kwargs, notes)
 
 
 def _variable_name(raw: str, limit: int, taken: set[str]) -> tuple[str, list[str]]:
@@ -168,6 +236,7 @@ def build(payload: dict) -> tuple[str, bytes, list[str], int, int]:
     index_of = {name: index for index, name in enumerate(names)}
 
     value_labels: dict[str, dict[object, str]] = {}
+    dropped_string_labels: dict[str, int] = {}
     for entry in payload.get("valueLabels") or []:
         variable = str(entry.get("variable") or "")
         name = next((candidate for candidate, original in original_of.items() if original == variable), None)
@@ -176,6 +245,13 @@ def build(payload: dict) -> tuple[str, bytes, list[str], int, int]:
             continue
         code = entry.get("code")
         label = str(entry.get("label") or "")
+        if not is_numeric[index_of[name]] and fmt == "dta":
+            # Stata attaches value labels to numbers, and pyreadstat does not refuse a
+            # label for a string variable: it writes it against the value 0, so every
+            # option of every select question would arrive as "the label of 0" with
+            # nothing to say which option was which. Dropped, counted, and named.
+            dropped_string_labels[name] = dropped_string_labels.get(name, 0) + 1
+            continue
         if is_numeric[index_of[name]]:
             try:
                 numeric_code = float(code)
@@ -190,16 +266,33 @@ def build(payload: dict) -> tuple[str, bytes, list[str], int, int]:
             code = "" if code is None else str(code)
         value_labels.setdefault(name, {})[code] = label
 
-    missing_ranges: list[dict[str, object]] = []
+    # The engine's missing-code table is global, so the codes apply to every numeric
+    # column. SPSS takes them per variable, as a list of discrete values.
+    missing_codes: list[object] = []
     for entry in payload.get("missingCodes") or []:
         value = entry.get("numeric")
         if isinstance(value, (int, float)) and not isinstance(value, bool):
-            missing_ranges.append(
-                {
-                    "value": int(value) if float(value).is_integer() else float(value),
-                    "label": str(entry.get("label") or ""),
-                }
-            )
+            missing_codes.append(int(value) if float(value).is_integer() else float(value))
+    missing_ranges: dict[str, list[dict[str, object]]] = {}
+    declaration, omission = _missing_declaration(missing_codes)
+    if fmt == "sav" and declaration:
+        for index, name in enumerate(names):
+            if is_numeric[index]:
+                missing_ranges[name] = declaration
+    if omission:
+        notes.append(omission)
+
+    for name, count in dropped_string_labels.items():
+        notes.append(
+            f'Stata attaches value labels to numbers, so the {count} label(s) of the string variable "{name}" '
+            "are not in the .dta; the codebook exported with it has them"
+        )
+
+    if fmt == "dta" and missing_codes:
+        notes.append(
+            "a .dta carries no declared missing ranges (pyreadstat writes no extended missing values), "
+            "so the missing codes are documented in the codebook rather than declared in the file"
+        )
 
     file_label = str(payload.get("fileLabel") or "Inicio export")[: limits["label"]]
     writer = pyreadstat.write_sav if fmt == "sav" else pyreadstat.write_dta
@@ -217,17 +310,7 @@ def build(payload: dict) -> tuple[str, bytes, list[str], int, int]:
 
     with tempfile.TemporaryDirectory() as directory:
         path = os.path.join(directory, f"export.{fmt}")
-        try:
-            writer(frame, path, **kwargs)
-        except TypeError:
-            # An older pyreadstat that does not take one of the optional arguments.
-            # A file without the declared missing ranges is still a correct file, so
-            # it is written and the omission is reported rather than the export
-            # failing over an argument the caller never asked for.
-            for optional in ("missing_ranges", "file_label"):
-                kwargs.pop(optional, None)
-            notes.append("this pyreadstat build does not accept missing ranges/file label; the file carries values only")
-            writer(frame, path, **kwargs)
+        _write(writer, frame, path, kwargs, notes)
         with open(path, "rb") as handle:
             body = handle.read()
 

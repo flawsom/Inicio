@@ -269,6 +269,101 @@ export const platformKeyRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
+  /**
+   * Rotate: the old secret dies on the next request and a new one inherits the
+   * grant.
+   *
+   * Three properties are deliberate.
+   *
+   *  1. **The new key keeps the original creator, its scopes and its expiry.**
+   *     Rotation changes the secret and nothing else. Binding the new key to
+   *     whoever pressed the button would silently move the credential's authority
+   *     (an admin rotating a member's key would hand themselves a key that can do
+   *     what the member could), and extending the expiry would make "rotate" a
+   *     quiet way to keep a lapsed grant alive.
+   *  2. **The old key is dead immediately, not within a grace window.** The
+   *     requirement is that a rotated key stops working within 60 seconds; a
+   *     refusal on the very next request is stronger than that, and an overlap
+   *     window is a second live credential that nobody is watching.
+   *  3. **A key whose creator has left the team is refused rather than rotated.**
+   *     The membership check is what authorises every policy in this schema, so the
+   *     new secret would authenticate and then reach nothing: a rotation that
+   *     answers `201` and hands over a dead key is worse than a refusal that says
+   *     what to do instead.
+   */
+  app.post(
+    '/orgs/:orgId/api-keys/:keyId/rotate',
+    async (
+      req: FastifyRequest<{ Params: { orgId: string; keyId: string } }>,
+      reply: FastifyReply,
+    ) => {
+      const actor = await requireActor(req);
+      const { secret, prefix, hash } = generateApiKey();
+
+      const rotated = await withOrg(
+        actor.userId,
+        req.params.orgId,
+        async (client) => {
+          const { rows: previous } = await client.query<{
+            id: string;
+            user_id: string;
+            name: string;
+            prefix: string;
+            scopes: string[];
+            expires_at: Date | null;
+          }>(
+            `UPDATE api_key
+                SET active = false, revoked_at = now(), revoked_by = $3
+              WHERE id = $1 AND org_id = $2 AND revoked_at IS NULL
+              RETURNING id, user_id, label AS name, prefix, scopes, expires_at`,
+            [req.params.keyId, req.params.orgId, actor.userId],
+          );
+          const old = previous[0];
+          if (!old) return null;
+
+          const { rows: stillMember } = await client.query<{ role: string }>(
+            `SELECT role FROM membership WHERE org_id = $1 AND user_id = $2`,
+            [req.params.orgId, old.user_id],
+          );
+          if (!stillMember[0]) {
+            // Thrown inside the transaction, so the revocation above rolls back with
+            // it: a refused rotation must not leave the organisation with no key.
+            throw new HttpError(
+              409,
+              'creator_not_a_member',
+              'the person this key belongs to is no longer in this organisation, so a rotated key would reach nothing: revoke it and create a new one',
+            );
+          }
+
+          const { rows } = await client.query<KeyRow>(
+            `INSERT INTO api_key (org_id, user_id, label, prefix, key_hash, scopes, expires_at)
+             VALUES ($1, $2, $3, $4, $5, $6::text[], $7)
+             RETURNING id, label AS name, prefix, scopes, active, created_at, last_used_at,
+                       expires_at, revoked_at, (SELECT email FROM app_user WHERE id = $2) AS created_by`,
+            [req.params.orgId, old.user_id, old.name, prefix, hash, old.scopes, old.expires_at],
+          );
+          return { previous: old, next: rows[0]! };
+        },
+        { roles: ['owner', 'admin'] },
+      );
+      if (!rotated) throw new HttpError(404, 'not_found');
+
+      // Prefixes, never secrets: this row is readable by anyone with the audit log.
+      await audit(req, `user:${actor.userId}`, 'api_key.rotated', rotated.next.id, {
+        orgId: req.params.orgId,
+        name: rotated.next.name,
+        previousKeyId: rotated.previous.id,
+        previousPrefix: rotated.previous.prefix,
+        prefix: rotated.next.prefix,
+        scopes: rotated.next.scopes,
+        expiresAt: rotated.next.expires_at,
+      });
+      return reply
+        .code(201)
+        .send({ key: view(rotated.next), secret, revokedKeyId: rotated.previous.id });
+    },
+  );
+
   /** Revoke. Kept as a soft delete so the audit trail keeps its target. */
   app.delete(
     '/orgs/:orgId/api-keys/:keyId',

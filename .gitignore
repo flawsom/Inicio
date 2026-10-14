@@ -16,3 +16,8 @@ coverage/
 .run/
 .env*
 .neon
+
+# Python bytecode: `services/pyreadstat/test_roundtrip.py` imports `worker.py` from the
+# same directory, so running it leaves a __pycache__ beside the service's source.
+__pycache__/
+*.pyc

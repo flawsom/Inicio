@@ -1,4 +1,4 @@
-import type { ExportDataset } from '@inicio/engine';
+import { statisticalPayload, type ExportDataset } from '@inicio/engine';
 import { env } from '../env.js';
 
 /**
@@ -65,28 +65,10 @@ export async function writeStatisticalFile(
     response = await fetch(`${baseUrl()}/write`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        format,
-        fileLabel,
-        // The dataset's own shape, sent as it is: the worker sanitises names for
-        // the format it is writing and reports what it changed, which is work that
-        // depends on the format and therefore does not belong here.
-        columns: dataset.columns.map((column) => ({
-          variable: column.variable,
-          label: column.prompt,
-          numeric: column.numeric,
-        })),
-        rows: dataset.rows,
-        // The worker maps these back by variable name, so a column the format
-        // forced it to rename still gets its labels.
-        valueLabels: dataset.valueLabels.map((label) => ({
-          variable: label.variable,
-          code: label.code,
-          label: label.label,
-        })),
-        missingCodes: dataset.codebook[0]?.missingCodes ?? [],
-        notes: dataset.meta.notes,
-      }),
+      // The body is the engine's own mapping of the dataset, not one assembled here:
+      // the same function builds the payload the end-to-end harness sends to a real
+      // worker, so what a deployment is asked to write is what the tests describe.
+      body: JSON.stringify(statisticalPayload(format, dataset, fileLabel)),
       signal: AbortSignal.timeout(env.PYREADSTAT_TIMEOUT_MS),
     });
   } catch (err) {

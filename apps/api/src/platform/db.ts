@@ -22,13 +22,35 @@ export interface PlatformUser {
 }
 
 /**
+ * Who was refused, in the audit trail's own actor form.
+ *
+ * Attached to a refusal at the point where the code knows who the caller is, because
+ * that is the only place that knows: `requireActor` has resolved a key or a session
+ * and is about to refuse it, while the error handler that writes the row sees only an
+ * error. An unauthenticated `401` attaches nothing, which is deliberate — there is no
+ * actor to attribute it to, and a row per anonymous guess is a growth vector rather
+ * than a record.
+ */
+export interface RefusedActor {
+  /** `user:<uuid>` or `key:<uuid>`. */
+  actor: string;
+  meta?: Record<string, unknown>;
+}
+
+/**
  * Fastify's error handler keys off `statusCode`, so carrying it here means a route
  * can simply throw and the response still has the right status and machine-readable
  * code. `code` is our own vocabulary, not a Node error code.
  */
 export class HttpError extends Error {
   readonly statusCode: number;
-  constructor(status: number, readonly code: string, message?: string) {
+  constructor(
+    status: number,
+    readonly code: string,
+    message?: string,
+    /** Present when the refusal is attributable: the handler records it as `access.denied`. */
+    readonly audit?: RefusedActor,
+  ) {
     super(message ?? code);
     this.statusCode = status;
   }
@@ -57,10 +79,16 @@ export async function withOrg<T>(
     const role = rows[0]?.role;
     if (!role) throw new HttpError(404, 'not_found');
     if (options.roles && !options.roles.includes(role as 'owner')) {
-      throw new HttpError(403, 'forbidden', `requires role: ${options.roles.join(', ')}`);
+      throw new HttpError(403, 'forbidden', `requires role: ${options.roles.join(', ')}`, {
+        actor: `user:${userId}`,
+        meta: { orgId, role, requiredRoles: options.roles },
+      });
     }
     if (options.write && role === 'viewer') {
-      throw new HttpError(403, 'read_only_role', 'a viewer can read and export, but not change anything');
+      throw new HttpError(403, 'read_only_role', 'a viewer can read and export, but not change anything', {
+        actor: `user:${userId}`,
+        meta: { orgId, role },
+      });
     }
     return fn(client);
   });

@@ -14,7 +14,8 @@
     "db:migrate": "tsx src/db/migrate-cli.ts",
     "admin:create": "tsx src/admin/create.ts",
     "bootstrap:owner": "tsx scripts/bootstrap-owner.ts",
-    "webhooks:drain": "tsx scripts/webhooks-drain.ts"
+    "webhooks:drain": "tsx scripts/webhooks-drain.ts",
+    "roundtrip:statistical": "tsx scripts/roundtrip-statistical.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.1",
