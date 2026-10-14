@@ -1,6 +1,6 @@
 {
-  "base": "https://inicio.unifies.codes",
-  "at": "2026-10-14T05:08:41.307Z",
+  "base": "http://127.0.0.1:3000",
+  "at": "2026-10-14T14:37:46.707Z",
   "checks": [
     {
       "name": "the landing read its figures from the API in this request",
@@ -10,17 +10,37 @@
     {
       "name": "the WebGL scene drew a frame",
       "ok": true,
-      "detail": "{\"width\":1440,\"height\":1000,\"drawn\":true}"
+      "detail": "{\"width\":1440,\"height\":1000,\"drawn\":true,\"ready\":true,\"beats\":6,\"silentBeat\":1,\"journeyHeight\":7000}"
+    },
+    {
+      "name": "the flight rendered its six beats",
+      "ok": true,
+      "detail": "{\"width\":1440,\"height\":1000,\"drawn\":true,\"ready\":true,\"beats\":6,\"silentBeat\":1,\"journeyHeight\":7000}"
+    },
+    {
+      "name": "the flight is at flight for its photograph",
+      "ok": true,
+      "detail": "{\"active\":\"#program\",\"text\":471}"
+    },
+    {
+      "name": "the flight is at corridor for its photograph",
+      "ok": true,
+      "detail": "{\"active\":\"#flythrough\",\"text\":0}"
+    },
+    {
+      "name": "the fly-through carries no text",
+      "ok": true,
+      "detail": "{\"active\":\"#flythrough\",\"text\":0}"
     },
     {
       "name": "the primary call to action reached /login",
       "ok": true,
-      "detail": "https://inicio.unifies.codes/login"
+      "detail": "http://127.0.0.1:3000/login"
     },
     {
       "name": "the call to action works on a phone viewport",
       "ok": true,
-      "detail": "https://inicio.unifies.codes/login"
+      "detail": "http://127.0.0.1:3000/login"
     },
     {
       "name": "nothing 4xx'd except the signed-out 401",
@@ -29,20 +49,24 @@
     }
   ],
   "consoleErrors": [
-    "Failed to load resource: the server responded with a status of 401 ()"
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
   ],
   "bad": [
-    "401 https://inicio.unifies.codes/api/v1/auth/me",
-    "[phone] 401 https://inicio.unifies.codes/api/v1/auth/me",
-    "[phone] 401 https://inicio.unifies.codes/api/v1/auth/me"
+    "401 http://127.0.0.1:3000/api/v1/auth/me",
+    "401 http://127.0.0.1:3000/api/v1/auth/me",
+    "[phone] 401 http://127.0.0.1:3000/api/v1/auth/me",
+    "[phone] 401 http://127.0.0.1:3000/api/v1/auth/me",
+    "[phone] 401 http://127.0.0.1:3000/api/v1/auth/me",
+    "[phone] 401 http://127.0.0.1:3000/api/v1/auth/me"
   ],
   "sizes": {
-    "landing-hero.jpg": "256 kB",
-    "landing-capabilities.jpg": "145 kB",
-    "landing-scene.jpg": "224 kB",
-    "landing-templates.jpg": "126 kB",
-    "login-desktop.jpg": "152 kB",
-    "landing-mobile.jpg": "170 kB",
-    "login-mobile.jpg": "141 kB"
+    "landing-hero.jpg": "122 kB",
+    "landing-flight.jpg": "61 kB",
+    "landing-corridor.jpg": "31 kB",
+    "landing-templates.jpg": "99 kB",
+    "login-desktop.jpg": "153 kB",
+    "landing-mobile.jpg": "136 kB",
+    "login-mobile.jpg": "137 kB"
   }
 }

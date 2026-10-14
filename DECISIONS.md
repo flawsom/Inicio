@@ -1374,3 +1374,412 @@ are not measured here: the deployment has no collection link to walk, and creati
 throwaway organisation into the production database and real bytes into its bucket. Both are stated as
 unmeasured in the changelog rather than assumed, which is the same standard the roadmap holds the frame
 rate of two canvases to.
+
+## D41 — A version diff is computed from the two stored definitions, on the graph's own edge
+
+**Context.** Versions were immutable and restores already forked rather than rewrote, and `form_version`
+has recorded `based_on` since `0003_platform.sql`. What was missing was the sentence: a version's row said
+`v3 · draft · 12 question(s)`, and the question a reviewer actually asks — what changed between the version
+I approved and this one, and who changed it? — had no answer in the product. A history that cannot say what
+changed is a list of numbers, and the reason `based_on` exists at all is that a restore makes the version
+one *before* a version not necessarily the one it descends from.
+
+**Decision: the comparison is the API's, computed from the two rows it just read, and the console renders
+its sentences verbatim.** Three consequences, all deliberate.
+
+*The comparison could not be a client-side one.* The console holds the definition it is editing; the two
+definitions a history is about are the stored ones. A diff computed in the browser from the loaded draft
+would be a second opinion about history, and the one thing a version history has to be is true.
+
+*It is a graph, so the edge is `based_on`, in that order of preference.* The route compares against the
+version named in `?against=`, else the version this one was forked from, else the version numbered
+immediately before it — which keeps the old behaviour for rows written before `based_on` was used for
+restores, and gives the right answer for the case that motivated this: a draft restored from v1 while v2
+sits between them. Restore and "new draft from published" both set `based_on`, and the console does not
+claim to tell them apart, because the distinction is not in the data; inventing one would be a label the
+database cannot support.
+
+*A missing comparison is `null`, not an empty diff.* A first version has nothing before it, and "nothing
+changed" and "there is nothing to compare with" are different facts. `diff: null` is what lets the screen
+say *this is where the form started*.
+
+**Where the wording lives.** In the engine, beside the analyser, because the sentences are a description of
+the schema and both packages already share that vocabulary. `diffDefinitions` matches questions by **name
+and never by `id`** (an id is a row identity and a name is what an answer is keyed by, which is the same
+rule the export follows), reports label changes per language with the language code and both texts, and
+refuses to compare option sets that come from different sources: when a question moves from one shared list
+to another, the sets are apples and oranges and diffing them would report every option as removed and
+re-added. That case pushes a note instead. Any field the diff does not describe in words (`appearance`, a
+`default`, an unknown key) emits "also changed in a way this diff does not describe" **and a note**, so two
+different definitions can never come back `identical: true` — a comparison that quietly rounds to "nothing
+changed" is the failure mode of every diff UI.
+
+**What holds it.** `packages/engine/test/diff.test.ts` (23 tests) asserts the sentences themselves rather
+than their count: identical definitions, an added and a removed question, a per-language label change, a
+choice added and removed, mandatory flipping, a rule change, a reorder, a repeat flag change, a question
+missing every optional field, an empty-versus-populated instrument, and both directions of the
+options-from-a-different-source case. `apps/web/test/version-history.test.tsx` (5 tests) mounts the console
+component over a fake API and holds the three claims a unit test cannot: the lineage line names the version
+this one was forked from *and not the one above it*, the sentences on screen are the ones that arrived over
+the wire (`v1 → v3: 1 added, 0 removed, 1 changed.` plus both sentences and the partial-comparison note), a
+first version says where the form started, and restore is offered only on a version that is not already
+editable, reports both numbers, and surfaces the server's own refusal when it is refused.
+
+**What this does not prove.** No browser pass: the tests mount the component in jsdom against a stubbed
+`fetch`, so the layout of a real version row at 320 px is unmeasured, and the changelog says so.
+
+## D42 — The statistical file is read back by something, and it was wrong
+
+**Context.** `.sav` and `.dta` are the one output this repository cannot produce itself: the writer is
+`pyreadstat`, in Python, deployed as a separate service on purpose (D9's refusal rather than a fabricated
+file, D30's hand-written signing for the same reason). That split left a hole exactly where the risk is.
+The API's suite stubs the worker over a local HTTP server, so it sees the *JSON it posts*; nothing saw the
+bytes the worker wrote. "It reported no notes" was the whole of the evidence that a `.sav` opened correctly
+in SPSS.
+
+**Decision: the worker's output is verified by reading it back, and the two properties that cannot be read
+back are printed as unverifiable rather than counted as passes.** `services/pyreadstat/test_roundtrip.py`
+builds a representative payload — the repeat group's contact, two languages, value labels on a numeric and a
+string variable, the four missing codes, a blank numeric, a blank string, a short row, and names needing
+sanitising, truncating and un-reserving — writes both formats through the worker's own `build()`, and reads
+them with `pyreadstat.read_sav`/`read_dta`. It is a script and not a CI job for the same reason the worker is
+a separate service: the runner is Node and the build image has no Python in it.
+
+**It found two defects on its first run, and both were the failure mode this project refuses.**
+
+The declared missing codes never reached a `.sav`. `pyreadstat` takes `missing_ranges` as a dict keyed by
+variable, and the worker passed a flat list of `{value, label}` dicts; the resulting `TypeError` hit an
+all-or-nothing fallback that dropped the missing ranges **and** the file label while announcing "this
+pyreadstat build does not accept missing ranges/file label" — a note that was wrong about the cause and
+cost a property nobody had asked to give up. Two things were wrong underneath it: the argument's shape, and
+the fact that SPSS accepts at most three discrete missing values per variable while the engine declares
+four. The declaration is now one contiguous range per numeric variable (`-99`…`-96`), which states the same
+four codes exactly, is what SPSS's own dialog shows, and cannot be mistaken for a value somebody answered;
+and an unsupported argument is now dropped one at a time, named, with an unknown `TypeError` re-raised
+rather than guessed at.
+
+The worse defect was silent. A `.dta` attached every string variable's value labels to the value `0`:
+`{'0': 'In progress'}`, `{'0': 'हो सकता है'}`. Stata attaches value labels to numeric values, and
+`pyreadstat.write_dta` does not refuse a label for a string variable — it writes it against zero. So every
+option of every select question, and the response status itself, arrived as "the label of 0", with no note
+and nothing in the file to say which option was which. This is the exact class of file the whole split
+exists to avoid: not a refusal, a plausible-looking export that is wrong at the analysis step. Stata cannot
+carry those labels, so they are now dropped, counted, and named per variable in the notes — and for a
+`.dta` the **codebook that ships beside the file** (`?codebook=1`) is where a reader finds the option codes,
+which is the honest answer to a format limit rather than a document nobody needed to make.
+
+**What is measured, and what is only written.** The declaration's presence is measured by difference: the
+same payload written with and without the missing codes differs by 64 bytes. Its *meaning* is not —
+`pyreadstat`'s reader reports `missing_ranges: {}` even for a file it wrote itself, so the round trip prints
+`not verifiable` with that evidence rather than an `ok`, and the claim that SPSS treats those values as
+missing rests on pyreadstat's documented contract. A `.dta` has no such declaration at all (Stata's
+equivalent is the extended missing values `.a`…`.z`, which the writer does not produce), and what is checked
+there is that the export **says so** in its notes — a Stata file that is silent about this is a researcher
+who imports it and finds `-99` in a mean. The same asymmetry decides the codebook: for `.sav` it is
+supplementary documentation, for `.dta` it is the only place a string variable's codes are written down, and
+the changelog states both rather than implying the two formats carry the same thing.
+
+**What holds it.** `test_roundtrip.py` — 34 checks, `ok`/`FAIL`/`not verifiable`/`exit 2` — and
+`packages/engine/test/statistical.test.ts` for the payload contract itself: the columns with their prompts,
+the rows cell by cell (a numeric, a stored code, a blank that is neither `0` nor the word `refused`), the
+value labels, the missing table's meanings, and a non-ASCII label surviving the mapping byte for byte.
+`apps/api/scripts/roundtrip-statistical.ts` closes the last seam, from the real template through
+`buildDataset` and `statisticalPayload` into a worker it starts itself, because the Python script's payload
+is written by hand and therefore proves the *worker*, not the mapping that feeds it.
+
+## D43 — `/health` answers which build it is, and a database that is down is a `503`
+
+**Context.** `GET /health` returned `{status: 'ok', dbTime}`, which is a real database round trip and
+nothing else. An operator whose deployment is behaving oddly has one question first, *which build is
+answering?*, and the running service was in the best position to answer it and did not. The two things that
+can look like an answer are both worse: the version in `package.json` is what npm published rather than
+what is deployed (a serverless bundle is built and cached independently of the version that is on disk),
+and the migration ledger in `/api/v1/public/summary` is a statement about the *database*, which can be in
+step with the checkout while the code serving requests is a release behind. That mismatch is not
+hypothetical: it is the shape of the day this repository spent nine migrations deep with nothing red.
+
+**Decision: the version is compiled in, held to `package.json` by a test, and reported even when the
+database is dead; a dead database is a `503`.**
+
+*The literal is the design, and the test is what makes it safe.* `apps/api/src/version.ts` exports
+`APP_VERSION` as a string rather than importing `package.json`, because the API's build has `rootDir: src`,
+so a JSON import from the package root is either inlined into the bundle by a bundler (drifting from the
+published version in a way nothing would notice, since the bundled copy is the one that runs) or a runtime
+failure in production. Duplicating the number and adding `version.test.ts`, which reads `package.json` and
+fails if the two disagree, is worse taste and better truth: there is no path by which the reported version
+silently stops matching the released one.
+
+*A health check that cannot fail is not a health check.* The first revision of this change caught the
+database error and answered `200 {status: 'degraded', reason}` — which tells a probe, a load balancer and a
+uptime monitor that a deployment with no database is healthy. The version must not depend on the dependency
+that just broke, but the *status* must: so a failed round trip is `503` with `status: 'degraded'`, the
+driver's own `reason`, and the version, which is strictly more than the bare `500` the framework produced
+before (that carried neither the version nor, when the error was logged rather than serialised, the reason).
+
+**What holds it.** `apps/api/test/version.test.ts`: the reported version equals `package.json`'s and looks
+like a version; `/health` answers `200` with the version beside a database timestamp that parses; and with
+the pool's query made to reject, the answer is `503` carrying the version and a non-empty reason. The
+rejection is injected rather than manufactured by pointing the pool at a closed port, because the pool holds
+idle connections and a query against it would be served without a new TCP connection: the branch under test
+is the route's own answer, and the driver's connection error is the driver's business. `specs/openapi.yaml`
+documents both responses, so the contract cannot quietly lose the status code that makes the endpoint
+truthful, and no route set moved (`openapi.test.ts`).
+
+**What this does not prove.** That the *deployed* function reports the version: the change is in this
+checkout and arrives with the next deploy, and the README's measured table says exactly that next to the
+line it will change, rather than describing a reading nobody has taken.
+
+---
+
+## D44 — One deployment, three hostnames: the docs name the canonical one and the deploy config does too
+
+**Context.** Resolving §2.4's fifth inconsistency ("standardize on the live host") was a find-and-replace
+through the README, the badges, the examples, the sitemap, `robots.txt` and the scratch tooling, and a
+find-and-replace is only as good as the assumption behind it: that `inicio-prjct.vercel.app` and
+`inicio-six-psi.vercel.app` are alternate addresses for the deployment the README calls canonical. If they
+were three deployments, "standardize the docs on one of them" would have quietly redirected every reader
+to a service nobody verified.
+
+**The assumption, checked rather than assumed.** All three hostnames answered `200` on `/health` and
+`/api/v1/public/summary` on 2026-10-14, and the summary's `startedAt` — the compute instance's own start
+time, which a cold start moves — was **`2026-10-14T13:02:07.079Z` on all three, to the millisecond**, with
+the same database behind them (10 migrations applied, latest `0010_api_keys_webhooks_flags.sql`, PostgreSQL
+`18.6 (653b019)`). Three separate deployments would not share a start time to the millisecond. They are one
+deployment under three names.
+
+**Decision: the canonical host is `https://inicio.unifies.codes` in prose, in configuration and in tests;
+the platform hostnames are recorded once, as the same deployment's other names.**
+
+*Documentation cannot be the only place that agrees.* The find-and-replace had left `netlify.toml` proxying
+`/api/*`, `/auth/*` and `/health` to `inicio-six-psi.vercel.app` while the README said no example carries a
+platform hostname. A deploy config is the most consequential copy of a hostname there is, so it now names
+the canonical host, and `apps/web/test/sitemap.test.ts` asserts it: every `to =` target in `netlify.toml`
+that is a URL must be on `https://inicio.unifies.codes`. The check is a test rather than a comment for the
+same reason the `vercel.json` catch-all exclusion list is — a hostname that only prose protects is a
+hostname that drifts.
+
+*The same edit had broken a sentence, and the check found it.* The README's "what the live deployment is
+right now" section read "`https://inicio.unifies.codes` is this repository. It is the canonical host;
+`https://inicio.unifies.codes` is the same project's platform hostname" — the replace had rewritten both
+halves, leaving a sentence that says nothing and contradicts itself. It now names both platform hostnames
+and carries the measurement above.
+
+**What holds it.** The new `sitemap.test.ts` case (canonical target in every URL rule, non-vacuous: it
+fails if the list of targets is empty, and the SPA rule's `/index.html` is skipped rather than asserted),
+and the five hostname occurrences in scratch tooling (`check-live-sections.mjs`, `probe-reveal.mjs`,
+`verify-deploy-routes.mjs`, `vercel-db.mjs`) which now default to the canonical host while
+`verify-deploy-routes.mjs` still walks two names on purpose, so an alias that stops answering shows up
+there. `DECISIONS.md`'s own dated record of a check run against `inicio-six-psi.vercel.app` (D-section
+above) is left as it was: it is a record of what was probed then, not a claim about where the docs point.
+
+**What this does not prove.** That the Netlify site is deployed and serving: the token for it is still the
+one thing that step waits on (README, "Netlify — prepared, one credential away"), so the configuration is
+committed and unexercised, and the test above holds the file rather than the running site.
+
+---
+
+## D45 — Rotating an API key changes the secret and nothing else, and a key whose creator has left is refused
+
+**Context.** Scoped keys shipped with issue and revoke, and nothing between them. Changing a secret meant
+revoking and re-minting, which silently changes three things the operator did not ask to change: the row's
+identity, who the key belongs to (the *new* minter), and its expiry if the mint form is filled in again.
+"Scoped API keys as a first-class primitive" is the third differentiator this product claims, and rotation is
+the part of a credential's life that the forums complain about most often after revocation itself.
+
+**Decision: `POST /orgs/:orgId/api-keys/:keyId/rotate` revokes the key and issues its successor in one
+transaction, preserving the creator, the scopes and the expiry, and the old secret dies immediately.**
+
+*Preserving the creator is the security property, not a convenience.* Every policy in this schema authorises
+through `membership` (0003), which is why a key is bound to its creator: it inherits exactly the boundary a
+browser session has. Had the successor been bound to whoever pressed Rotate, an admin rotating a member's key
+would have handed themselves a credential with the member's reach and their own, which is a privilege change
+dressed as maintenance. The same reasoning covers the expiry: recomputing it would make rotation a quiet way
+to keep a grant alive past the study it was issued for. So the insert takes `old.user_id`, `old.scopes` and
+`old.expires_at`, and the test asserts all three against the previous row rather than trusting the shape.
+
+*Immediate death, not a grace window.* The requirement is that a rotated key stops working within 60 seconds.
+A refusal on the very next request is stronger and simpler: there is no overlap interval in which two live
+secrets exist, and nothing has to be swept up afterwards. The test asserts the old secret's next request is
+`401 invalid_api_key` and the new secret's is `200`, in that order, through the real API.
+
+*The refusal for a departed creator is inside the transaction.* A key whose creator is no longer a member
+would rotate into a credential that authenticates and then reaches nothing, because the membership check is
+the authorisation. Answering `201` there would be a lie with a copyable secret attached, so the route answers
+`409 creator_not_a_member` and says to revoke it and create a new one instead. It is thrown *after* the
+revocation `UPDATE` in the same transaction, so the rollback matters: the test asserts the original key is
+still `active` with `revoked_at IS NULL` afterwards. A refusal that leaves the organisation holding neither
+the old key nor a replacement would be a worse outcome than the refusal itself.
+
+**What holds it.** `apps/api/test/api-keys.test.ts` — the rotation end to end, including the audit row's
+metadata (`previousPrefix`, `prefix`, and a negative assertion that neither secret appears anywhere in it),
+an already-revoked key answering `404` with no third row minted, a member refused with `403`, and the
+left-creator case. `apps/web/test/integrations-view.test.tsx` holds the control: the confirmation names the
+prefix that is about to stop working, the panel is rewritten with the successor's secret in a read-only field,
+and a member is offered no Rotate button at all. `specs/openapi.yaml` documents the path, and
+`openapi.test.ts` fails when a mounted route is undocumented — checked by breaking that path on purpose and
+watching it report "in the code but not in specs/openapi.yaml", then restoring it.
+
+**What this does not prove.** That a rotation in progress is safe for the caller: the old secret stops
+working on its next request, so an integration that is mid-sync when an operator presses Rotate sees a `401`
+and must be handed the new secret. That is the intended trade (a second live secret is the thing rotation is
+for), but it is a trade, and it is stated on the confirmation dialog rather than left to be discovered.
+
+---
+
+## D46 — A refusal by an actor we can name is written to the audit trail; an anonymous one is not
+
+**Context.** The requirement on a scoped key is that a refused write answers `403` **and leaves an audit
+entry**. The `403` was there, in the vocabulary it should be (`insufficient_scope` naming the scope,
+`key_not_permitted`, `key_org_mismatch`), and nothing was recorded: the resolution and the refusal both happen
+inside `requireActor`, which threw and returned. A key that spent an afternoon probing routes it could not
+call left no trace of it, which is precisely the trace a CTO's review asks for (ER-3: "every authentication,
+authorization, data access...").
+
+**Decision: a refusal is recorded when the code has just resolved who the caller is, and only then.**
+
+*Where it lives is the whole design.* The refusal happens in the middle of authorisation, where the actor is
+known; the *writing* happens in one place, the error handler, which sees only an error. So `HttpError` carries
+an optional `RefusedActor` and the five refusals that know their actor attach it: `key_not_permitted`,
+`insufficient_scope` and `key_org_mismatch` from `requireActor`/`assertActorOrg`, and the role and read-only
+refusals from `withOrg` (which has the `userId` and the role it just read). The handler writes **one**
+`access.denied` row with the machine code, the method, the request path as the target, and the organisation,
+role and granted scopes in the metadata. One writer, five attach points, and nothing that has to remember to
+audit.
+
+*An anonymous `401` attaches nothing.* A missing, malformed, expired or revoked credential has no actor, so
+there is nothing to attribute; the row would have to be keyed on the presented bytes or the client address,
+and either way anyone on the internet can produce one per request. A log that grows with anonymous guesses is
+a cost and a distraction, and the useful signal ("this valid credential is reaching for things it cannot
+have") is exactly the case that is recorded.
+
+*The write is best-effort, and the refusal is not.* The audit insert runs after the decision and outside the
+request's transaction, wrapped so a failure is logged rather than thrown: a `403` the caller can act on must
+not become a `500` they cannot, which is the same rule the API key touch applies to a request that is
+otherwise authorised.
+
+**What holds it.** `apps/api/test/api-keys.test.ts` asserts three things rather than one: a key refused a
+write leaves exactly one row with `actor = key:<id>`, the request path as its target, and the code, method,
+organisation and granted scopes in its metadata; a member refused an owner action leaves a row carrying
+`role: member`; and an unresolved credential leaves **no** row at all. The middle assertion is what keeps this
+from becoming a key-only feature, and the last is what keeps it from becoming a per-request log.
+
+**What this does not prove.** That a denied write is attributed to a *person*: the row names the key, and a
+key is bound to its creator (D-section above), so the trail to the human is one join away rather than in the
+row itself. That join is deliberate — the key is what made the request — but it does mean an operator reading
+`access.denied` for a key they do not recognise has one step left to do.
+
+## D47 — The rate limiter counts in PostgreSQL, under two namespaces, and fails open
+
+**Problem.** `@fastify/rate-limit` was registered with its default store, a per-process LRU map. That is
+correct for one long-running process and wrong for every deployment this product actually has: the API runs as
+a serverless function whose process is recycled between requests, and the profile is horizontally scaled
+anyway. Each instance counted from zero, so a client's 121st request was refused only if it happened to reach
+the instance that had counted its 120 predecessors, and the ceiling a caller is told about (`x-ratelimit-limit`)
+was really "per process". The requirement asks for a limiter that works across instances and holds across a
+rolling restart.
+
+**Chosen.** The counter is a row (`rate_limit_counter`, migration `0011`) and the whole job is one atomic
+upsert: increment a live window, take over an expired one, and return the count with the time left. Three
+follow-on decisions, each with the alternative it rejected:
+
+- **PostgreSQL, not Valkey/Redis**, although `REDIS_URL` had been reserved for exactly this. Postgres is
+  already a hard dependency of every request and already the only state this deployment shares; a broker would
+  have to be run or paid for on a free tier and would add a second failure mode to a component whose only job is
+  to protect the first. The cost is one round trip per request that the in-memory store did not have, and that
+  is the honest price of a ceiling that means something. `REDIS_URL` stays reserved for the push fan-out, which
+  is the thing that is genuinely per-instance.
+- **Fail open, loudly.** A store error is reported as `current: 0` (the request is allowed) and the store writes
+  at most one line a minute naming the namespace and the error. The plugin swallows a store error silently when
+  `skipOnError` is set, so without that line a database problem would switch every ceiling off invisibly, which
+  is how a broken limiter comes to look exactly like a working one. The limiter is a throttle: the
+  authorisation boundary is the session, the scope and the row-level policies, and a throttle that turns a
+  database hiccup into a total outage is worse than the flood it prevents.
+- **A salted hash as the subject, and a second ceiling keyed on the link rather than the form.** A counter row
+  must not be readable as a log of who was throttled, so the table holds `sha256(pepper | subject)` and only the
+  namespace (`ip`, `link`) stays in the clear. The pepper is the deployment's existing `OTP_PEPPER`, domain
+  separated, because a new required secret would mean every running deployment had to be reconfigured before
+  the limiter worked — and the alternative to a salt is a table of raw addresses. The second ceiling reads
+  *against* the requirement's wording on purpose: several links point at one form, and a per-form ceiling would
+  let one flooded link lock out every other team on that form, while a link is both what a flood targets and the
+  unit a field team shares. The per-address ceiling still applies on top of it, so the two together are stricter
+  than either alone.
+
+**Verified, not assumed.** Fastify's `onRoute` is encapsulated and two registrations keep two counters (probed
+with a throwaway app before any of this was written, because the alternative — a second registration quietly
+covering the whole API — would have been invisible until a link-keyed bucket was created by `/health`). Two app
+instances over one database: the second refuses what the first filled, having counted nothing itself. Ten
+concurrent increments land as ten. An expired window is taken over in place. The hash is on disk and the address
+and the token are not. Only the collection routes touch the `link` namespace. A store pointed at a connection
+that fails lets the requests through and says so in one log line.
+
+**What this does not fix.** CAPTCHA and disposable-domain screening on the public entry points (Phase 0 item 8),
+per-API-key ceilings (FR-8.2), and bot detection on anonymous forms. And the migration is not applied in
+production: the deployment is serving the build that predates `0011`, so once this build is deployed the limiter
+fails open (the designed behaviour, with a log line) until `pnpm db:migrate` runs there, and `pnpm drift`
+reports the checkout one migration ahead in the meantime.
+
+## D48 — The marketing page is one flight through the product, and its choreography is arithmetic
+
+**Chosen:** `/` is a single continuous camera journey through six beats of the product, in the order the
+software actually works — the questionnaire as a program (24 question slabs rising into a staggered arc,
+wired by relevance, constraint and calculation filaments), offline collection (three device clusters
+streaming to a hub, one losing signal, keeping what it collects while it glows, handing it over in a burst
+when it returns), conflict retention (server and device orbs orbiting one centre that never merge), a
+fly-through through a corridor of form slabs with the camera banking and levelling out, three sealed tenant
+realms ringed by boundary membranes, and the invitation. The hero is **typography with no 3D object in it**
+(the scene fades in as the headline scrolls away), the copy inside the flight is set as type rather than as
+panels of tiles, and there is no card and no stat grid on the page.
+
+**Why one flight instead of sections.** DP-4 says motion means something, and DP-1 says the worst moment is
+the demo. A page that shows the product's own data model — questions as nodes, logic as filaments,
+disagreements as pairs, tenants as rings — *is* the demo, and a grid of feature cards is the same claims
+with less evidence behind them. Every object in the scene therefore depicts something the software does,
+which is also what removed the abstract sculpture and the film grain from the page it replaced. The
+framework is the DP principles this decision is judged against: DP-1 (the flight is what a tired enumerator
+sees first), DP-2 (each beat ends by naming where the claim can be checked in the product, and the page
+prints no figure at all rather than an old one when the API does not answer), DP-3 (the flight is the dark
+surface, the reading below it is white paper, and the two are never mixed in one screen), DP-6 (no em dash
+reaches a reader; the copy names the object it acts on).
+
+**Why the choreography lives in its own module as arithmetic.** `apps/web/src/immersive/choreography.ts`
+imports no renderer and decides everything worth arguing about: where the camera stands at any progress,
+when each beat hands over to the next, when the disconnected device returns, and the rule that the share of
+everything collected that has reached the hub **never decreases**. Two things follow. A scene needs a GPU and
+a camera path does not, so the claims are unit tested (14 tests) rather than admired; and the page imports
+the same module for its own beat list, so the copy and the camera cannot disagree about how many beats there
+are. The one beat that is entirely a camera move — the corridor — carries no words at all, on purpose:
+breathing room is a mechanic, and the page's own test asserts that panel is empty rather than stylistically
+quiet.
+
+**Why reduced motion is a complete path rather than a degraded one.** DP-7. Under
+`prefers-reduced-motion` the instrument draws one frame per scroll position and never starts a loop, with
+the same beats, the same camera poses and the same arcs — only the idle motion is absent. Measured rather
+than asserted: nothing draws at rest, and the whole page costs 186 draw calls against 621 with the loop
+running. The cheaper tier (`quality: 'low'`) is a separate decision from reduced motion: it triggers under
+860 px or on a device reporting four cores, and it reduces counts rather than changing the journey.
+
+**Why the no-WebGL path is a real path.** Context creation is the one thing that genuinely fails on real
+devices, so `createInstrument` returns `null` rather than throwing, the canvas is `aria-hidden`, and the
+page is complete and readable without it. The jsdom suite mocks exactly that return value, so the fallback
+is the path most of the test file exercises.
+
+**Verified, not assumed.** A headless Chromium with software GL: a live `WebGL 2.0` context on
+`canvas.linstrument`, 621 draw calls across the flight at 1440×1000 and 824 at 390×844, the progress rail
+reaching all six beats, 0 px of sideways overflow at 1440 and at 360, no console error beyond the two
+signed-out `401`s this deployment always answers, and the reduced-motion numbers above. The same pass found
+two defects in `scripts/screenshots.mjs` that no picture could show. Its GL flags
+(`--use-gl=swiftshader`) are refused by this Chromium, so every photograph would have been of the
+**no-WebGL fallback** and the run would not have known. And the check written to catch exactly that was
+reading the *first* canvas on the page, which since the trail moved onto a canvas of its own is the cursor
+trail's 2D context rather than the scene, so a scene drawing perfectly was reported as not drawing, for a
+reason that was not the flags. The flags are now `--use-gl=angle --use-angle=swiftshader --disable-gpu-sandbox`, the canvas is
+named, the photographs are taken at points *in the choreography* (15 % and 63 % of the flight) with the
+active beat and the empty corridor asserted, and the capture report records the address the images came from,
+so a picture cannot silently be of a different build.
+
+**What this does not fix.** Frame rate and GPU cost on real hardware: a software rasteriser cannot answer
+that, and the roadmap row says so rather than quoting a number from SwiftShader. The manual WCAG 2.2 AA
+audit with a screen reader (axe-core and the measured contrast pairs are not the same thing), and the
+Lighthouse budget, both still outstanding. And the immersive bar is deliberately **not** applied to the
+console: DP-3 puts the authenticated product on paper, dense and fast, with the dark material reserved for
+focus moments, so the flight is a marketing surface rather than a direction the workspace should follow.

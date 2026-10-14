@@ -29,7 +29,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const OUT = join(HERE, '..', 'docs', 'assets', 'screenshots');
 
 const arg = process.argv.indexOf('--base');
-const BASE = arg === -1 ? 'https://inicio-prjct.vercel.app' : (process.argv[arg + 1] ?? '');
+// The canonical host, which is the one `docs/assets/screenshots/capture-report.json` names.
+// The platform hostname (inicio-prjct.vercel.app) resolves to the same project; `--base`
+// takes either, and the default is the address a reader of this repository would visit.
+const BASE = arg === -1 ? 'https://inicio.unifies.codes' : (process.argv[arg + 1] ?? '');
 
 let chromium;
 try {
@@ -48,9 +51,21 @@ const check = (name, ok, detail = '') => checks.push({ name, ok: Boolean(ok), de
 const bad = [];
 const errors = [];
 
+// The GL flags are the ones this chromium actually accepts. It allows one implementation,
+// `egl-angle`, and refuses both `--use-gl=swiftshader`, which it maps to `gl=none`, and
+// `--use-angle=swiftshader` without `--disable-gpu-sandbox` — in each case the context
+// creation fails and the page draws its no-WebGL fallback, so the shots would be of the
+// fallback while the check below passed. Verified by creating a context before the run:
+// `--use-gl=angle --use-angle=swiftshader --disable-gpu-sandbox` is the combination that
+// answers `WebGL 2.0 (OpenGL ES 3.0 Chromium)`.
 const browser = await chromium.launch({
   channel: 'chromium',
-  args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--disable-gpu-sandbox'],
+  args: [
+    '--enable-unsafe-swiftshader',
+    '--disable-gpu-sandbox',
+    '--use-gl=angle',
+    '--use-angle=swiftshader',
+  ],
 });
 
 const sizes = {};
@@ -88,23 +103,58 @@ await page.goto(`${BASE}/`, { waitUntil: 'load' });
 check('the landing read its figures from the API in this request', (await summary)?.status() === 200);
 await page.waitForTimeout(4000);
 
+// The canvas is named, not guessed. A trail canvas is mounted on every route, so
+// `querySelector('canvas')` answers with a 2D context and the check would fail on a page
+// whose scene was drawing perfectly.
 const scene = await page.evaluate(() => {
-  const canvas = document.querySelector('canvas');
+  const canvas = document.querySelector('canvas.linstrument');
   const context = canvas?.getContext('webgl2') ?? canvas?.getContext('webgl');
-  return { width: canvas?.width ?? 0, height: canvas?.height ?? 0, drawn: Boolean(context) };
+  const journey = document.getElementById('landing-journey');
+  return {
+    width: canvas?.width ?? 0,
+    height: canvas?.height ?? 0,
+    drawn: Boolean(context),
+    ready: canvas?.classList.contains('ready') ?? false,
+    beats: document.querySelectorAll('.lbeat').length,
+    silentBeat: document.querySelectorAll('.lbeat-silent').length,
+    journeyHeight: journey?.offsetHeight ?? 0,
+  };
 });
-check('the WebGL scene drew a frame', scene.drawn && scene.width > 300, JSON.stringify(scene));
+check('the WebGL scene drew a frame', scene.drawn && scene.ready && scene.width > 300, JSON.stringify(scene));
+check('the flight rendered its six beats', scene.beats === 6 && scene.silentBeat === 1, JSON.stringify(scene));
 await shot(page, 'landing-hero.jpg');
 
-for (const [name, screens] of [
-  ['capabilities', 1.6],
-  ['scene', 0.85],
-  ['templates', 3.3],
+/** Scroll to a point *inside the flight* rather than to a multiple of the viewport. */
+const atFlight = (progress) =>
+  page.evaluate((fraction) => {
+    const journey = document.getElementById('landing-journey');
+    const span = Math.max(1, (journey?.offsetHeight ?? window.innerHeight) - window.innerHeight);
+    window.scrollTo(0, (journey?.offsetTop ?? 0) + span * fraction);
+  }, progress);
+
+// Three moments of the flight, each at a point in the choreography rather than at a
+// scroll offset that happened to look right once: the arc of question slabs is assembled
+// and wired by 0.15, the corridor is mid-fly-through at 0.63, and the corridor carries no
+// text at all, which is asserted rather than admired.
+for (const [name, progress] of [
+  ['flight', 0.15],
+  ['corridor', 0.63],
 ]) {
-  await page.evaluate((factor) => window.scrollTo(0, window.innerHeight * factor), screens);
-  await page.waitForTimeout(2000);
+  await atFlight(progress);
+  await page.waitForTimeout(2400);
+  const beat = await page.evaluate(() => {
+    const active = document.querySelector('.lrail-dot.in')?.getAttribute('href') ?? null;
+    const section = active ? document.getElementById(active.slice(1)) : null;
+    return { active, text: (section?.textContent ?? '').trim().length };
+  });
+  check(`the flight is at ${name} for its photograph`, beat.active === (name === 'corridor' ? '#flythrough' : '#program'), JSON.stringify(beat));
+  if (name === 'corridor') check('the fly-through carries no text', beat.text === 0, JSON.stringify(beat));
   await shot(page, `landing-${name}.jpg`);
 }
+
+await page.evaluate(() => document.getElementById('templates')?.scrollIntoView({ block: 'start' }));
+await page.waitForTimeout(2000);
+await shot(page, 'landing-templates.jpg');
 
 await page.evaluate(() => window.scrollTo(0, 0));
 await page.waitForTimeout(1200);

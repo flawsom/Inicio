@@ -11,6 +11,164 @@ what changed and why.
 
 ### Added
 
+- **The rate limiter is durable, so a ceiling means something on a serverless deployment.** `@fastify/rate-limit`
+  was registered with its default store, a per-process LRU map, which is the one thing a limit must not be here:
+  the API runs as a function whose process is recycled between requests, so each instance counted from zero and
+  a 121st request was refused only where the 120 before it had happened to land. The counter is now a row
+  (`rate_limit_counter`, migration `0011`) and one atomic upsert per request increments a live window, takes
+  over an expired one and returns the count with the time left, which is what makes the ceiling survive a
+  second instance, a rolling restart and the next cold start. Three properties are decisions rather than
+  details: the table holds a **salted hash** of each bucket's subject and never an address or a token, so it
+  cannot be read back as a log of who was throttled; a limiter that **cannot reach the database fails open**,
+  with one line a minute naming the namespace, because a throttle that turns a database hiccup into an outage
+  is worse than the flood it prevents (and the plugin swallows that error silently, so the store is the only
+  visibility there is); and public collection carries a **second, independent ceiling keyed on the distribution
+  link** on top of the per-address one, since a link is what a flood targets and what a field team shares, so a
+  flooded link cannot lock out another team on the same form. Held by eight new tests, including two app
+  instances over one database where the second refuses what the first filled while having counted nothing
+  itself — the thing the store this replaced could not do. **Deploying this needs `pnpm db:migrate` in the same
+  window:** until `0011` is applied where the new build serves, the limiter fails open (the designed behaviour,
+  and the log says so) and `pnpm drift` reports the checkout one migration ahead.
+- **An API key can be rotated, and rotation cannot do more than it says.** The machine surface had issue and
+  revoke and nothing in between: changing a key's secret meant revoking it and minting a replacement, which
+  produces a new row, a new creator, a new expiry and a window in which the integration has no working
+  credential. `POST /orgs/:orgId/api-keys/:keyId/rotate` revokes the key and issues its successor in one
+  transaction, returning the new secret once. Three properties are load-bearing rather than incidental. The
+  **successor keeps the original creator, the same scopes and the same expiry**: rotation changes the secret
+  and nothing else, so an admin rotating a member's key cannot move that credential's authority onto
+  themselves, and rotating cannot quietly keep a lapsed grant alive. The **old secret is refused on its very
+  next request** rather than after a grace window, which is what an integration rotating a key expects and is
+  strictly stronger than the "within 60 seconds" the requirement asks for; an overlap window would be a second
+  live credential nobody is watching. And a key **whose creator has left the organisation is refused** with
+  `409 creator_not_a_member` naming the action to take instead, thrown inside the transaction so the refusal
+  rolls back the revocation it had already made: the membership check is what authorises every policy in this
+  schema, so the successor would have authenticated and then reached nothing, and a `201` handing over a dead
+  key is worse than a refusal that explains itself. Held by three tests — the rotation end to end (successor's
+  `user_id`, scopes and expiry equal to the previous key's, its hash on disk and not its secret, the audit row
+  naming both prefixes and neither secret), a member refused and an already-revoked key `404` with no third row
+  minted, and the left-creator refusal asserted to change nothing — plus the console control: a Rotate button on
+  each row whose confirmation names the prefix about to stop working, and a secret panel rewritten in place.
+- **A refusal by a named actor is now written down.** The requirement on a scoped key is that a refused write
+  leaves a `403` *and* an audit entry, and only the `403` existed: a key missing a scope, a key pointed at
+  another organisation, a member attempting an owner action and a viewer attempting a write were all answered
+  and then forgotten. `HttpError` now carries an optional `RefusedActor`, the code that has just resolved* who
+  the caller is* attaches it at the moment it refuses (`requireActor` for the three key refusals, `withOrg` for
+  the two role refusals), and the error handler writes one `access.denied` row with the code, the method, the
+  path, the organisation, the role and the scopes involved. Two deliberate exclusions: an anonymous `401`
+  attaches nothing, because there is no actor to attribute it to and a row per anonymous guess is a growth
+  vector rather than a record, and the write is best-effort, because a bookkeeping failure must not turn a
+  refusal into a `500` the caller cannot act on. Held by a test that asserts the row for both a key and a
+  session and asserts the *absence* of one for an unresolved credential.
+- **Three documented measurements brought back to what the tree actually does.** Rotating a key changed the
+  console bundle, so `pnpm build` + `pnpm budgets` were run rather than assumed, and the numbers they printed
+  are now the ones the README carries: the app chunk is **252.3 kB raw / 78.7 kB over the wire**, not the
+  239.9 / 75.1 the table and the performance footnote still claimed (the integration and quality screens, the
+  version history and this rotation had all landed since that reading), with the landing and instrument rows
+  corrected in the same pass. `docs/ROADMAP.md` said `pnpm test` was 388 tests; it is 461 (engine 87, api 167,
+  web 207) and the api/web rows and the "what the tests cover" entry now say what the rotation tests hold.
+  Worth flagging rather than burying: the app chunk has **1.3 kB of headroom** under its 80 kB gzip ceiling,
+  so the next feature that adds to the console is the one that trips it, and the honest fix there is a
+  decision about what leaves the critical path rather than a raised ceiling.
+- **The deployment now answers which build it is, and the Phase 0 ledger was read against the code and
+the live service instead of against the document.** `GET /health` returned `{status, dbTime}`: that the
+process was up and the database answered, and nothing about the release serving the request, which is the
+first question of any incident. It now carries `version` (`apps/api/src/version.ts`, a literal that
+`version.test.ts` holds equal to `package.json`, because the serverless bundle's `rootDir` makes a JSON
+import either inlined-and-drifting or a runtime failure), and a database that does not answer is a
+**`503`** carrying the version *and* the driver's reason. That last part is a deliberate correction to the
+first draft of this change: the version must not depend on the database that just died, but a health check
+that answers `200` with bad news in the body is one no probe can fail on, so the honest pair is "still tell
+them the build" and "fail the check". Three tests, including one that makes the round trip reject and
+asserts both the status code and that `reason` is a sentence.
+- **Five documented inconsistencies resolved against the code, one of them already closed.** (1) The test
+  count: the suite runs **461** (engine 87, web 207, api 167, the web test being the Netlify
+  canonical-host guard D44 added), and no stale count remains. (2) The migration
+  ledger, which was the interesting one: the audit note said production was at 9 migrations with `0010`
+  unapplied and therefore API keys, webhooks and flags not live. `pnpm drift` says otherwise today — the
+  deployment reports 10 applied including `0010_api_keys_webhooks_flags.sql` and is in step with this
+  checkout — and the routes that migration makes possible answer `401` signed out rather than `404`, which
+  is what a mounted authenticated route does. It was applied at some point after that reading was taken;
+  the drift job is what keeps the difference between "documented" and "deployed" visible. (3) `.sav`/
+  `.dta`: the error table still said those formats were "deliberately not implemented" and the FAQ still
+  asked why they `501`, when the truth is that they are refused only where no worker is deployed — both
+  now say so, and name `&codebook=1` and the round-trip script that reads the worker's output back. (4)
+  The design description: there is no "dark console" claim left to contradict, because `styles.css` has one
+  palette with two materials (`--surface` for the marketing surface, `--paper` for work) and the README
+  describes exactly that. (5) The deployment host: documentation, badges, examples, `scripts/screenshots.mjs`'s
+  default and `scripts/check-drift.mjs`'s usage line all name `https://inicio.unifies.codes` now, with the
+  platform hostnames recorded once as the same project's other names rather than as alternative addresses.
+  The assumption that find-and-replace rested on was measured rather than assumed: all three hostnames
+  answered, and their public summaries carried the same compute start time to the millisecond, so they are
+  one deployment under three names. Two leftovers also got fixed: `netlify.toml` was still proxying
+  `/api/*`, `/auth/*` and `/health` to `inicio-six-psi.vercel.app` (it now names the canonical host, and
+  `apps/web/test/sitemap.test.ts` asserts every URL-valued `to =` target is on it), and the README's
+  "what the live deployment is right now" sentence had been rewritten by the replace into a self-
+  contradiction that named the same hostname twice. Recorded as D44.
+- **The version history is a graph, and it now says what changed.** A published version is frozen and
+  restoring one forks a new draft rather than rewriting anything — that part was already true — but the
+  console listed versions as `v3 · draft · 12 question(s)`, so "what did this version change, and who made
+  it?" had no answer anywhere in the product. Three things close that. `packages/engine/src/diff.ts`
+  (`diffDefinitions(from, to)`) compares two definitions and returns **sentences** — `Added question
+  "gps_accuracy" (decimal).`, `"school" label in hi changed from "स्कूल" to "विद्यालय".`, `"age" choices:
+  added "dont_know"; removed "refused".` — matched by question *name*, per language, with anything it
+  cannot describe in words pushed into `notes` rather than left silent; 23 tests, including the case where
+  a question's options move from one shared list to another, where the option sets are deliberately **not**
+  diffed against each other because that compares one instrument's options with another's. `GET
+  /forms/:formId/versions/:versionId/diff` (plus `?against=`) computes that comparison from the two
+  *stored* definitions — never from anything the browser holds — and answers with the version the graph
+  says this one descends from (`based_on`) rather than the version numbered before it, because a restore
+  forks from wherever it was taken. A first version answers `diff: null`, not an empty list, so the console
+  can say "this is where the form started" instead of "nothing changed". And the Builder tab's flat list is
+  replaced by `VersionHistory`: every version with the person who created it (an email from the
+  organisation's roster, and `a former member` when they have left, because a history naming `user-1`
+  tells nobody anything), when it was created and published, which version it was forked from, an expandable
+  comparison showing the server's own sentences, and **Restore as draft** — offered only where it means
+  something (a draft is edited, not restored), asking first because it replaces the current draft, and
+  reporting both numbers (`Restored v1 as draft v4. Nothing was rewritten.`). The export refusals and
+  restores report the server's words on failure rather than "something went wrong". **Not measured:** a
+  browser pass. The five new tests in `apps/web/test/version-history.test.tsx` mount the component in jsdom
+  against a fake API; no real deployment was walked, so the layout of a version row at 320 px is unmeasured.
+  The history lands in the console's own chunk, so `pnpm budgets` reads 78.5 kB of the critical path's 80 kB
+  ceiling (from 77.3 kB) — within it, and tight enough to say out loud rather than discover on the next
+  feature.
+- **The statistical export is read back, and reading it back found two real defects.** `.sav` and `.dta` are
+  written by `services/pyreadstat`, deployed separately, and the repository's own runner is Node — so until
+  now nothing checked the bytes that service produces. `services/pyreadstat/test_roundtrip.py` does: it
+  builds a representative payload (a repeat group's contact, English and Hindi labels, value labels on a
+  numeric **and** a string variable, the engine's four missing codes, a blank numeric cell, a blank string
+  cell, a short row, and names needing sanitising, truncating and un-reserving), writes both formats through
+  the worker's own `build()`, reads them back with `pyreadstat.read_sav`/`read_dta`, and prints one line per
+  property as `ok`, `FAIL` or `not verifiable` — 34 checks. Two of them failed against a real worker, both
+  in `worker.py`, and both are the class of failure this project exists to refuse: a file that is quietly
+  wrong. The **declared missing codes never reached a `.sav`**: `pyreadstat` wants `missing_ranges` as a
+  per-variable dict, the worker passed a flat list of `{value, label}` dicts, and the `TypeError` fallback
+  then dropped the missing ranges *and* the file label together while its note blamed "this pyreadstat
+  build". They are now declared as one contiguous range per numeric variable (`-99`…`-96`, which is also
+  what SPSS's own cap of three discrete values per variable allows), the fallback drops only the argument
+  the writer names, and a `.dta` — which has no such argument at all, Stata's equivalent being extended
+  missing values that pyreadstat does not write — says so in its notes instead of staying quiet. The second
+  is worse: **a `.dta` attached the value labels of every string variable to the value `0`**, silently and
+  with no note, so each option of every select question arrived as "the label of 0" and nothing said which
+  option was which. Stata attaches value labels to numbers, so they are now dropped, counted and named per
+  variable — and the codebook that ships beside the file is where a Stata reader finds them. What could not
+  be verified is stated rather than counted as a pass: the missing-range declaration does reach the file (it
+  changes the bytes by 64) but `pyreadstat`'s reader reports `{}` even for a file it wrote itself, so that
+  line is `not verifiable` with its evidence attached.
+- **The codebook now ships beside the statistical file, and the body the worker receives has one
+  definition.** `statisticalPayload(format, dataset, fileLabel)` moved from the API into
+  `packages/engine/src/export/statistical.ts`, so the body a deployment is asked to write, the body the
+  API's own tests describe, and the body the end-to-end harness sends are one function rather than three
+  copies that agree until one is edited. `GET …/responses/export?format=sav&codebook=1` then returns the
+  data file **and** the codebook quartet the CSV bundle already carries (codebook, value labels, missing
+  table, metadata) in one archive — the bare file stays the default, because a researcher downloading a
+  `.sav` wants to double-click it, and the console offers the pair as a checkbox beside the export buttons.
+  `apps/api/scripts/roundtrip-statistical.ts` is the harness that closes the remaining seam: the real school
+  ranking template → `buildDataset` → `statisticalPayload` → `writeStatisticalFile` → a pyreadstat process
+  it starts itself → the bytes → `test_roundtrip.py` reading them back. The export buttons also stop lying:
+  `.sav`/`.dta` were rendered as a permanently disabled `Export .sav (unavailable)`, which was true before
+  the worker existed and has been false since — whether a deployment can write one is the deployment's
+  business, and the API answers for itself with a `501` naming `PYREADSTAT_WORKER_URL` or a `502` saying the
+  worker did not answer.
 - **The device can now show, and carry away, what it has not sent.** Keeping answers safe and saying
   whether the server had them was the whole of what the collection page could do about a bad connection,
   and that left three holes, each of which is a way field data is really lost. A failure was one sentence
@@ -160,13 +318,50 @@ what changed and why.
   measured round trip of the query that produced the response, the migration ledger, and the template
   library summarised by walking the real definitions. No form, response, organisation or count of any
   of them, asserted key by key in `public-summary.test.ts`.
-- **An immersive public page at `/`.** A WebGL scene built for this product's own data model (a
-  sequence of nodes wired by filaments, rearranged by scroll), loaded as its own dynamically imported
-  chunk so a signed-in user never downloads it, `aria-hidden`, stopping entirely when the tab is
-  hidden or the stage has scrolled past, with a cheaper tier on small screens and one drawn frame
-  under `prefers-reduced-motion`. Every figure on the page is read from the API in that request and
-  the panel prints the time it was read, so a live number cannot be mistaken for a decorative one.
-  Where a claim needs evidence it links to the file that implements it.
+- **The public page is one flight through the product, and the product is the content.** The page at `/`
+  was rebuilt as a six beat camera journey in the order the software actually works: a typographic hero
+  with **no 3D object in it** at all (the scene fades in as the headline scrolls away, so the first thing
+  a reader meets is a sentence rather than a render), then the questionnaire as a program — twenty four
+  question slabs rising into a staggered arc and wired by the three kinds of logic filament the engine
+  really has (relevance, constraints, calculations) — offline collection (three device clusters streaming
+  particles to a hub, one of them losing signal, keeping collecting while it glows, and handing everything
+  over in a burst when it returns), conflict retention (server and device orbs orbiting one centre that
+  never merge, because the gap between them is the point), a **fly-through with no text at all** through a
+  corridor of form slabs with the camera banking through the move and level by the end of it, tenant
+  isolation (three sealed realms ringed by boundary membranes nothing crosses), and the invitation. Every
+  object in the scene depicts something the product does, which is what removed the abstract sculpture and
+  the film grain; the copy inside the flight is set as type rather than as panels of tiles, and there is no
+  card and no stat grid on the page, because the product is the content. Two properties are load bearing
+  rather than decorative. The choreography is **arithmetic**: where the camera stands at any progress, how
+  much of the arc is assembled, when each beat hands over to the next, when the disconnected device comes
+  back, and the rule that the share of everything collected that has reached the hub **never decreases**
+  live in `apps/web/src/immersive/choreography.ts`, which imports no renderer at all, so they are unit
+  tested without a GPU — and the same module is what the page reads for its own beat list. And
+  `prefers-reduced-motion` draws **one frame per scroll position and never starts a loop**, with the same
+  beats and the same camera poses and only the idle motion absent, so it is a complete path rather than a
+  degraded one. The scene stays a dynamically imported chunk (122.2 kB gzipped, ceiling 150 kB) that a
+  signed in reader never downloads, is `aria-hidden`, drops to a cheaper tier under 860 px or on a device
+  reporting four cores, and `createInstrument` returns null rather than throwing when a context cannot be
+  created, which is the one thing that genuinely fails on real devices. Each figure on the page is still
+  read from `/api/v1/public/summary` in the request that renders it, with the time it was read printed
+  beside it, and each beat ends by naming the two taps that show that claim working rather than by
+  linking at a file.
+- **The flight, driven in a real browser rather than described.** The component tests hold the markup and
+  the arithmetic; they cannot hold whether a WebGL context is created at all, so the page was walked
+  through a headless Chromium with software GL and the numbers recorded: a live `WebGL 2.0` context on
+  `canvas.linstrument`, 621 draw calls across the flight at 1440×1000 and 824 at 390×844 (each beat
+  drawing again on every scroll step), the active chapter advancing `#program` → `#sync` → `#conflict` →
+  `#flythrough` → `#tenants` → `#invitation`, **0 px of sideways overflow at 1440 and at 360**, no console
+  error beyond the two signed-out `401`s this deployment always answers, and — the one that matters under
+  the readability rule — the reduced-motion run drawing **nothing at rest** and one frame per scroll
+  position, 186 calls for the whole page against 621 with the loop running. Two things that had been
+  assumed were wrong and are now checked in the script: the no-WebGL path is reached on this machine's
+  Chromium unless the flags are `--use-gl=angle --use-angle=swiftshader --disable-gpu-sandbox`, and
+  `querySelector('canvas')` finds the **cursor trail's** 2D context now that a trail is mounted on every
+  route, so a scene that was drawing perfectly reported as not drawing until the canvas was named. The
+  captures are of **this build** and not of the deployment: production still serves the page the flight
+  replaces, and `docs/assets/screenshots/capture-report.json` records the address each image came from so
+  that difference is visible in the repository rather than implied by a caption.
 - **Component tests for the web surfaces.** The landing page runs in jsdom (its figures come from the
   API, it stays complete when the scene returns nothing, it shows no figure rather than an old one
   when the API does not answer, and its call to action reaches `/login`), and so does the realtime
@@ -174,7 +369,10 @@ what changed and why.
   a push naming its aggregate refetches the screen, a push naming another one does not, two pushes
   inside a frame cost one read, and a minute of clock passes while the stream is live without a single
   timed request. `pnpm test` is the suite these entries describe; it stood at 169 tests when the push
-  channel shipped, and it is 256 now: 55 engine, 103 API, 98 web.
+  channel shipped, and it is 461 now: 87 engine, 167 API, 207 web — the web figure having grown with the
+  flight's own suite (the choreography as arithmetic, the hero carrying no 3D object, the six beats in
+  order with the fly-through panel empty, every other beat naming where to check its claim, no anchor
+  leaving this deployment, and the scene falling back without a canvas).
 - **File uploads: presigned, bounded, scanned, and picked from the browser.** An `image`, `audio`,
   `video` or `file` question can be authorised, uploaded around the server and verified — and now from
   the product's own interface, which was the half that was missing. A respondent gets a real file input,
@@ -360,6 +558,19 @@ what changed and why.
 
 ### Changed
 
+- **The numbers in this document, and in the README, are this build's numbers.** Rebuilding the page changed
+  what the suite covers and what the bundle weighs, so each figure quoted above and beside it was measured
+  rather than carried forward: `pnpm test` is **461** (engine 87, API 167, web 207), `pnpm coverage` is
+  engine **89.9 %** statements / 81.7 % branches / 94.3 % functions, API **84.3 / 79.1 / 92.3**, web
+  **62.5 / 77.9 / 61.4** over the whole package and **88.6 %** over the offline core
+  (`--coverage.include='src/offline/**'`), and `pnpm budgets` reports 78.7 kB of critical JavaScript, 5.1 kB
+  of critical CSS, 6.6 kB for the landing chunk (3.6 kB of it stylesheet), 7.3 kB for the studio, 122.2 kB for
+  the renderer and 1.4 kB for the cursor trail — all inside their ceilings, with 1.3 kB of headroom under the
+  80 kB critical-JS budget, which is worth repeating rather than rediscovering. Note what moved and why: the
+  web package's coverage was documented at 48.5 % and is 62.5 %, not because anything was covered that was
+  not covered before but because the six beat flight arrived with tests for its own arithmetic (`choreography.ts`
+  is at 100 % of statements) while `instrument.ts` stays at 7.9 %, which is what a WebGL renderer loop being
+  executable only in a real browser looks like in a coverage table.
 - **There is one database, and it is the one the deployment answers from.** This workspace's
   `DATABASE_URL` named one Neon project (`proud-field-04065571`, `us-east-2`, database `inicio`) while the
 deployment answered from another (`cold-leaf-32411407`, `ap-southeast-1`, database `neondb`), so
@@ -747,6 +958,29 @@ rather than reckless, and it now matters more than it did: see D37.
   failed the run over `document` and `fetch`. It is `**/.run/**` now, which is what the comment above it
   already claimed. The two errors it had been hiding in real source are fixed with it: an unnecessary
   escape in `safeFilename`'s leading-dot strip, and an unused constant in the attachments suite.
+
+### Not done
+
+- **The rest of Phase 0 of the product requirements document.** The foundation work was read off the
+  requirements document and the deployment rather than assumed, and what remains is listed here rather than
+  implied by the entries above: **backups** (a 6-hour encrypted cadence and a rehearsed restore; nothing is
+  configured and no restore has been rehearsed), a **public status page**, the **manual WCAG 2.2 AA audit**
+  with a screen reader and a keyboard (axe-core runs in CI, which is not the same thing), the **Lighthouse
+  budget** (`pnpm budgets` holds the shipped bundle to byte ceilings; nothing measures a real device's paint),
+  and **CAPTCHA plus disposable-domain screening** on the public entry points. Backups and the status page need
+  infrastructure and a provider decision rather than code, the audit and the budget need a person and a running
+  deployment, and the last needs a provider chosen with the same care as the mail relay.
+- **The N-deep outbox.** It was asked for alongside the two features above, and it is **not implemented**. The
+  device's queue is still one deep, so a device collecting for a week still keeps one response in flight at a
+  time, and a held file is still retried only while the page stays open. This release says so here rather
+  than letting two finished features imply a third, and it says *why*, because that is worth more than a
+  half-built queue in the one part of the product whose entire promise is that nothing typed is lost. The
+  depth is a property of how a response is **keyed** on the device: `offline/types.ts` keys a `StoredDraft`
+  by the distribution token, so one link holds one response, and the queue's operations (create, save,
+  submit) belong to that one draft. Holding N pending responses therefore changes the store's shape, the
+  migration of whatever is already on a respondent's device, the collect flow that drives it and `runSync`
+  — and any one of those going wrong loses answers somebody watched being saved. It is the next item in
+  [docs/ROADMAP.md](docs/ROADMAP.md) §5, with the same reasoning attached.
 
 ## [0.1.0] — 2026-10-12
 

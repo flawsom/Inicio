@@ -27,7 +27,7 @@
  * `DRIFT_URL` overrides the origin, so the same check runs against a preview deployment.
  *
  *   node scripts/check-drift.mjs
- *   DRIFT_URL=https://inicio-prjct.vercel.app node scripts/check-drift.mjs
+ *   DRIFT_URL=https://inicio.unifies.codes node scripts/check-drift.mjs
  */
 import { readdirSync } from 'node:fs';
 

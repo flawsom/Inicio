@@ -19,10 +19,10 @@ there is no signal** — and exporting data that is ready for analysis rather th
 [![License](https://img.shields.io/badge/license-Apache--2.0-15803d?style=flat-square&labelColor=191c21)](LICENSE)
 [![Build](https://img.shields.io/badge/build-clean-15803d?style=flat-square&labelColor=191c21)](#-testing)
 [![CI](https://img.shields.io/badge/CI-lint_·_types_·_tests_·_budgets-15803d?style=flat-square&labelColor=191c21)](#enforced-on-every-push)
-[![Tests](https://img.shields.io/badge/tests-388%20passing-15803d?style=flat-square&labelColor=191c21)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-461%20passing-15803d?style=flat-square&labelColor=191c21)](#-testing)
 [![Typecheck](https://img.shields.io/badge/typecheck-0%20errors-c2410c?style=flat-square&labelColor=191c21)](#-testing)
 [![Lint](https://img.shields.io/badge/lint-0%20errors-9a3412?style=flat-square&labelColor=191c21)](#-testing)
-[![Production](https://img.shields.io/badge/production-live-15803d?style=flat-square&labelColor=191c21&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app/health)
+[![Production](https://img.shields.io/badge/production-live-15803d?style=flat-square&labelColor=191c21&logo=vercel&logoColor=white)](https://inicio.unifies.codes/health)
 
 <!-- github -->
 [![Stars](https://img.shields.io/github/stars/flawsom/Inicio?style=flat-square&labelColor=191c21&color=b45309&logo=github)](https://github.com/flawsom/Inicio/stargazers)
@@ -44,7 +44,7 @@ there is no signal** — and exporting data that is ready for analysis rather th
 <br />
 
 <!-- calls to action -->
-[![Live demo](https://img.shields.io/badge/▶_OPEN_THE_LIVE_APP-c2410c?style=for-the-badge&labelColor=191c21&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app)
+[![Live demo](https://img.shields.io/badge/▶_OPEN_THE_LIVE_APP-c2410c?style=for-the-badge&labelColor=191c21&logo=vercel&logoColor=white)](https://inicio.unifies.codes)
 [![Documentation](https://img.shields.io/badge/📚_DOCUMENTATION-9a3412?style=for-the-badge&labelColor=191c21)](docs/)
 [![Installation](https://img.shields.io/badge/⚡_INSTALL_IN_5_MINUTES-15803d?style=for-the-badge&labelColor=191c21)](#-quick-start)
 [![Repository](https://img.shields.io/badge/⭐_GITHUB_REPOSITORY-191c21?style=for-the-badge&labelColor=191c21&logo=github&logoColor=white)](https://github.com/flawsom/Inicio)
@@ -233,18 +233,21 @@ promise.
 CSV bundle (data, codebook, value labels, missing codes), XLSX and JSON, generated from the definition
 version that actually collected the data.
 
-<sub>`GET /forms/:id/responses/export?format=…` — `.sav` / `.dta` are written by the pyreadstat worker (`services/pyreadstat`) when `PYREADSTAT_WORKER_URL` names one, and refused with a `501` naming that variable when it does not (D9, D30)</sub>
+<sub>`GET /forms/:id/responses/export?format=…` — `.sav` / `.dta` are written by the pyreadstat worker (`services/pyreadstat`) when `PYREADSTAT_WORKER_URL` names one, and refused with a `501` naming that variable when it does not; `&codebook=1` ships the codebook beside the data file, which is where a Stata reader finds the option codes a `.dta` cannot carry (D9, D30, D42)</sub>
 
 </td>
 </tr>
 <tr>
 <td valign="top" width="50%">
 
-### 📚 Immutable versions
+### 📚 Immutable versions, and a history that says what changed
 A published version is frozen. Responses stay attached to the version that collected them, and
-restoring an old version forks a **new** draft rather than rewriting history.
+restoring an old version forks a **new** draft rather than rewriting history. The history is a graph:
+each version records the one it was forked from, so the console shows who created it, when, which version
+it descends from, **what changed in words** (`"school" label in hi changed from "स्कूल" to "विद्यालय".`)
+and a restore that reports both numbers it touched.
 
-<sub>`POST /forms/:id/versions/:versionId/restore`</sub>
+<sub>`POST /forms/:id/versions/:versionId/restore` · `GET …/versions/:versionId/diff` · `packages/engine/src/diff.ts`</sub>
 
 </td>
 <td valign="top" width="50%">
@@ -280,9 +283,12 @@ An API key is a restricted session for the person who minted it, so it inherits 
 database already enforces and dies with their membership. It reaches a route only when that route
 *declares* the capability it needs, which makes the machine surface a list you can read. Webhooks are
 enqueued in the same transaction as the event they describe and signed over a timestamp and the body,
-so a receiver can prove a delivery is ours and cannot be replayed.
+so a receiver can prove a delivery is ours and cannot be replayed. A refusal is data too: a key missing a
+scope, a viewer attempting a write and a key pointed at another organisation are each answered `403` **and**
+written to the audit trail as `access.denied` against the actor that tried, because a denial nobody can
+reconstruct afterwards is a denial nobody can review.
 
-<sub>`Authorization: Bearer ik_…` · `POST /orgs/:orgId/api-keys` · `POST /orgs/:orgId/webhooks` · `X-Inicio-Signature`</sub>
+<sub>`Authorization: Bearer ik_…` · `POST /orgs/:orgId/api-keys` · `POST …/api-keys/:keyId/rotate` · `POST /orgs/:orgId/webhooks` · `X-Inicio-Signature`</sub>
 
 </td>
 <td valign="top" width="50%">
@@ -366,15 +372,15 @@ standing, rather than showing the definition they used to have.
 | 🔌 **An integration surface, not a token** | An API key is a restricted session for its creator: same tenant boundary, narrower reach, dead the moment they leave the team. Revocation is not a second mechanism that can drift. |
 | 🔔 **Webhooks that survive a bad receiver** | Enqueued in the publishing transaction, signed over a timestamp and the body, retried with backoff, and self-disabling with a stated reason after five consecutive failures — plus a **Send test** button that reports what the receiver actually answered. |
 | 🧾 **A quality queue, not a score** | Speeding, straight-lining, duplicates and findings raised by hand, each row showing the evidence behind it and recording who decided what, when and why. |
-| 🌌 **A public surface with nothing invented on it** | Every figure on the landing page is read in that request from `GET /api/v1/public/summary`, and the scene is decoration: it is `aria-hidden`, it stops when the tab is hidden or the stage has scrolled past, and the page is complete with no WebGL at all. |
+| 🌌 **A public surface with nothing invented on it** | The landing page is one six beat flight through the product — a typographic hero with no 3D object in it, then the questionnaire as a program, offline collection losing and regaining signal, two devices disagreeing, a silent fly-through, three sealed tenants and the invitation — and every object in it depicts something the software actually does. Every figure on the page is read in that request from `GET /api/v1/public/summary`, and the scene is decoration: it is `aria-hidden`, its own chunk, it stops when the tab is hidden or the flight has scrolled past, under `prefers-reduced-motion` it draws one frame per scroll position and never starts a loop, and the page is complete and readable with no WebGL at all. |
 | 🎨 **A brand palette with the contrast measured, not hoped for** | One palette, in both stylesheets: an orange primary (`#ea580c`) on a white ground, one near-black surface (`#191c21`) for the stage, the footer and the front door, and a peach accent that appears **only** on that surface, where it is 10:1 rather than the 1.9:1 it would be on white. The primary is two tokens for the same reason — `#ea580c` as a fill, a darker `#c2410c` as type — because the brand value is 3.6:1 as a glyph on white and text needs 4.5:1. All **26 pairs** are computed from the stylesheets in `apps/web/test/contrast.test.ts`, which also holds the two stylesheets to each other's values and asserts that the surface re-binds every colour role. |
 | 🖼️ **The brand in the things a stylesheet cannot reach** | The palette is not only CSS, and the artifacts that are not CSS are the ones that go stale: the README's drawings were still rendered in the previous navy-and-blue palette, the badges on this page were drawn in it, and the app icons — the one asset seen in every browser tab and on every home screen — were generated once before the palette existed and measured **92 % blue-dominant pixels** two palette changes later. The drawings and badges are now checked by value and the icons by decoding their pixels, in `apps/web/test/brand-assets.test.ts`; the icons are generated from the palette's own values by `pnpm icons` (`scripts/make-icons.mjs`) rather than edited, because a PNG is not something anybody re-reads. |
-| 🪞 **One product, two materials** | Every screen is made of the same two materials, and which one is a fact about the screen rather than about a visitor's operating system: paper is the workspace, the respondent's form and the reading sections of the landing page, and the surface is the first paint, the sign-in sheet, the consent and legal documents, the landing page's stage and the studio's source panel. The dark material is one class (`.surface`) that re-binds the palette for its subtree, so a card, a field or a heading added inside it arrives in the right material without a rule of its own. Over it all sits an ambient light field drawn from the same node-and-filament structure as the landing page's scene, with the same type scale, the same radius language and the same entrance. Every figure on a console screen is live, and the whole shell is complete with no canvas and under `prefers-reduced-motion`. |
+| 🪞 **One product, two materials** | Every screen is made of the same two materials, and which one is a fact about the screen rather than about a visitor's operating system: paper is the workspace, the respondent's form and the reading sections of the landing page, and the surface is the first paint, the sign-in sheet, the consent and legal documents, the landing page's stage and the studio's source panel. The dark material is one class (`.surface`) that re-binds the palette for its subtree, so a card, a field or a heading added inside it arrives in the right material without a rule of its own. Over the console sits an ambient light field of its own, drawn on a 2D canvas: nodes and filaments rather than the landing page's flight, with the same type scale, the same radius language and the same entrance. Every figure on a console screen is live, and the whole shell is complete with no canvas and under `prefers-reduced-motion`. |
 | 🏫 **A real template** | The 2026 school ranking survey — the project this platform grew out of — ships as template #1, not as the product. |
 | 📶 **Honest connection state** | "No connection. Your answers are saved on this device and will be sent automatically", plus the attempt count and the time of the next try, a **Send now** button, the timestamp the server has everything up to, and **Save a copy** / **Restore a saved copy** for the answers themselves — a file, written and read with no network at all. |
 | 🐳 **A self-hosted profile** | Compose brings up PostgreSQL 16, Valkey, MinIO, ClamAV and Mailpit, with Caddy in front. |
 | 🧪 **Two live harnesses** | 35 end-to-end consumer checks and 28 offline-sync checks drive a real database through the same origin the browser uses. Each harness prints its own pass/fail line and reports the count it actually ran. |
-| 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 388 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
+| 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 461 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
 | 🛰️ **Checked on a schedule, against production** | Every six hours `.github/workflows/drift.yml` asks the deployment which migrations its own database has applied and compares that with `main`, opening one issue when they disagree. This is the failure a green CI run cannot see: the code and its migrations agree with each other while the deployed database is behind. |
 | ⚖️ **Budgets, not intentions** | The build fails if the critical path grows past 80 kB gzipped, if any chunk passes 150 kB, if the WebGL scene *or the XLSForm writer* leaks out of its lazy chunk, if a measured colour pair drops under 4.5:1, or if `axe-core` finds a violation on the public page or the consent gate. |
 
@@ -384,7 +390,7 @@ standing, rather than showing the definition they used to have.
 
 ## 📸 Screenshots
 
-<div align="center"><sub><b>Captured, not drawn.</b> The images in this first table are photographs of the running product — headless Chromium against <a href="https://inicio-prjct.vercel.app">the live deployment</a> at 1440×1000 (desktop) and 390×844 (phone), with nothing staged: the figures on the page are the ones <code>GET /api/v1/public/summary</code> returned in that request, and the light field is the real WebGL scene. The further screens are vector renderings of the same interface, committed as SVG so they stay sharp at any zoom and cost a few kilobytes; they exist because the documentation pipeline has no signed-in session to photograph, not because the screens are imagined. Every one of them is drawn in the product's own palette, and that is asserted rather than assumed: `apps/web/test/brand-assets.test.ts` reads the drawings and fails on a colour from the palette this replaced — which is how nine of them were found still painted in the previous navy and blue, long after the stylesheets had changed.<br /><br />They are taken by <code>scripts/screenshots.mjs</code>, which asserts four things a picture cannot show — the page read its figures from the API in that request, the WebGL scene drew a frame, the call to action reaches <code>/login</code> on desktop and on a phone, and nothing 4xx'd except the signed-out <code>401</code> — and then writes both the images and <code>docs/assets/screenshots/capture-report.json</code>. That check is what found the missing tab icon: a browser's own request for <code>/favicon.ico</code> never appears as a page response.</sub></div>
+<div align="center"><sub><b>Captured, not drawn.</b> The images in this first table are photographs of the running product — headless Chromium at 1440×1000 (desktop) and 390×844 (phone), driven against a server built from this checkout, with nothing staged: the figures on the page are the ones <code>GET /api/v1/public/summary</code> returned in that request, and the scene is the real WebGL flight, drawn by software GL on a machine with no GPU. Each capture records the address it was taken from in <code>docs/assets/screenshots/capture-report.json</code>, so which build a picture came from is a fact in the repository rather than a claim about it. The further screens are vector renderings of the same interface, committed as SVG so they stay sharp at any zoom and cost a few kilobytes; they exist because the documentation pipeline has no signed-in session to photograph, not because the screens are imagined. Every one of them is drawn in the product's own palette, and that is asserted rather than assumed: `apps/web/test/brand-assets.test.ts` reads the drawings and fails on a colour from the palette this replaced — which is how nine of them were found still painted in the previous navy and blue, long after the stylesheets had changed.<br /><br />They are taken by <code>scripts/screenshots.mjs</code>, which asserts the things a picture cannot show — the page read its figures from the API in that request, the WebGL scene drew a frame and reported six beats, the camera was at the beat each photograph is named for, the fly-through carries no text at all, the call to action reaches <code>/login</code> on desktop and on a phone, and nothing 4xx'd except the signed-out <code>401</code> — and then writes both the images and the report. Two of those checks exist because the pictures were nearly wrong in ways nobody could have seen: the GL flag combination this Chromium accepts is a narrower one, and the flags it had would have photographed the fallback without a scene in it; and a canvas is mounted on every route now, so the check that was meant to notice a scene that failed to draw was reading the cursor trail's 2D context instead of the scene. That same class of check is what found the missing tab icon: a browser's own request for <code>/favicon.ico</code> never appears as a page response.</sub></div>
 
 <br />
 
@@ -392,38 +398,38 @@ standing, rather than showing the definition they used to have.
 <tr>
 <td colspan="2" align="center">
 
-<img src="./docs/assets/screenshots/landing-hero.jpg" alt="The live landing page: the headline, the invitation-only note and the light field behind them, captured from the deployment" width="100%" />
+<img src="./docs/assets/screenshots/landing-hero.jpg" alt="The landing page's first viewport: three lines of headline type on the dark surface, with no 3D object in front of them" width="100%" />
 
-**🌐 The landing page — captured from production**
-<br /><sub>Every figure read from the API in that request · the scene is the real WebGL field · 1440×1000</sub>
-
-</td>
-</tr>
-<tr>
-<td valign="top" width="50%" align="center">
-
-<img src="./docs/assets/screenshots/landing-scene.jpg" alt="The light field arranged by scroll: nodes and filaments drawn from the product's own data model" width="100%" />
-
-**✨ The light field, scrolled**
-<br /><sub>One path and five fills per frame, rearranged as the page is scrolled</sub>
-
-</td>
-<td valign="top" width="50%" align="center">
-
-<img src="./docs/assets/screenshots/landing-capabilities.jpg" alt="The capabilities section: each finished claim, with where to check it in the product" width="100%" />
-
-**🧭 Capabilities, claim by claim**
-<br /><sub>Each claim ends by naming the two taps that show it working, in the deployment rather than in a file</sub>
+**🌐 The landing page — the hero is type, not a render**
+<br /><sub>Measured in the capture: 81 % of the frame is the dark surface, and the warm pixels outnumber the cool ones by 59 to 1 · 1440×1000</sub>
 
 </td>
 </tr>
 <tr>
 <td valign="top" width="50%" align="center">
 
-<img src="./docs/assets/screenshots/landing-templates.jpg" alt="The template library, summarised by walking the real definitions" width="100%" />
+<img src="./docs/assets/screenshots/landing-flight.jpg" alt="The first beat of the flight: twenty four question slabs risen into an arc, joined by the three kinds of logic filament" width="100%" />
 
-**🏫 The template library**
-<br /><sub>Summarised by walking the real definitions, not from a declared list</sub>
+**🧩 Beat one, the questionnaire as a program**
+<br /><sub>Twenty four slabs in a staggered arc, then the relevance, constraint and calculation filaments drawn between them · photographed at 15 % of the flight</sub>
+
+</td>
+<td valign="top" width="50%" align="center">
+
+<img src="./docs/assets/screenshots/landing-corridor.jpg" alt="The silent fly-through: a corridor of form slabs seen from inside it, with no text on the page" width="100%" />
+
+**🎥 The fly-through, which says nothing**
+<br /><sub>The one beat with no text at all: 0 characters in the active panel, 91 % of the frame is the surface, and the camera banks · photographed at 63 % of the flight</sub>
+
+</td>
+</tr>
+<tr>
+<td valign="top" width="50%" align="center">
+
+<img src="./docs/assets/screenshots/landing-templates.jpg" alt="Where the flight lands: the light paper section, with the template library set as text rather than as cards" width="100%" />
+
+**📄 Where the flight lands: paper**
+<br /><sub>The flight is the dark surface and the reading is white paper, never mixed in one screen (DP-3) · 97 % of this frame is the light ground</sub>
 
 </td>
 <td valign="top" width="50%" align="center">
@@ -438,10 +444,10 @@ standing, rather than showing the definition they used to have.
 <tr>
 <td colspan="2" align="center">
 
-<img src="./docs/assets/screenshots/landing-mobile.jpg" alt="The landing page on a phone: the same figures, the same claims, the cheaper scene tier" width="100%" style="max-width:420px" />
+<img src="./docs/assets/screenshots/landing-mobile.jpg" alt="The landing page on a phone: the same headline, the same six beats, the cheaper scene tier" width="100%" style="max-width:420px" />
 
 **📱 The landing page — phone**
-<br /><sub>A cheaper scene tier under 900 px, and nothing else about the page changes</sub>
+<br /><sub>A cheaper scene tier under 900 px and nothing else about the page changes · 390×844, and a separate pass at 360 px wide found no sideways scroll</sub>
 
 </td>
 </tr>
@@ -536,8 +542,8 @@ instead of rewriting the version that is already collecting.
 
 <div align="center">
 
-[![Open the live deployment](https://img.shields.io/badge/▶_TRY_IT_LIVE-inicio--prjct.vercel.app-c2410c?style=for-the-badge&labelColor=191c21&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app)
-[![Health check](https://img.shields.io/badge/🩺_/health-JSON_read_with_a_real_db_time-15803d?style=for-the-badge&labelColor=191c21)](https://inicio-prjct.vercel.app/health)
+[![Open the live deployment](https://img.shields.io/badge/▶_TRY_IT_LIVE-inicio.unifies.codes-c2410c?style=for-the-badge&labelColor=191c21&logo=vercel&logoColor=white)](https://inicio.unifies.codes)
+[![Health check](https://img.shields.io/badge/🩺_/health-JSON_read_with_a_real_db_time-15803d?style=for-the-badge&labelColor=191c21)](https://inicio.unifies.codes/health)
 
 </div>
 
@@ -749,8 +755,8 @@ Three consequences worth stating plainly:
 <br />
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL_16-4169e1?style=flat-square&labelColor=191c21&logo=postgresql&logoColor=white)
 ![Row level security](https://img.shields.io/badge/row_level_security-enforced-15803d?style=flat-square&labelColor=191c21)
-![Migrations](https://img.shields.io/badge/migrations-0001_to_0010-6b7280?style=flat-square&labelColor=191c21)
-<br /><sub>Ten forward-only SQL migrations. No ORM: typed repository functions, parameterised queries, and RLS underneath all of them.</sub>
+![Migrations](https://img.shields.io/badge/migrations-0001_to_0011-6b7280?style=flat-square&labelColor=191c21)
+<br /><sub>Eleven forward-only SQL migrations. No ORM: typed repository functions, parameterised queries, and RLS underneath all of them.</sub>
 
 **☁️ Cloud & delivery**
 <br />
@@ -904,7 +910,7 @@ Open **http://localhost:3000**, request a one-time code, read it in Mailpit, and
 ```bash
 pnpm lint        # ESLint 9, flat config
 pnpm typecheck   # tsc across four workspace packages
-pnpm test        # 388 tests
+pnpm test        # 461 tests
 pnpm coverage     # v8 coverage, per package
 pnpm build       # engine -> api -> web
 pnpm budgets     # the built bundle, gzipped, against its ceilings
@@ -991,7 +997,7 @@ Inicio
 │   │   │   ├── events.ts            the push channel: one server-sent event stream per form
 │   │   │   ├── public.ts            the one unauthenticated route: live facts, no tenant data
 │   │   │   └── guards.ts            authentication and role guards
-│   │   ├── src/db/migrations        0001 -> 0010, forward-only SQL
+│   │   ├── src/db/migrations        0001 -> 0011, forward-only SQL
 │   │   ├── src/auth, src/legal      the Phase 1 school surface, kept working (/auth/*)
 │   │   ├── src/db/pool.ts           role check: refuses a superuser or BYPASSRLS connection
 │   │   ├── src/mail                 SMTP and HTTPS relay abstraction
@@ -1161,6 +1167,31 @@ reason. The delivery path itself was verified against the live relay rather than
 went out through Resend from `inicio@unifies.codes` and arrived in a mailbox with their links, both
 alternatives and their palette intact (`26/26` content checks, `4/4` reported `delivered`).
 
+### Rate limiting
+
+Both ceilings are counted in PostgreSQL (`rate_limit_counter`, migration `0011`), not in a process's memory,
+because the API runs as a serverless function: a per-process limiter is reset by every recycled instance, so
+the ceiling a client is told about would really be "per process" and a flood would simply spread across them.
+One atomic upsert per request answers both how many requests this subject has made in this window and when the
+window ends, from state every instance shares. See `apps/api/src/lib/rate-limit.ts`.
+
+| Variable | Required | Default | Description |
+|---|:---:|---|---|
+| `RATE_LIMIT_MAX` | | `120` | Requests per minute **per address**, for every route |
+| `COLLECT_RATE_LIMIT_MAX` | | `1200` | Requests per minute **per distribution link**, on the public collection routes, on top of the per-address ceiling |
+
+An over-limit request is a `429` carrying `retry-after`, and every limited response carries `x-ratelimit-limit`,
+`x-ratelimit-remaining` and `x-ratelimit-reset` (both measured, not assumed). Three properties are decisions
+rather than details. **The counters hold no address and no token:** a bucket's subject is hashed with the
+deployment's own pepper and only the namespace (`ip`, `link`) stays in the clear, so the table cannot be read
+back as a log of who was throttled while an operator can still group by what was hit. **A limiter that cannot
+reach the database fails open**, with one log line a minute naming the namespace and the error: the limiter is
+a throttle, and the authorisation boundary is the session, the scope and the row-level policies, so an
+unreachable counter must not become a total outage. **Two registrations, two counters, both consulted:** the
+per-address ceiling covers every route, and public collection adds one keyed on the distribution link, which is
+both what a flood targets and the unit a field team shares, so one flooded link cannot lock out another team on
+the same form. Neither is a plan limit; collection volume is never a billing event.
+
 ### Attachments and object storage
 
 S3-compatible, and optional on purpose. **With no bucket configured the API answers `501
@@ -1202,7 +1233,7 @@ the API logs no secret material, including one-time codes.</sub>
 ### Base URL
 
 ```
-https://inicio-prjct.vercel.app/api/v1     # the live deployment
+https://inicio.unifies.codes/api/v1     # the live deployment
 http://localhost:3001/api/v1               # local API
 http://localhost:3000/api/v1               # through the Vite proxy — the same origin the browser uses
 ```
@@ -1230,7 +1261,8 @@ the suite for a route with no entry *and* for an entry whose route is gone.
 | `409` | `already_submitted`, `client_id_conflict`, `not_published`, `version_immutable`, `version_archived`, `last_owner` |
 | `410` | `link_expired`, `link_already_used`, `link_exhausted`, `link_inactive` |
 | `422` | `invalid_definition` — publication is where authoring errors become a blocked publish instead of a broken form mid-interview |
-| `501` | Export formats that are deliberately not implemented yet (`.sav`, `.dta`), returned **with a reason** |
+| `501` | `format_not_available` — a statistical export was asked for and this deployment has no worker configured, naming `PYREADSTAT_WORKER_URL`. **Nothing is written** |
+| `502` | `export_worker_unavailable` — the worker is configured and did not answer, so no file was produced |
 
 **Machine access is deny-by-default, and that is the design.** A key reaches a route only when that route *declares* the capability it needs, so the machine surface is a list you can read rather than the absence of a check you cannot see. The scopes, and what each one buys:
 
@@ -1334,6 +1366,7 @@ the suite for a route with no entry *and* for an entry whose route is gone.
 |---|---|---|---|---|
 | `GET` | `/api-scopes` | cookie | — | The scope vocabulary, with a flag on each saying whether a route declares it today |
 | `GET` / `POST` | `/orgs/:orgId/api-keys` | cookie | — | List keys (**never** a secret), or mint one: the secret is in the create response and nowhere else, because only its hash exists |
+| `POST` | `/orgs/:orgId/api-keys/:keyId/rotate` | cookie | — | Issue the key's successor and revoke it in one transaction: same creator, same scopes, same expiry, a new secret returned once, and the old one refused on its very next request |
 | `DELETE` | `/orgs/:orgId/api-keys/:keyId` | cookie | — | Revoke. The next request with it answers `401 invalid_api_key`; the second revoke answers `404` |
 | `GET` | `/webhook-events` | cookie | — | The event catalogue and what each event means |
 | `GET` / `POST` | `/orgs/:orgId/webhooks` | cookie | — | List endpoints with their pending and failed counts, or create one — **HTTPS only**, enforced by a database constraint, with a signing secret returned once |
@@ -1365,7 +1398,7 @@ A webhook delivery carries `X-Inicio-Timestamp` and `X-Inicio-Signature: sha256=
 ### Example: the console journey
 
 ```bash
-API=https://inicio-prjct.vercel.app/api/v1
+API=https://inicio.unifies.codes/api/v1
 
 # 1 - a one-time code (read it in Mailpit locally, or in your inbox in production)
 curl -sS -X POST "$API/auth/otp/request" \
@@ -1581,7 +1614,7 @@ Reproduce it:
 
 ```bash
 for i in $(seq 1 12); do
-  curl -sS -o /dev/null -w "%{time_starttransfer}\n" https://inicio-prjct.vercel.app/
+  curl -sS -o /dev/null -w "%{time_starttransfer}\n" https://inicio.unifies.codes/
   sleep 0.6
 done
 ```
@@ -1597,7 +1630,7 @@ done
 | `/health` | Function **with** a database round trip | **393 ms** | 412 ms | max 420 ms |
 
 <sub>¹ The three asset rows measure the build that was deployed, which predates the integration and
-quality screens; the current tree compiles to 239.9 kB of app and 75.1 kB over the wire (see
+quality screens; the current tree compiles to 252.3 kB of app and 78.7 kB over the wire (see
 [Bundle size](#bundle-size)), and the *latency* is a property of the host and the request, not of a
 particular hash.</sub>
 
@@ -1627,15 +1660,16 @@ the table below is a budget rather than a report:
 | Asset | Raw | Gzip | Budget | Loaded by |
 |---|---:|---:|---:|---|
 | `index.html` | 1.74 kB | 0.84 kB | — | everyone |
-| `index-*.css` (the whole app) | 20.2 kB | 5.1 kB | 7 kB | everyone |
-| `index-*.js` (console, collection, admin, legal) | **239.9 kB** | **75.1 kB** | 80 kB | everyone |
-| `landing-*.css` | 14.0 kB | 3.7 kB | 6 kB | the landing page |
-| `landing-*.js` | 15.7 kB | 5.5 kB | 8 kB | the landing page |
-| `instrument-*.js` (three.js) | 521.0 kB | 132.6 kB | 150 kB | the landing page, after first paint |
+| `index-*.css` (the whole app) | 21.1 kB | 5.1 kB | 7 kB | everyone |
+| `index-*.js` (console, collection, admin, legal) | **252.3 kB** | **78.7 kB** | 80 kB | everyone |
+| `landing-*.css` | 13.7 kB | 3.6 kB | 6 kB | the landing page |
+| `landing-*.js` | 18.8 kB | 6.6 kB | 8 kB | the landing page |
+| `instrument-*.js` (three.js, the flight) | 477.6 kB | 122.2 kB | 150 kB | the landing page, after first paint |
+| `cursor-trail-*.js` | 2.8 kB | 1.4 kB | 4 kB | every route, after first paint |
 
-The console bundle is 239.9 kB raw, which carries the push channel, the console — including the
-integration, quality and raise-a-finding screens — and the ambient light field that makes the signed-in app the same
-world as the landing page. There is no charting library, no
+The console bundle is 252.3 kB raw, which carries the push channel, the console — including the
+integration, quality and raise-a-finding screens — and an ambient light field of its own, so the signed-in app
+is recognisably the same product without a scene anywhere near the critical path. There is no charting library, no
 UI kit, no state manager and no icon package: the console is hand-built React with CSS custom
 properties, which is why the whole app is smaller than a typical component library's stylesheet. The
 scene is in its own dynamically imported chunk, so a signed-in user heading for the console never
@@ -1648,7 +1682,7 @@ of responses should not be paying for a 3D engine to look at a background.
 
 | Metric | Value |
 |---|---|
-| Migrations | 10, forward-only, `0001` to `0010` |
+| Migrations | 11, forward-only, `0001` to `0011` |
 | Tables under `FORCE ROW LEVEL SECURITY` | 14 tenant tables, with per-table policies generated at migration time, and the forged-`org_id` isolation test enumerating every one of them |
 | Tenant context | `set_config('app.user_id' \| 'app.org_id', …, true)` — transaction-local, no pooling leak |
 | Production | Neon Postgres, free tier; the app connects as `app_role`, never the owner |
@@ -1668,21 +1702,25 @@ than pretending the score is 100. What can be verified today is verifiable: the 
 ```bash
 pnpm lint         # ESLint 9, flat config — 0 errors
 pnpm typecheck    # tsc across engine, api, web and the serverless entry
-pnpm test         # 388 tests
+pnpm test         # 430 tests
 pnpm coverage     # v8 coverage, per package
 pnpm build        # engine -> api -> web
 pnpm budgets      # the built bundle, gzipped, against its ceilings
 pnpm drift        # is the deployment running the migrations this checkout has?
+# the whole statistical chain — engine -> payload -> a real pyreadstat worker -> pyreadstat
+# reading the file back. Needs Python with services/pyreadstat/requirements.txt installed,
+# which is why it is not part of the Node-only CI:
+pnpm --filter @inicio/api roundtrip:statistical
 pnpm icons        # regenerate the app icons from the palette — committed output, not edited
 ```
 
-### What the 388 tests actually cover
+### What the 461 tests actually cover
 
 | Suite | Tests | Focus |
 |---|---:|---|
-| `packages/engine` | **55** | Expression parsing and evaluation, validation, XLSForm round-trip fixpoint, XLSX read/write, dataset and codebook assembly, every export writer, and **the workbook the studio shows**: `xlsFormSheets` asserted row by row against the file `exportXlsForm` zips, so the viewer and the download cannot drift |
-| `apps/api` | **150** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers, and **the push channel over a real socket**: `ready` first, silence while nothing changes, then one coalesced event naming the aggregate that moved, with a 404 and no stream for a form the caller cannot see, plus the public summary: read live, and asserted key by key to carry no tenant data, **and the integration surface**: a key whose secret is shown once and stored as a hash, its scope enforced at the route that declares it and *named* when it is missing, a key refused across organisations even though its creator belongs to both, revocation effective on the very next request, an endpoint that disables itself after five consecutive failures, a delivery signature checked against an independent HMAC in the test, a duplicate scan that refuses to record the same finding twice, and **the read scopes**: a key granted `forms:read` reaches the forms list *narrowed to its own organisation*, is `403 key_org_mismatch` on another organisation's form even though its creator belongs to both, and is told it is missing `responses:export` when it tries to export with only `responses:read`, **and the emails**: the sign-in code is in the body and never in the subject, no template fetches anything (no image, no pixel, no web font, no `url()`), every colour pair it uses is measured at 4.5:1 in both schemes, a hostile organisation name cannot close an attribute or reach the hidden preheader, the text alternative is prose rather than tags with the tags removed, and the header a transport composes is the one the environment named |
-| `apps/web` | **183** | The offline core (`enqueueSave`/`enqueueSubmit` supersede rules, the backoff schedule, and the resume rule that keeps the device's copy while anything is pending), **the device's own copy of its answers** (the draft exported to a file and restored onto an empty device, which then sends the submission it had been holding on the same response id; a copy of another link, of a newer app, or older than what is already on the device each refused in a sentence), **the three ways a send can fail kept apart** (a file the network ate held and re-sent by itself after a reconnect, a file the server refused never retried, and a queue that names its attempt count, its last failure and when it will try again — with the collection page itself mounted over a stubbed wire, including the answers still there when the page is opened a second time and a device warned before a full disk costs anything), the service worker's routing executed in a VM, **the pointer trail** (mounted exactly once on each route by the shell, mounting the real effect through a recorded 2D context so one route cannot become two trails under StrictMode, and removed by reference when the route goes — and **not even fetched** by a device that would never draw it, asserted by counting the mocked module's own evaluation rather than by trusting the bundler), **the sitemap and `robots.txt`** (exactly the four public routes on the canonical origin, no `lastmod`, and the two hosting catch-alls asserted not to be able to answer either file with the app shell — the `/sw.js` defect in a new dress), the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer), **and the cards that arrive after the mount** (the template articles the API renders are handed to the reveal observer instead of keeping the hidden state, which is how three invisible cards reached production) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request), **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure), **26 measured contrast pairs** taken from the stylesheets themselves — both of the workspace's materials, both of the landing page's, the primary-as-type pair, the label on the primary action, and every control boundary — plus the assertions that hold the two stylesheets to one set of brand values and that the surface material re-binds **every** colour role it borrows (the defect that once put near-black headings on a near-black ground) — **`axe-core` audits** of the two public surfaces, **the quality queue** (the evidence behind each finding is on the row, a decision carries the reason typed with it and re-reads the list it just changed, dismissing is asserted to be a different outcome from resolving, and a second scan is reported as finding nothing new rather than as doing nothing) and **the integration screen** (the scope catalogue's `enforced` flag genuinely disables a scope no route declares, a key secret is shown once in a read-only field that carries a panel saying so, an `http://` endpoint cannot be added at all, and "send test" reports the receiver's real `500` rather than "sent"), **raising a finding by hand** from a response row (the raise waits for a reason, and "already in the queue" is asserted to read differently from "recorded"), **the definition studio** (the JSON panel is the server's own definition; its rows move the XLSForm sheets and the preview with no request at all, because all three read one object; the sheets are the workbook the download writes; the preview hides a question whose relevance rule says so, renders the two inline choices, sends nothing and stores nothing when it is typed into, and produces *field-for-field identical markup* to the component the collection page renders), **the shell guard** that keeps the ambient layer and a form field from ever sharing a class name again, and **the public page's own boundaries**: every anchor it renders resolves to this deployment and no source host is named anywhere in it, no em dash or en dash reaches a reader, and the honesty bullets are measured as the brand's dot rather than as a rule that reads like one — **plus the brand in the artifacts a stylesheet cannot reach**: the README's nine drawings held to the palette by value and to no pre-brand colour or saturated blue-violet accent, every badge colour on this page (their label grounds all the one surface tone, their vendor colours left alone where they belong), and the three app icons **decoded pixel by pixel** and required to be the palette's own ground, to carry the primary, to be free of blue-dominant pixels and to contain none of the three colours the previous icon was drawn from — the guard that would have caught an icon still wearing the palette it was made in |
+| `packages/engine` | **87** | Expression parsing and evaluation, validation, XLSForm round-trip fixpoint, XLSX read/write, dataset and codebook assembly, every export writer, **the workbook the studio shows** (`xlsFormSheets` asserted row by row against the file `exportXlsForm` zips, so the viewer and the download cannot drift), **the version diff** (23 tests asserting the sentences themselves — a per-language label change, a choice added and removed, mandatory flipping, a reorder, a repeat flag, and the case where a question's options move between shared lists, where the option sets are deliberately *not* compared with each other), and **the body the statistical worker receives**: `statisticalPayload` held to a real `buildDataset` — every column's prompt, the rows cell by cell including a blank that is neither `0` nor the word `refused`, the value labels, the missing table's meanings, and a Hindi label surviving byte for byte |
+| `apps/api` | **167** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the version comparison over the real database** (a form published, a second version forked from it and edited, then a third restored from the *first* one: the comparison follows `based_on` to `v1` rather than to the `v2` numbered before it and reports the definitions identical, `?against=` gives the other answer in words, and a first version answers `null` rather than an empty comparison), **and the statistical export at its own boundary**: `501` naming `PYREADSTAT_WORKER_URL` with no worker, the worker's bytes returned unchanged with its `x-inicio-notes` read back, `502` rather than a file when the worker cannot be reached or answers with nothing, and — with `&codebook=1` — one archive holding the data file the worker wrote plus the codebook, value labels, missing table and metadata, and **not** the data a second time, **and the contract itself**: the route table, `specs/openapi.yaml` and the machine surface held equal in both directions, so a route cannot ship undocumented or a scope unstated, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers, and **the push channel over a real socket**: `ready` first, silence while nothing changes, then one coalesced event naming the aggregate that moved, with a 404 and no stream for a form the caller cannot see, plus the public summary: read live, and asserted key by key to carry no tenant data, **and the integration surface**: a key whose secret is shown once and stored as a hash, its scope enforced at the route that declares it and *named* when it is missing, a key refused across organisations even though its creator belongs to both, revocation effective on the very next request, **every refusal by an actor the code can name written to the audit trail** (`access.denied`, with the code, the method, the path, the organisation and the granted scopes, and *nothing* for an anonymous `401` because there is nobody to attribute it to), **rotation that keeps the grant and changes only the secret** (the successor's `user_id`, scopes and expiry equal the previous key's, the audit row names both prefixes and neither secret, an admin cannot rotate a key onto themselves, a member cannot rotate at all, an already-revoked key is `404` rather than rotated, and a key whose creator has left the organisation is refused with `409 creator_not_a_member` *and nothing changed* — the revocation rolled back with the refusal), an endpoint that disables itself after five consecutive failures, a delivery signature checked against an independent HMAC in the test, a duplicate scan that refuses to record the same finding twice, and **the read scopes**: a key granted `forms:read` reaches the forms list *narrowed to its own organisation*, is `403 key_org_mismatch` on another organisation's form even though its creator belongs to both, and is told it is missing `responses:export` when it tries to export with only `responses:read`, **and the emails**: the sign-in code is in the body and never in the subject, no template fetches anything (no image, no pixel, no web font, no `url()`), every colour pair it uses is measured at 4.5:1 in both schemes, a hostile organisation name cannot close an attribute or reach the hidden preheader, the text alternative is prose rather than tags with the tags removed, the header a transport composes is the one the environment named, **and the durable rate limiter**: two store objects over one database counting the same bucket, ten concurrent increments landing as ten rather than losing an update, an expired window taken over in place instead of accumulating a row per window, a **salted** hash on disk and never the address or the token, a ceiling that still refuses on a freshly built app instance that has counted nothing itself (what the store this replaced could not do), one link's flood leaving another link alone, the sweep deleting expired windows and leaving live ones, and a store that cannot reach PostgreSQL failing **open** with one line saying so — plus the wiring: only the collection routes touch the `link` namespace, and the token reaches a counter's key without ever landing in it |
+| `apps/web` | **207** | The offline core (`enqueueSave`/`enqueueSubmit` supersede rules, the backoff schedule, and the resume rule that keeps the device's copy while anything is pending), **the device's own copy of its answers** (the draft exported to a file and restored onto an empty device, which then sends the submission it had been holding on the same response id; a copy of another link, of a newer app, or older than what is already on the device each refused in a sentence), **the three ways a send can fail kept apart** (a file the network ate held and re-sent by itself after a reconnect, a file the server refused never retried, and a queue that names its attempt count, its last failure and when it will try again — with the collection page itself mounted over a stubbed wire, including the answers still there when the page is opened a second time and a device warned before a full disk costs anything), the service worker's routing executed in a VM, **the pointer trail** (mounted exactly once on each route by the shell, mounting the real effect through a recorded 2D context so one route cannot become two trails under StrictMode, and removed by reference when the route goes — and **not even fetched** by a device that would never draw it, asserted by counting the mocked module's own evaluation rather than by trusting the bundler), **the sitemap and `robots.txt`** (exactly the four public routes on the canonical origin, no `lastmod`, the two hosting catch-alls asserted not to be able to answer either file with the app shell — the `/sw.js` defect in a new dress — and every URL-valued redirect target in `netlify.toml` required to be on that same canonical origin, so the deploy config cannot point at a platform hostname the docs deny exists), the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer), **and the six-beat flight's own rules** — the choreography as arithmetic with no renderer in sight (the camera's pose at any progress, the disconnected device's `delivered` share never decreasing while it hands over, the bank returning to level by the end of the corridor, and one beat index per sixth of the journey), the hero carrying no canvas and therefore no 3D object, the fly-through panel genuinely empty for a reader and for a screen reader, every other beat naming where to check its claim and no path into the source anywhere on the page, the character split never breaking a word or nesting a box even under StrictMode, and no anchor leaving this deployment **and the cards that arrive after the mount** (the template articles the API renders are handed to the reveal observer instead of keeping the hidden state, which is how three invisible cards reached production) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request), **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure), **26 measured contrast pairs** taken from the stylesheets themselves — both of the workspace's materials, both of the landing page's, the primary-as-type pair, the label on the primary action, and every control boundary — plus the assertions that hold the two stylesheets to one set of brand values and that the surface material re-binds **every** colour role it borrows (the defect that once put near-black headings on a near-black ground) — **`axe-core` audits** of the two public surfaces, **the quality queue** (the evidence behind each finding is on the row, a decision carries the reason typed with it and re-reads the list it just changed, dismissing is asserted to be a different outcome from resolving, and a second scan is reported as finding nothing new rather than as doing nothing) and **the integration screen** (the scope catalogue's `enforced` flag genuinely disables a scope no route declares, a key secret is shown once in a read-only field that carries a panel saying so, rotating a key from its row rewrites the panel in place and its confirmation names the prefix that is about to stop working, a member is offered no rotate control either, an `http://` endpoint cannot be added at all, and "send test" reports the receiver's real `500` rather than "sent"), **raising a finding by hand** from a response row (the raise waits for a reason, and "already in the queue" is asserted to read differently from "recorded"), **the definition studio** (the JSON panel is the server's own definition; its rows move the XLSForm sheets and the preview with no request at all, because all three read one object; the sheets are the workbook the download writes; the preview hides a question whose relevance rule says so, renders the two inline choices, sends nothing and stores nothing when it is typed into, and produces *field-for-field identical markup* to the component the collection page renders), **the shell guard** that keeps the ambient layer and a form field from ever sharing a class name again, **the version history** (each row naming the version a version was forked from *and not the one above it*, the comparison on screen being the sentences that arrived over the wire rather than one the browser derived, a first version saying where the form started instead of showing nothing changed, restore offered only where it means something and reporting both numbers, and the server's own refusal surfaced when it is refused), and **the public page's own boundaries**: every anchor it renders resolves to this deployment and no source host is named anywhere in it, no em dash or en dash reaches a reader, and the honesty bullets are measured as the brand's dot rather than as a rule that reads like one — **plus the brand in the artifacts a stylesheet cannot reach**: the README's nine drawings held to the palette by value and to no pre-brand colour or saturated blue-violet accent, every badge colour on this page (their label grounds all the one surface tone, their vendor colours left alone where they belong), and the three app icons **decoded pixel by pixel** and required to be the palette's own ground, to carry the primary, to be free of blue-dominant pixels and to contain none of the three colours the previous icon was drawn from — the guard that would have caught an icon still wearing the palette it was made in |
 
 ### Enforced on every push
 
@@ -1722,9 +1760,9 @@ pnpm --filter @inicio/engine coverage      # one package
 
 | Package | Statements | Branches | Functions | Lines |
 |---|---:|---:|---:|---:|
-| `packages/engine` | 89.6 % | 81.4 % | 92.9 % | 89.6 % |
-| `apps/api` | 85.7 % | 79.7 % | 89.4 % | 85.7 % |
-| `apps/web` | 48.5 % *(the whole package)* · 75.3 % *(the offline core)* | 75.9 % | 54.8 % | 48.5 % |
+| `packages/engine` | 89.9 % | 81.7 % | 94.3 % | 89.9 % |
+| `apps/api` | 84.3 % | 79.1 % | 92.3 % | 84.3 % |
+| `apps/web` | 62.5 % *(the whole package)* · 88.6 % *(the offline core, `--coverage.include='src/offline/**'`)* | 77.9 % | 61.4 % | 62.5 % |
 
 <sub>**Why the web number is what it is, stated plainly:** the components are covered by the jsdom suite
 in `apps/web/test` — the studio, the landing page, the quality queue, the integration screen, the consent
@@ -1795,13 +1833,17 @@ vercel --prod
 
 ### What the live deployment is right now, measured
 
-`https://inicio.unifies.codes` and `https://inicio-prjct.vercel.app` are this repository, deployed from
-`main`, and every line below was read from the running service rather than from a dashboard:
+`https://inicio.unifies.codes` is this repository, deployed from `main`. It is the canonical host;
+`inicio-prjct.vercel.app` and `inicio-six-psi.vercel.app` are the same deployment's platform hostnames,
+which is why no example below carries them. Probed on 2026-10-14, all three returned the same compute
+start time to the millisecond and the same database (10 migrations, PostgreSQL `18.6`), so they are one
+service under three names rather than three deployments. Every line was read from the running service
+rather than from a dashboard:
 
 | Read | Answer | What it means |
 |---|---|---|
-| `GET /health` | `200 {"status":"ok","dbTime":…}` | The function reaches the database and runs a real query |
-| `GET /api/v1/public/summary` | `"migrationsApplied": 10, "latestMigration": "0010_api_keys_webhooks_flags.sql"`, `"startedAt": "2026-10-14T05:29:45.273Z"` | The database this deployment talks to is the one this workspace migrates and the one `pnpm drift` compares against `main` |
+| `GET /health` | `200 {"status":"ok","dbTime":…}` | The function reaches the database and runs a real query. The `version` field beside them is in this checkout and arrives with the next deploy: the row is what the running build answers now, not what the source says |
+| `GET /api/v1/public/summary` | `"migrationsApplied": 10, "latestMigration": "0010_api_keys_webhooks_flags.sql"`, plus a `startedAt` that is the instance's own compute start and therefore moves on every cold start | The database this deployment talks to is the one this workspace migrates and the one `pnpm drift` compares against `main`. The `startedAt` is quoted by shape rather than by value on purpose: it is a liveness reading, not a version, and it is what proved on 2026-10-14 that the three hostnames above are one deployment rather than three |
 | `/assets/studio-*.js` | contains *"What the respondent opens"*, *"The workbook"*, *"Nothing typed here is sent or stored"* | The three-panel studio **is** deployed and reachable |
 | `/sw.js`, `/manifest.webmanifest` | `application/javascript`, `application/manifest+json` | The static-asset trap below is genuinely fixed in production, not just locally |
 | `/`, `/login`, `/terms`, `/privacy`, `/console` | `200`; **no `4xx` and no console error on any of them** | The signed-out console is the sign-in sheet *in place*: `/console` keeps its URL, draws the email field and "Send me a code", and renders no workspace chrome at all |
@@ -2031,13 +2073,13 @@ ceilings underneath — lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). This is t
 - [x] **Authoring** — schema or JSON, with a live analyser that blocks a bad publish
 - [x] **A real expression engine** — relevance, constraints, calculations, choice filters
 - [x] **XLSForm import and export**, with a round-trip fixpoint and a report of what could not be carried
-- [x] **Immutable versions** — publish, and restore-as-a-new-draft
+- [x] **Immutable versions, and a history that says what changed** — publish, restore-as-a-new-draft, a version graph keyed by the version each one was forked from, a comparison in plain words computed by the API from the two stored definitions, and a restore that names both numbers it touched
 - [x] **Distribution** — anonymous, single-use, multiple and panel links
 - [x] **Offline-first collection** — cached definition, IndexedDB drafts, durable outbox, autosave
 - [x] **The answers in your hand** — a visible attempt count and next-try time, and a copy of the draft saved to a file and restored with no network at all
 - [x] **Conflict retention** — a disagreement is kept twice and recorded, never silently resolved
 - [x] **An installable PWA** that caches the shell and never the data
-- [x] **Exports that carry meaning** — CSV bundle (data + codebook + labels + missing codes), XLSX, JSON
+- [x] **Exports that carry meaning** — CSV bundle (data + codebook + labels + missing codes), XLSX, JSON, and SPSS `.sav` / Stata `.dta` from the pyreadstat worker, whose binary output is read back by its own round-trip script — which found and fixed two defects the first time it ran — with `&codebook=1` shipping the codebook beside the data file
 - [x] **Live analytics** recomputed per request, plus per-response conflict counts
 - [x] **Pushed, not polled**: one server-sent event stream per form, coalesced per aggregate, with an honest connection indicator and a timer that only starts when the stream is gone
 - [x] **An immersive public surface**: a WebGL landing page whose every figure is read live from the API, and which is complete and readable without the scene
@@ -2172,8 +2214,12 @@ between two accounts.
 
 What is missing before you would run a serious multi-week survey: **backups and a rehearsed restore**
 (the biggest gap), a host for the statistical-export worker if you want `.sav`/`.dta` out of a deployment
-that has none — the API says exactly that rather than inventing a file — a WCAG 2.2 AA audit, and a rate
-limiter that survives more than one instance. All of it is in the [roadmap](#-roadmap) with reasons.
+that has none — the API says exactly that rather than inventing a file — and a manual WCAG 2.2 AA audit
+with a screen reader and a keyboard. The rate limiter no longer belongs on that list: it counts in
+PostgreSQL ([Rate limiting](#rate-limiting)), so a ceiling holds across instances and across the process
+recycling a serverless function does between requests, and the migration that creates its counter is
+`0011`, which production has not applied yet (until it does, the limiter fails open and says so). What is
+left of the foundation work is in the [roadmap](#-roadmap) with reasons.
 
 </details>
 
@@ -2194,17 +2240,21 @@ demand.
 </details>
 
 <details>
-<summary><b>Why do <code>.sav</code> and <code>.dta</code> return <code>501</code> instead of exporting?</b></summary>
+<summary><b>What happens to <code>.sav</code> and <code>.dta</code> if no export worker is deployed?</b></summary>
 
 <br />
 
-Because a wrong SPSS file is worse than an honest error. A real `.sav` with value labels, variable
-labels and missing-code mappings needs `pyreadstat`, which is a Python library — so it is written by a
-worker of its own (`services/pyreadstat`) rather than approximated in TypeScript. Point
-`PYREADSTAT_WORKER_URL` at one and the export is a real file, with every renamed variable, truncated name
-and dropped label reported back; deploy nothing and the API refuses with a reason naming that variable,
-and offers CSV, XLSX and JSON, all of which carry the codebook and the label tables instead. Shipping a
-file that opens but means the wrong thing would be the actual bug.
+They are refused, with a reason, rather than approximated: a wrong SPSS file is worse than an honest
+error. A real `.sav` with value labels, variable labels and missing-code mappings needs `pyreadstat`,
+which is a Python library, so it is written by a worker of its own (`services/pyreadstat`) rather than
+in TypeScript. Point `PYREADSTAT_WORKER_URL` at one and the export is a real file, with every renamed
+variable, truncated name and dropped label reported back; add `&codebook=1` and the codebook, value
+labels, missing table and metadata travel beside it in one archive, which is where a Stata reader finds
+the option codes a `.dta` cannot carry at all. Deploy nothing and the API answers `501` naming that
+variable, and offers CSV, XLSX and JSON instead. The worker is not taken on trust either: its binary
+output is read back by `services/pyreadstat/test_roundtrip.py` and, end to end, by
+`pnpm --filter @inicio/api roundtrip:statistical` — which found two real defects in it the first time it
+ran. Shipping a file that opens but means the wrong thing would be the actual bug.
 
 </details>
 
