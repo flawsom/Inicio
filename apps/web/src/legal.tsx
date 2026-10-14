@@ -36,7 +36,7 @@ export function TermsGate({
   };
 
   return (
-    <div className="auth card">
+    <div className="auth card surface">
       <div className="eyebrow">Consent</div>
       <h1>Before you continue</h1>
       <p className="muted small">
@@ -110,7 +110,7 @@ export function LegalPage({ id }: { id: 'terms' | 'privacy' }): JSX.Element {
   }
   if (!doc) {
     return (
-      <div className="boot">
+      <div className="boot surface">
         <p>Loading...</p>
         <div className="boot-bar" />
       </div>
@@ -118,7 +118,7 @@ export function LegalPage({ id }: { id: 'terms' | 'privacy' }): JSX.Element {
   }
 
   return (
-    <div className="prose card">
+    <div className="prose card surface">
       <div className="eyebrow">Document</div>
       <h1>{doc.title}</h1>
       <div className="row wrap">
@@ -201,7 +201,7 @@ export function InvitePage({ token }: { token: string }): JSX.Element {
 
   if (invalid) {
     return (
-      <div className="auth card">
+      <div className="auth card surface">
         <div className="eyebrow">Invitation</div>
         <h1>Invitation not usable</h1>
         <p className="muted">
@@ -217,7 +217,7 @@ export function InvitePage({ token }: { token: string }): JSX.Element {
 
   if (!invite) {
     return (
-      <div className="boot">
+      <div className="boot surface">
         <p>Loading...</p>
         <div className="boot-bar" />
       </div>
@@ -225,7 +225,7 @@ export function InvitePage({ token }: { token: string }): JSX.Element {
   }
 
   return (
-    <div className="auth card">
+    <div className="auth card surface">
       <header className="screen-head">
         <div>
           <div className="eyebrow">Invitation</div>

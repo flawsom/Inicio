@@ -86,7 +86,7 @@
    * The ground is the surface, and that is not a contradiction: the stage is painted
    * straight onto it and every section below the stage is an opaque sheet of
    * `--l-bg` laid over it. Painting the base dark is what makes the first paint
-   * correct — the scene is a separate chunk, and a light base would show white text
+   * correct: the scene is a separate chunk, and a light base would show white text
    * on a white page for as long as that chunk takes to arrive.
    */
   background: var(--l-surface);
@@ -113,8 +113,8 @@
 
 /*
  * The landing is a light page inside an application whose shell is dark-first, so
- * the browser's own chrome — the scrollbar, and any form control a reader's browser
- * draws for them — follows the page rather than the console.
+ * the browser's own chrome (the scrollbar, and any form control a reader's browser
+ * draws for them) follows the page rather than the console.
  */
 html:has(.landing) {
   color-scheme: light;
@@ -209,7 +209,7 @@ html:has(.landing) {
  * One fixed canvas across the viewport that the springs are drawn into. It is
  * decoration and it behaves like it: `pointer-events: none`, so every control
  * underneath still receives its click, and `aria-hidden` in the markup, so it is
- * nothing to a screen reader. The canvas is transparent — what a reader sees when
+ * nothing to a screen reader. The canvas is transparent, so what a reader sees when
  * the trail is at rest is the page behind it, unchanged.
  *
  * Reduced motion hides it here as well as switching it off in the effect. Two
@@ -259,7 +259,7 @@ html:has(.landing) {
 /*
  * A split headline is only readable because of these two rules.
  *
- * The characters are boxes, because that is what a per-character stagger needs —
+ * The characters are boxes, because that is what a per-character stagger needs:
  * and a box is precisely what the sentence cannot survive: the browser will end a
  * line after any atomic inline (so "instrument" broke as "instrumen" / "t"), and
  * an inline-block holding a bare space collapses to no width at all (so the words
@@ -298,7 +298,7 @@ html:has(.landing) {
  *
  * This is not belt and braces. `styles.css` carries `h1, h2, h3, h4 { color:
  * var(--text) }` for every signed-in screen, and `--text` is the *console's* type
- * colour — `--ink`, near-black, for anyone whose operating system is in light mode.
+ * colour, `--ink` near-black, for anyone whose operating system is in light mode.
  * The landing page's headlines therefore inherited near-black on a near-black ground
  * for every light-mode visitor, and a screenshot taken in a light-scheme browser is
  * the one place that is not visible as a defect. The page is two materials, so its
@@ -392,8 +392,16 @@ html:has(.landing) {
   font-size: 13.5px;
 }
 
+/*
+ * The nav's links are controls, so they get a finger's worth of room rather than a
+ * glyph's: a 13.5px line is a 22px box, which is two pixels short of the 24px a target
+ * needs. The padding is taken straight back off with a negative margin, so the row
+ * looks exactly as it did and only the thing you can hit got bigger.
+ */
 .lnav nav a {
   color: var(--l-muted);
+  padding: 6px 4px;
+  margin: -6px -4px;
   transition: color 0.2s ease;
 }
 
@@ -811,23 +819,31 @@ html:has(.landing) {
 }
 
 /*
- * The file each claim is implemented in.
+ * Where a claim can be checked, in the product rather than in a file.
  *
- * Set apart from the sentence above it by a hairline and a gap, because it is
- * evidence rather than prose.
+ * Set apart from the sentence above it by a hairline and a gap, because it is an
+ * instruction rather than prose. Two classes deep on purpose: `.lcards p` gives
+ * every paragraph in a card `flex: 1` so the body fills the space, and this line
+ * has to sit at the bottom without growing.
  */
-.lcode {
-  font-family: var(--l-mono);
-  font-size: 12px;
-  color: var(--l-primary-text);
-  word-break: break-all;
+.lcards .lwhere {
+  flex: none;
   margin-top: var(--l-sp-2);
   padding-top: var(--l-sp-3);
   border-top: 1px solid var(--l-line);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--l-muted);
 }
 
-.lcode:hover {
-  text-decoration: underline;
+.lcards .lwhere span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--l-primary-text);
 }
 
 .ltemplate-grid {
@@ -908,7 +924,7 @@ html:has(.landing) {
 
 .ltemplate-grid dd {
   margin: var(--l-sp-2) 0 0;
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--l-muted);
@@ -916,7 +932,7 @@ html:has(.landing) {
 
 .ltypes {
   font-family: var(--l-mono);
-  font-size: 11.5px !important;
+  font-size: 12px !important;
   line-height: 2;
   color: var(--l-muted) !important;
   margin-top: var(--l-sp-2);
@@ -945,13 +961,22 @@ html:has(.landing) {
   color: var(--l-muted);
 }
 
+/*
+ * A dot, not a dash.
+ *
+ * The marker used to be a 12px rule, which read as a long hyphen set beside the
+ * sentence and made a list of honest statements look like a list of corrections.
+ * The dot is the same mark the wordmark wears, so a bullet is now the brand's own
+ * full stop rather than a second piece of punctuation in a paragraph.
+ */
 .lhonest li::before {
   content: '';
   position: absolute;
   left: 0;
-  top: 0.72em;
-  width: 12px;
-  height: 1px;
+  top: 0.78em;
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
   background: var(--l-primary);
 }
 

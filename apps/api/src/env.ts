@@ -50,6 +50,16 @@ const schema = z.object({
   SMTP_PASS: optionalStr,
   MAIL_FROM: z.string().default('Inicio Survey <no-reply@inicio.example>'),
 
+  // Where a reply to one of our emails goes, when that is a person rather than a
+  // black hole.
+  //
+  // `no-reply@` is a claim about someone's time: "your question will be
+  // discarded". A transactional message that asks the reader to reply — the
+  // welcome does — has to arrive from an address that can receive, so the reply
+  // target is its own variable instead of the sender's name being trusted to be
+  // a mailbox. Unset, replies fall to the sender, which is at least honest.
+  MAIL_REPLY_TO: optionalStr,
+
   // Which relay carries mail. `smtp` is the portable default (Mailpit locally,
   // any relay in production). `resend` posts to the provider's HTTPS API on port
   // 443 — the only egress some networks allow, since SMTP ports 25/465/587 are

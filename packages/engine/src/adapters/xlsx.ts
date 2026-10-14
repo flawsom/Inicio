@@ -187,7 +187,7 @@ function resolveTarget(target: string): string {
 export function readWorkbook(bytes: Uint8Array): Workbook {
   const files = unzipSync(bytes);
   const wbXml = textOf(files['xl/workbook.xml']);
-  if (!wbXml) throw new Error('xlsx: xl/workbook.xml missing — not a SpreadsheetML package');
+  if (!wbXml) throw new Error('xlsx: xl/workbook.xml missing, so this is not a SpreadsheetML package');
 
   const rels = parseRels(textOf(files['xl/_rels/workbook.xml.rels']) ?? '');
   const shared = parseSharedStrings(textOf(files['xl/sharedStrings.xml']) ?? '');

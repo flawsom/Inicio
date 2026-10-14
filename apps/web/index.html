@@ -7,12 +7,22 @@
       name="description"
       content="Build forms with real logic, circulate them, and collect answers that survive a bad connection. Open source, invite only, no trackers."
     />
-    <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#05070d" />
+    <!--
+      The document's own colour scheme is the palette's light material, because that is
+      what the product is printed on; the dark material is a class on the subtree that
+      is made of it (see `.surface` in src/styles.css), and the browser's own chrome
+      follows the page from there.
+
+      `theme-color` is the surface, not the ground: the first frame of every route is
+      the boot screen or the landing page's stage, and both are #191c21. A white bar
+      above a dark first viewport is the one thing this value exists to prevent.
+    -->
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#191c21" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <!--
       The tab icon. Without a declared `icon`, every browser asks for `/favicon.ico`
-      whether or not it exists — this deployment has no such file, so the console
+      whether or not it exists. This deployment has no such file, so the console
       carried a 404 on every visit and the tab showed a blank page glyph. The
       manifest's icons are for installs, not for the tab; these are for the tab.
     -->

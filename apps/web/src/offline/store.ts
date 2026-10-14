@@ -41,8 +41,17 @@ class IndexedDbStore implements OfflineStore {
     return row ?? null;
   }
 
+  /*
+   * No key argument, and that is the fix rather than an omission.
+   *
+   * Both stores declare `keyPath: 'token'`, which means the key comes out of the
+   * record: handing one in as well is a `DataError` that the browser raises
+   * synchronously, so the promise this returns was never even created and every save
+   * threw past its caller. Offline drafts therefore never persisted in a real browser
+   * while the memory fallback — which the unit tests use — behaved perfectly.
+   */
   async putDraft(draft: StoredDraft): Promise<void> {
-    await request(this.tx(DRAFTS, 'readwrite').put(draft, draft.token));
+    await request(this.tx(DRAFTS, 'readwrite').put(draft));
   }
 
   async removeDraft(token: string): Promise<void> {
@@ -55,7 +64,8 @@ class IndexedDbStore implements OfflineStore {
   }
 
   async putCachedForm(form: CachedForm): Promise<void> {
-    await request(this.tx(FORMS, 'readwrite').put(form, form.token));
+    // In-line key again: see `putDraft`.
+    await request(this.tx(FORMS, 'readwrite').put(form));
   }
 }
 

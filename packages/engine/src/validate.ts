@@ -38,7 +38,7 @@ export function validateForm(def: FormDefinition): ValidationReport {
     if (!q.name || !NAME_RE.test(q.name)) {
       errors.push(`Question ${q.id}: name "${q.name}" must start with a letter or underscore and contain only letters, digits and underscores`);
     }
-    if (names.has(q.name)) errors.push(`Duplicate question name "${q.name}" — export columns would collide`);
+    if (names.has(q.name)) errors.push(`Duplicate question name "${q.name}": export columns would collide`);
     names.add(q.name);
     if (q.groupId && !groupIds.has(q.groupId)) {
       errors.push(`Question "${q.name}" references unknown group "${q.groupId}"`);
@@ -56,7 +56,7 @@ export function validateForm(def: FormDefinition): ValidationReport {
       }
     }
     if (q.rules?.calculate && MULTI_TYPES.has(q.type)) {
-      warnings.push(`Question "${q.name}" is a multi-select with a calculation — rare and easy to get wrong`);
+      warnings.push(`Question "${q.name}" is a multi-select with a calculation, which is rare and easy to get wrong`);
     }
   }
 
@@ -83,14 +83,14 @@ export function validateForm(def: FormDefinition): ValidationReport {
           for (const bare of bareNames) {
             if (!declared.has(bare)) {
               warnings.push(
-                `Question "${q.name}" choiceFilter uses "${bare}", which is not an attribute column on ${q.choices?.listName ? `list "${q.choices.listName}"` : 'its choices'} — every option will be filtered out`,
+                `Question "${q.name}" choiceFilter uses "${bare}", which is not an attribute column on ${q.choices?.listName ? `list "${q.choices.listName}"` : 'its choices'} , so every option will be filtered out`,
               );
             }
           }
         }
       } else {
         for (const bare of bareNames) {
-          errors.push(`Question "${q.name}" ${field}: unknown bare name "${bare}" — did you mean \${${bare}}?`);
+          errors.push(`Question "${q.name}" ${field}: unknown bare name "${bare}"; did you mean \${${bare}}?`);
         }
       }
       for (const ref of refs) {

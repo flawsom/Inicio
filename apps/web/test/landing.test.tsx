@@ -299,4 +299,49 @@ describe('the landing page', () => {
       strictContainer.remove();
     }
   });
+
+  /**
+   * This deployment is one organisation's private application, so the public page
+   * is not allowed to point at where its source lives, and it is not allowed to
+   * point anywhere that is not the deployment itself.
+   *
+   * Both are asserted rather than trusted to review: a link added to a card, or a
+   * status link pasted into a footer, is exactly the kind of change that reads as
+   * harmless in a diff and publishes a private repository's address to everyone
+   * who visits the login screen behind it. The rule is the whole page, so the test
+   * is the whole page: every anchor, resolved.
+   */
+  it('links to nothing but this deployment', async () => {
+    await renderLanding();
+
+    const anchors = Array.from(container.querySelectorAll('a'));
+    expect(anchors.length).toBeGreaterThan(3);
+    for (const anchor of anchors) {
+      const href = anchor.getAttribute('href') ?? '';
+      if (href.startsWith('#')) continue;
+      const resolved = new URL(href, window.location.href);
+      expect(resolved.origin, `${href} leaves the deployment`).toBe(window.location.origin);
+      expect(resolved.pathname, `${href} is a source link`).not.toMatch(/github|gitlab|bitbucket|sourcehut/i);
+    }
+    // The words that would give it away even without a link.
+    expect(text()).not.toMatch(/github|repository|open source|apache/i);
+  });
+
+  it('renders no typographic dash a reader can see', async () => {
+    await renderLanding();
+    // Em dash or en dash: both are the punctuation a generated paragraph reaches
+    // for, and this page is written for a reader rather than printed at them.
+    expect(text()).not.toMatch(/[\u2014\u2013]/);
+  });
+
+  it('says where a claim can be checked in the product, not in a file', async () => {
+    await renderLanding();
+
+    const checks = Array.from(container.querySelectorAll('.lwhere'));
+    expect(checks.length).toBeGreaterThanOrEqual(6);
+    expect(text()).toContain('Where to check it');
+    // A path into the source was the thing this line used to hold.
+    expect(text()).not.toMatch(/\.(ts|tsx|sql)\b/);
+    expect(text()).not.toContain('packages/');
+  });
 });

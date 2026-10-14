@@ -298,11 +298,11 @@ describe('the definition studio', () => {
     await edit(
       textarea(),
       edited({
-        questions: DEFINITION.questions.map((q) => (q.id === 'q2' ? { ...q, label: { en: 'School name — official' } } : q)),
+        questions: DEFINITION.questions.map((q) => (q.id === 'q2' ? { ...q, label: { en: 'School name (official)' } } : q)),
       }),
     );
-    expect(panel('Preview').textContent).toContain('School name — official');
-    expect(panel('XLSForm').textContent).toContain('School name — official');
+    expect(panel('Preview').textContent).toContain('School name (official)');
+    expect(panel('XLSForm').textContent).toContain('School name (official)');
   });
 
   it('reports an analyser finding while typing, before anything is saved', async () => {

@@ -231,7 +231,7 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
   const choicesSheet = findSheet(wb.sheets, 'choices');
   const settingsSheet = findSheet(wb.sheets, 'settings');
   if (!choicesSheet) {
-    notes.push({ kind: 'normalised', message: 'no `choices` sheet — options must be inline or added later' });
+    notes.push({ kind: 'normalised', message: 'no `choices` sheet : options must be inline or added later' });
   }
 
   const settingsRaw: Record<string, string> = {};
@@ -242,7 +242,7 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
       settingsRaw[key] = (row[1] ?? '').trim();
     });
   } else {
-    notes.push({ kind: 'normalised', message: 'no `settings` sheet — title and form id cannot be recovered from the file' });
+    notes.push({ kind: 'normalised', message: 'no `settings` sheet : title and form id cannot be recovered from the file' });
   }
 
   const surveyRows = surveySheet.rows;
@@ -278,7 +278,7 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
     const name = cellAt(row, index['name']);
     if (typeCell === '' && name === '') continue;
     if (typeCell === '') {
-      notes.push({ kind: 'dropped', message: `row ${r + 1} has a name but no type — skipped`, where: name });
+      notes.push({ kind: 'dropped', message: `row ${r + 1} has a name but no type, so it was skipped`, where: name });
       continue;
     }
     rows.push({ typeCell, row, rowNumber: r + 1, name });
@@ -309,7 +309,7 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
       .filter(({ spec }) => !['list_name', 'name', 'label'].includes(spec.base));
 
     if (listIdx < 0 || nameIdx < 0) {
-      notes.push({ kind: 'unsupported', message: '`choices` sheet needs `list_name` and `name` columns — sheet ignored' });
+      notes.push({ kind: 'unsupported', message: '`choices` sheet needs `list_name` and `name` columns, so the sheet was ignored' });
     } else {
       for (let r = 1; r < choicesSheet.rows.length; r++) {
         const row = choicesSheet.rows[r] ?? [];
@@ -347,7 +347,7 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
       const wantsRepeat = parsed.kind === 'end_repeat';
       const top = stack.pop();
       if (!top) {
-        notes.push({ kind: 'dropped', message: `row ${row.rowNumber}: ${row.typeCell} with no matching begin — ignored` });
+        notes.push({ kind: 'dropped', message: `row ${row.rowNumber}: ${row.typeCell} with no matching begin, so it was ignored` });
       } else if (Boolean(top.repeat) !== wantsRepeat) {
         notes.push({
           kind: 'normalised',
@@ -373,7 +373,7 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
     const source: PreservedSource = { adapter: 'xlsform', type: row.typeCell.trim() };
     if (Object.keys(sourceColumns).length > 0) source.columns = sourceColumns;
     if (guidance) {
-      notes.push({ kind: 'lossy', message: 'guidance_hint has no canonical field — preserved in the source passthrough so it survives export', where });
+      notes.push({ kind: 'lossy', message: 'guidance_hint has no canonical field: it is preserved in the source passthrough so it survives export', where });
       const cols = source.columns ?? {};
       for (const [lang, text] of Object.entries(guidance)) cols[`guidance_hint::${lang}`] = text;
       source.columns = cols;
@@ -384,11 +384,11 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
       if (name === '') {
         generated += 1;
         name = `group_${generated}`;
-        notes.push({ kind: 'normalised', message: `row ${row.rowNumber}: group without a name — named "${name}"` });
+        notes.push({ kind: 'normalised', message: `row ${row.rowNumber}: group without a name: named "${name}"` });
       }
       if (!NAME_RE.test(name)) {
         const fixed = sanitizeName(name);
-        notes.push({ kind: 'normalised', message: `group name "${name}" is not a valid identifier — renamed "${fixed}"`, where: name });
+        notes.push({ kind: 'normalised', message: `group name "${name}" is not a valid identifier: renamed "${fixed}"`, where: name });
         name = fixed;
       }
       const group: Group = {
@@ -412,11 +412,11 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
     if (name === '') {
       generated += 1;
       name = `question_${generated}`;
-      notes.push({ kind: 'normalised', message: `row ${row.rowNumber}: question without a name — named "${name}"`, where: `row ${row.rowNumber}` });
+      notes.push({ kind: 'normalised', message: `row ${row.rowNumber}: question without a name: named "${name}"`, where: `row ${row.rowNumber}` });
     }
     if (!NAME_RE.test(name)) {
       const fixed = sanitizeName(name);
-      notes.push({ kind: 'normalised', message: `question name "${name}" is not a valid identifier — renamed "${fixed}"`, where: name });
+      notes.push({ kind: 'normalised', message: `question name "${name}" is not a valid identifier: renamed "${fixed}"`, where: name });
       name = fixed;
     }
 
@@ -442,7 +442,7 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
         where,
       });
     } else if (!recognised) {
-      notes.push({ kind: 'unsupported', message: `unknown question type "${head}" — treated as "text" (original type preserved on export)`, where });
+      notes.push({ kind: 'unsupported', message: `unknown question type "${head}": treated as "text" (original type preserved on export)`, where });
     }
     if (sourceColumns['parameters']) {
       notes.push({
@@ -454,7 +454,7 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
     if (parsed.fromFile) {
       notes.push({
         kind: 'lossy',
-        message: `external choice list "${listName}" (…_from_file) is not embedded in the workbook — upload it as a dataset to keep the options`,
+        message: `external choice list "${listName}" (…_from_file) is not embedded in the workbook, so upload it as a dataset to keep the options`,
         where,
       });
     }
@@ -465,7 +465,7 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
       notes.push({ kind: 'normalised', message: `select_one "${YESNO_LIST}" mapped to the canonical yesno type`, where });
     }
     if ((type === 'select_one' || type === 'select_multiple' || type === 'rank') && !listName) {
-      notes.push({ kind: 'unsupported', message: `${type} without a list name — a choices list is required`, where });
+      notes.push({ kind: 'unsupported', message: `${type} without a list name: a choices list is required`, where });
       type = 'text';
       listName = undefined;
     }
@@ -479,7 +479,7 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
       if (/\bpulldata\s*\(/.test(calculationCell)) {
         notes.push({
           kind: 'lossy',
-          message: 'pulldata() reads an external CSV that is not in the workbook — mapped to search(); the dataset must be uploaded',
+          message: 'pulldata() reads an external CSV that is not in the workbook. It is mapped to search(), and the dataset must be uploaded',
           where,
         });
       }
@@ -531,7 +531,7 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
   }
 
   for (const g of stack) {
-    notes.push({ kind: 'normalised', message: `group "${g.name}" was never closed — closed at the end of the sheet`, where: g.name });
+    notes.push({ kind: 'normalised', message: `group "${g.name}" was never closed: it was closed at the end of the sheet`, where: g.name });
   }
 
   if (yesnoNeeded && !choiceLists[YESNO_LIST]) {
@@ -552,7 +552,7 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
   if (Object.keys(extra).length > 0) settings.extra = extra;
 
   if (!settingsRaw['form_title']) {
-    notes.push({ kind: 'normalised', message: 'settings.form_title is missing — this form needs a title before it can be published' });
+    notes.push({ kind: 'normalised', message: 'settings.form_title is missing, so this form needs a title before it can be published' });
   }
   const title = settingsRaw['form_title'] ?? settingsRaw['form_id'] ?? 'Untitled form';
   if (Object.keys(extra).length > 0) {
@@ -693,7 +693,7 @@ export function xlsFormSheets(def: FormDefinition): XlsFormSheets {
     } else if (q.type === 'select_one' || q.type === 'select_multiple' || q.type === 'rank') {
       const listName = listForQuestion(q);
       if (!listName) {
-        notes.push({ kind: 'dropped', message: `"${q.name}" is a ${q.type} with no choices — exported as text`, where: q.name });
+        notes.push({ kind: 'dropped', message: `"${q.name}" is a ${q.type} with no choices, so it was exported as text`, where: q.name });
         values['type'] = 'text';
       } else {
         values['type'] = `${q.type} ${listName}`;

@@ -65,7 +65,10 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       session.token,
       sessionCookieOptions(env.SESSION_IDLE_MINUTES * 60),
     );
-    deliverInBackground({ ...otpVerifiedEmail(result.school.registered_email), schoolId: result.school.id });
+    deliverInBackground({
+      ...otpVerifiedEmail(result.school.registered_email, { at: new Date(), ip: req.ip }),
+      schoolId: result.school.id,
+    });
     return reply.code(200).send({ subject });
   });
 

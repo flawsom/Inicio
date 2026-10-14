@@ -81,9 +81,15 @@ describe('resend over HTTPS', () => {
     expect(sent).toMatchObject({
       from: 'Inicio Survey <onboarding@resend.dev>',
       to: ['owner@example.com'],
-      subject: 'Your Inicio survey login code: 123456',
+      subject: 'Your Inicio sign-in code',
     });
     expect(String(sent.text)).toContain('123456');
+    // The subject carries no code and the body does: the one channel a provider,
+    // a gateway and a lock screen all see is the one that stays generic.
+    expect(String(sent.subject)).not.toContain('123456');
+    // No reply target configured, so the field is not sent at all rather than
+    // sent empty.
+    expect('reply_to' in sent).toBe(false);
 
     expect(delivery.ok).toBe(true);
     expect(delivery.id).toBe('01a13009-0cfd-73fc-a20c-02aa994a25b0');
@@ -92,6 +98,24 @@ describe('resend over HTTPS', () => {
       `SELECT status FROM email_log WHERE school_id IS NULL ORDER BY id DESC LIMIT 1`,
     );
     expect(rows[0]!.status).toBe('sent');
+  });
+
+  it('sends the configured reply target when there is one', async () => {
+    const { impl, calls } = stubFetch(200, { id: 'id-reply-to' });
+    setSenderForTest(
+      createResendSender({
+        apiKey: 're_test_key',
+        from: 'Inicio <inicio@unifies.codes>',
+        replyTo: 'Inicio <inicio@unifies.codes>',
+        fetchImpl: impl,
+      }),
+    );
+
+    await sendMail({ ...otpEmail('owner@example.com', '482913'), schoolId: null });
+
+    const sent = JSON.parse(String(calls[0]!.init.body)) as Record<string, unknown>;
+    expect(sent.from).toBe('Inicio <inicio@unifies.codes>');
+    expect(sent.reply_to).toBe('Inicio <inicio@unifies.codes>');
   });
 
   it('turns a provider refusal into an actionable error, not a generic one', async () => {

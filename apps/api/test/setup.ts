@@ -112,6 +112,10 @@ Object.assign(process.env, {
   // default would return 429 and hide whatever the test was actually checking.
   RATE_LIMIT_MAX: '100000',
   MAIL_FROM: 'Inicio Survey <no-reply@inicio.example>',
+  // Pinned so `mail.test.ts` can assert the header it produces is the value the
+  // environment named, rather than an assertion that holds because both sides
+  // are undefined.
+  MAIL_REPLY_TO: 'Inicio <reply@inicio.example>',
 });
 
 await ensureTestDatabase();

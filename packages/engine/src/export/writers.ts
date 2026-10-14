@@ -72,7 +72,7 @@ export function csvBundle(dataset: ExportDataset): BundleFile[] {
       entry.type,
       entry.numeric ? 'yes' : 'no',
       entry.valueLabels.map((v) => `${v.code}=${v.label}`).join('; '),
-      ...missingName.map(([, code]) => `${MISSING_CODES[code].numeric ?? 'blank'} — ${MISSING_CODES[code].label}`),
+      ...missingName.map(([, code]) => `${MISSING_CODES[code].numeric ?? 'blank'}: ${MISSING_CODES[code].label}`),
       entry.notes.join(' '),
     ] as Cell[]),
   ];

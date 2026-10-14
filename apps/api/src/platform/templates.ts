@@ -91,7 +91,7 @@ const schoolRanking: FormDefinition = {
       groupId: 'g_metrics',
       name: 'teacher_quality',
       type: 'integer',
-      label: { en: 'Teacher quality (1–5)', hi: 'शिक्षक गुणवत्ता (1–5)' },
+      label: { en: 'Teacher quality (1-5)', hi: 'शिक्षक गुणवत्ता (1-5)' },
       required: true,
       appearance: 'rating',
       validation: { constraint: '. >= 1 and . <= 5', message: { en: 'Between 1 and 5' } },
@@ -101,7 +101,7 @@ const schoolRanking: FormDefinition = {
       groupId: 'g_metrics',
       name: 'infrastructure',
       type: 'integer',
-      label: { en: 'Infrastructure (1–5)', hi: 'अधोसंरचना (1–5)' },
+      label: { en: 'Infrastructure (1-5)', hi: 'अधोसंरचना (1-5)' },
       required: true,
       appearance: 'rating',
       validation: { constraint: '. >= 1 and . <= 5', message: { en: 'Between 1 and 5' } },
@@ -186,7 +186,7 @@ const serviceFeedback: FormDefinition = {
   groups: [],
   questions: [
     { id: 'q_rating', name: 'rating', type: 'select_one', label: { en: 'Overall rating' }, required: true, choices: { listName: 'ratings' } },
-    { id: 'q_nps', name: 'nps', type: 'integer', label: { en: 'How likely are you to recommend us? (0–10)' }, required: true, validation: { constraint: '. >= 0 and . <= 10', message: { en: 'Between 0 and 10' } } },
+    { id: 'q_nps', name: 'nps', type: 'integer', label: { en: 'How likely are you to recommend us? (0-10)' }, required: true, validation: { constraint: '. >= 0 and . <= 10', message: { en: 'Between 0 and 10' } } },
     { id: 'q_comment', name: 'comment', type: 'textarea', label: { en: 'What should we improve?' }, rules: { visibleIf: '${rating} != \'excellent\'' } },
   ],
   choiceLists: {
@@ -224,19 +224,19 @@ export const TEMPLATES: Template[] = [
     id: 'school-ranking-2026',
     title: schoolRanking.title,
     description:
-      'The original 2026 school ranking instrument — cascading district selection, a repeat group for contacts, an on-site geopoint and a computed composite score. Kept as a template so the existing questionnaire is content, not the product.',
+      'The original 2026 school ranking instrument: cascading district selection, a repeat group for contacts, an on-site geopoint and a computed composite score. Kept as a template so the existing questionnaire is content, not the product.',
     definition: schoolRanking,
   },
   {
     id: 'service-feedback',
     title: serviceFeedback.title,
-    description: 'Short NPS-style form: a rating, a 0–10 recommendation score and a conditional comment box.',
+    description: 'Short NPS-style form: a rating, a 0-10 recommendation score and a conditional comment box.',
     definition: serviceFeedback,
   },
   {
     id: 'field-inspection',
     title: fieldInspection.title,
-    description: 'Photo, GPS and a conditional damage narrative — the shape of an offline field inspection.',
+    description: 'Photo, GPS and a conditional damage narrative: the shape of an offline field inspection.',
     definition: fieldInspection,
   },
 ];

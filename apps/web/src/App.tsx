@@ -420,7 +420,7 @@ function Login({ onSignedIn }: { onSignedIn: () => void }): JSX.Element {
   };
 
   return (
-    <div className="auth card">
+    <div className="auth card surface">
       <h1>Inicio</h1>
       <p className="muted">
         Multi-tenant survey and data-collection platform. Accounts are invitation only: sign in with the address your
@@ -659,7 +659,7 @@ export function DataTab({
         {analytics !== null && analytics !== undefined && analytics.conflicts > 0 && (
           <p className="muted small" role="status">
             {analytics.conflicts === 1 ? '1 answer was' : `${analytics.conflicts} answers were`} edited on two devices
-            before syncing. The value the server held is kept, and the other copy is stored beside it — nothing was
+            before syncing. The value the server held is kept, and the other copy is stored beside it. Nothing was
             overwritten.
           </p>
         )}
@@ -689,7 +689,7 @@ export function DataTab({
                 {row.conflict_count > 0 ? (
                   <span className="error">{row.conflict_count}</span>
                 ) : (
-                  <span className="muted">—</span>
+                  <span className="muted">0</span>
                 )}
               </td>
               <td>
@@ -2076,7 +2076,7 @@ export function App(): JSX.Element {
     page = (
       <Suspense
         fallback={
-          <div className="boot" role="status">
+          <div className="boot surface" role="status">
             <span className="boot-bar" aria-hidden="true" />
             <p>Inicio</p>
           </div>
@@ -2088,7 +2088,7 @@ export function App(): JSX.Element {
   } else if (onLogin && !signedIn) page = <Login onSignedIn={goToConsole} />;
   else if (me === undefined) {
     page = (
-      <div className="boot" role="status">
+      <div className="boot surface" role="status">
         <span className="boot-bar" aria-hidden="true" />
         <p>Opening your workspace.</p>
       </div>

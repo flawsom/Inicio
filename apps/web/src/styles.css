@@ -11,8 +11,9 @@
  * Three rules hold this together.
  *
  * 1. Every colour, radius, gap and shadow comes from a token. There is no literal
- *    hex below the token blocks, which is what makes the light theme a switch
- *    rather than a rewrite.
+ *    hex below the token blocks, which is what makes the dark material a class
+ *    rather than a second stylesheet: `.surface` re-binds the roles for its subtree
+ *    and every rule below follows it.
  * 2. Spacing is a scale, not a mood. `--sp-*` is used for every margin, padding and
  *    gap, so nothing ends up jammed against anything: the smallest gap between two
  *    pieces of type is 12px and the smallest inside a control is 12px, which is the
@@ -22,22 +23,42 @@
  *    margin block instead of a margin bottom, and every uppercase label gets
  *    tracking wide enough to be read as a label rather than shouted as a word.
  *
- * The palette is the product's own: pearl and ink, one blue, one violet, one cyan
- * used only where something is genuinely live.
+ * The palette is the brand's own, and it is one palette with two materials. A white
+ * ground carries ink type and a peach-tinted pane; a near-black surface (`#191c21`)
+ * carries white type and a light hairline. One orange is the primary and one peach is
+ * the accent, and neither of them means anything else. Background, surface, type and
+ * border never borrow each other's tokens, which is what keeps a page made of two
+ * materials legible in both.
+ *
+ * The landing page carries the same values in its own stylesheet (its scene and its
+ * palette are a separate chunk on purpose), so this file and that one are one look.
  */
 
 :root {
-  /* Palette, named, so the themes below are readable. */
-  --pearl: #f3f2ee;
-  --ink: #0a0a0b;
-  --blue: #2a5bff;
-  --violet: #7b4dff;
-  --cyan: #1cc7d0;
-  --pearl-muted: #6d6d74;
-  --ink-muted: #8e8e96;
-  --green: #2f9e6b;
-  --red: #e0555a;
-  --amber: #d3a24a;
+  /*
+   * The brand palette, at its own values, named once.
+   *
+   * `--primary-text` exists because one value cannot do two jobs honestly: #ea580c as
+   * type on white is 3.6:1, short of the 4.5:1 a paragraph needs, so the primary is
+   * the brand value wherever it is a fill or a mark and the darker shade wherever it
+   * is a glyph. The peach is the accent and is only ever a mark or a wash, never type.
+   * Every pair below is measured in `apps/web/test/contrast.test.ts`.
+   */
+  --primary: #ea580c;
+  --primary-text: #c2410c;
+  --on-primary: #111827;
+  --peach: #fdba74;
+  --paper: #ffffff;
+  --paper-deep: #f4f2ef;
+  --surface: #191c21;
+  --ink: #111827;
+  --ink-muted: #4b5563;
+  --green: #15803d;
+  --red: #b91c1c;
+  --amber: #92400e;
+  /* The surface's own two type colours, for the same reason. */
+  --on-surface: #ffffff;
+  --ink-muted-on-surface: #9ca3af;
 
   /* Spacing scale. */
   --sp-1: 4px;
@@ -59,86 +80,152 @@
   --text-lg: 18px;
   --label-tracking: 0.22em;
 
-  --radius-sm: 10px;
+  /* One radius language, shared with the landing page: a control is 8px, a card and
+     a sheet are 16px, and a pill is a pill. */
+  --radius-sm: 8px;
   --radius: 16px;
-  --radius-lg: 22px;
   --radius-pill: 999px;
 
   --gutter: clamp(20px, 4vw, 56px);
   --measure: 74ch;
 }
 
-/* Dark, which is what the product is: a dark room with glass in it. */
+/*
+ * The ground: the paper the product is printed on.
+ *
+ * This is the default material, and it is what every screen in the workspace is made
+ * of. The surface's own values live beside it rather than inside a media query: the
+ * product has one palette, and which material a given element is made of is a fact
+ * about that element, not about a visitor's operating system.
+ */
 :root {
-  --bg: #07070a;
-  --bg-deep: #040406;
-  --panel: rgba(255, 255, 255, 0.038);
-  --panel-2: rgba(255, 255, 255, 0.062);
-  --panel-solid: #101018;
-  --line: rgba(243, 242, 238, 0.13);
-  --line-strong: rgba(243, 242, 238, 0.24);
+  color-scheme: light;
+
+  --bg: var(--paper);
+  --bg-deep: var(--paper-deep);
+  --panel: rgba(253, 186, 116, 0.12);
+  --panel-2: rgba(17, 24, 39, 0.045);
+  --panel-solid: var(--paper);
+  --line: rgba(17, 24, 39, 0.12);
+  --line-strong: rgba(17, 24, 39, 0.26);
   /*
    * The boundary of something you can type in.
    *
    * WCAG 1.4.11 asks a control's boundary to reach 3:1 against what is behind it,
-   * and a hairline chosen for looks does not: `--line` at 13% is about 1.6:1 against
-   * this ground. A field also has a fill, but the fill alone is under 1.5:1 either,
+   * and a hairline chosen for looks does not: `--line` at 12% is about 1.5:1 against
+   * this ground. A field also has a fill, but the fill alone is under 1.2:1 either,
    * so the boundary is doing the work and it has to be strong enough to do it.
    */
-  --line-control: rgba(243, 242, 238, 0.5);
-  --text: var(--pearl);
+  --line-control: rgba(17, 24, 39, 0.5);
+  --text: var(--ink);
   --muted: var(--ink-muted);
-  --accent: #6f95ff;
-  --accent-solid: var(--blue);
-  --accent-2: var(--violet);
-  --live: var(--cyan);
+  /* `--accent` is type and focus, so it is the shade that survives on white;
+     `--accent-solid` is the brand value, and it is only ever a fill or a mark. */
+  --accent: var(--primary-text);
+  --accent-solid: var(--primary);
+  --accent-2: #b45309;
+  --on-accent: var(--on-primary);
+  /* Live is the brand's own signal: the same orange as the primary, in the shade
+     that holds as type. Nothing else in the product is allowed to be this colour. */
+  --live: var(--primary-text);
   --ok: var(--green);
-  --bad: #ff6b70;
-  --warn-fg: #f0d9a8;
-  --warn-bg: rgba(211, 162, 74, 0.12);
-  --warn-line: rgba(211, 162, 74, 0.5);
-  --sheen: rgba(255, 255, 255, 0.09);
+  --bad: var(--red);
+  --warn-fg: var(--amber);
+  --warn-bg: rgba(217, 119, 6, 0.12);
+  --warn-line: rgba(180, 83, 9, 0.45);
+  --sheen: rgba(255, 255, 255, 0.9);
   /* Opaque fallback for the two surfaces that must never be see-through, for a
      browser without `color-mix`. */
-  --scrim: rgba(7, 7, 10, 0.84);
-  --shadow: 0 22px 70px rgba(0, 0, 0, 0.55);
-  --glow: 0 18px 60px rgba(42, 91, 255, 0.28);
-  color-scheme: dark;
+  --scrim: rgba(255, 255, 255, 0.86);
+  --shadow: 0 18px 44px rgba(17, 24, 39, 0.1);
+  --glow: 0 18px 60px rgba(234, 88, 12, 0.18);
+
+  /*
+   * The surface's roles, in the same order.
+   *
+   * They are declared on the ground rather than only inside `.surface` so that a
+   * rule which needs one of them by name (the vignette, over a boot screen) can
+   * reach it without a second copy of the value.
+   */
+  --panel-on-surface: rgba(255, 255, 255, 0.06);
+  --panel-2-on-surface: rgba(255, 255, 255, 0.1);
+  --text-on-surface: var(--on-surface);
+  --muted-on-surface: var(--ink-muted-on-surface);
+  --line-on-surface: rgba(255, 255, 255, 0.16);
+  --line-control-on-surface: rgba(255, 255, 255, 0.45);
+  --sheen-on-surface: rgba(255, 255, 255, 0.14);
+  --accent-on-surface: var(--peach);
+  --ok-on-surface: #86efac;
+  --bad-on-surface: #fca5a5;
+  --warn-fg-on-surface: #fcd34d;
+  --warn-bg-on-surface: rgba(252, 211, 77, 0.12);
+  --warn-line-on-surface: rgba(252, 211, 77, 0.45);
+  --scrim-on-surface: rgba(25, 28, 33, 0.86);
+  --shadow-on-surface: 0 26px 70px rgba(0, 0, 0, 0.45);
 }
 
 /*
- * The other half of the palette.
+ * The dark material, as a class.
  *
- * Pearl ground, ink type, the same two accents darkened just enough to hold their
- * contrast on a light background. Nothing else changes: same scale, same radii,
- * same components.
+ * A page is made of one of two materials and nothing in between: a white sheet, or
+ * this. Because every rule in this file reads its colour from a token, re-binding the
+ * tokens inside a subtree re-themes the whole subtree at once, and it stays correct
+ * as the subtree grows: a card, an input, a table row or a heading added inside a
+ * `.surface` region inherits the surface's own type, boundary and panel values without
+ * anybody remembering to add a rule.
+ *
+ * That is the point of it. The alternative is the defect this codebase has already
+ * shipped once: near-black headings on a near-black ground, because one global rule
+ * read `--text` and nobody had told the dark region what its `--text` was.
+ *
+ * The roles are rebound in full rather than partially, so there is no half-themed
+ * state: type, support type, boundaries, control boundaries, panels, the sheen along
+ * a card's top edge, the scrim behind the sticky bar, the accent, the status colours
+ * (all four of which have to be lighter to hold their contrast on ink) and the lift.
  */
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg: var(--pearl);
-    --bg-deep: #e9e8e3;
-    --panel: rgba(255, 255, 255, 0.66);
-    --panel-2: rgba(10, 10, 11, 0.045);
-    --panel-solid: #ffffff;
-    --line: rgba(10, 10, 11, 0.14);
-    --line-strong: rgba(10, 10, 11, 0.28);
-    --line-control: rgba(10, 10, 11, 0.5);
-    --text: var(--ink);
-    --muted: var(--pearl-muted);
-    --accent: var(--blue);
-    --accent-2: #5b32d6;
-    --live: #0a6a75;
-    --ok: #1f7a52;
-    --bad: #c4343a;
-    --warn-fg: #6b4c12;
-    --warn-bg: rgba(211, 162, 74, 0.16);
-    --warn-line: rgba(160, 118, 30, 0.45);
-    --sheen: rgba(255, 255, 255, 0.9);
-    --scrim: rgba(243, 242, 238, 0.88);
-    --shadow: 0 20px 60px rgba(10, 10, 11, 0.12);
-    --glow: 0 18px 60px rgba(42, 91, 255, 0.16);
-    color-scheme: light;
-  }
+.surface {
+  color-scheme: dark;
+
+  --bg: var(--surface);
+  --bg-deep: #0b0d10;
+  --panel: var(--panel-on-surface);
+  --panel-2: var(--panel-2-on-surface);
+  --panel-solid: var(--surface);
+  --line: var(--line-on-surface);
+  --line-strong: var(--line-control-on-surface);
+  --line-control: var(--line-control-on-surface);
+  --text: var(--text-on-surface);
+  --muted: var(--muted-on-surface);
+  --accent: var(--accent-on-surface);
+  --accent-solid: var(--primary);
+  --live: var(--accent-on-surface);
+  --ok: var(--ok-on-surface);
+  --bad: var(--bad-on-surface);
+  --warn-fg: var(--warn-fg-on-surface);
+  --warn-bg: var(--warn-bg-on-surface);
+  --warn-line: var(--warn-line-on-surface);
+  --sheen: var(--sheen-on-surface);
+  --scrim: var(--scrim-on-surface);
+  --shadow: var(--shadow-on-surface);
+  --glow: 0 18px 60px rgba(234, 88, 12, 0.34);
+
+  color: var(--text);
+}
+
+/*
+ * The region that declares the material paints it.
+ *
+ * `.surface.surface` is not a typo, and the reason is worth writing down. `.card`
+ * fills a pane that sits *on* a material, and every one of those rules is below this
+ * one, so on an element that is both — the front door is a card, the studio's source
+ * panel is a panel — the pane's fill would win the tie on source order and leave the
+ * region a six per cent white film with the surface's white type on top of it, which
+ * on a white page is invisible. Repeating the class wins the tie by specificity
+ * instead of by position, so the rule keeps working wherever it sits in the file and
+ * whatever component is next built out of it.
+ */
+.surface.surface {
+  background: var(--bg);
 }
 
 * {
@@ -183,7 +270,7 @@ body {
  * The class is `ambient` and not `field` for a reason worth keeping: `.field` is the
  * question block inside a form card, and while the two shared the name every question
  * a respondent saw was `position: fixed; inset: 0; z-index: -1; pointer-events: none`
- * — a full-viewport, invisible, unclickable layer. The markup was correct and no unit
+ * a full-viewport, invisible, unclickable layer. The markup was correct and no unit
  * test could see it. `shell.test.ts` is what stops the two names meeting again.
  */
 .ambient {
@@ -191,10 +278,16 @@ body {
   inset: 0;
   z-index: -1;
   pointer-events: none;
+  /*
+   * The wash under the canvas, in the brand's two warm values rather than in three
+   * cool ones. It is the fallback for a browser without WebGL and the ground the
+   * canvas's own field is drawn into, so it is deliberately faint: it is a tint on
+   * paper, not a background.
+   */
   background:
-    radial-gradient(78% 60% at 84% -10%, rgba(42, 91, 255, 0.2), transparent 62%),
-    radial-gradient(62% 54% at 2% 104%, rgba(123, 77, 255, 0.17), transparent 60%),
-    radial-gradient(50% 40% at 50% 50%, rgba(28, 199, 208, 0.05), transparent 70%);
+    radial-gradient(78% 60% at 84% -10%, rgba(234, 88, 12, 0.14), transparent 62%),
+    radial-gradient(62% 54% at 2% 104%, rgba(253, 186, 116, 0.24), transparent 60%),
+    radial-gradient(50% 40% at 50% 50%, rgba(17, 24, 39, 0.035), transparent 70%);
 }
 
 .ambient canvas {
@@ -248,12 +341,24 @@ body {
   100% { background-position: 0 0; }
 }
 
+/*
+ * The vignette.
+ *
+ * On paper it is a warm grey that gathers at the edges; over the surface it is black,
+ * because the light fog that reads as a shadow on white reads as haze on ink. Which
+ * of the two it is follows the page: the vignette is a sibling of the page rather than
+ * a descendant of it, so it cannot inherit the material and is keyed off it instead.
+ */
 .vignette {
   position: fixed;
   inset: 0;
   z-index: 59;
   pointer-events: none;
   background: radial-gradient(120% 100% at 50% 0%, transparent 45%, color-mix(in srgb, var(--bg-deep) 85%, transparent) 100%);
+}
+
+body:has(.surface) .vignette {
+  background: radial-gradient(120% 100% at 50% 0%, transparent 45%, rgba(0, 0, 0, 0.5) 100%);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -461,6 +566,14 @@ button {
   border: 1px solid var(--line-control);
   border-radius: var(--radius-sm);
   padding: 11px 13px;
+  /*
+   * A field is allowed to become narrower than it would like to be, and that is a
+   * mobile fix rather than a style: the automatic minimum size of a form control is
+   * its intrinsic width — a `<select>` is as wide as its longest option — and a row
+   * of controls that contains one cannot shrink below it, so it pushes the page
+   * sideways or gets clipped at 320px.
+   */
+  min-width: 0;
   transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
@@ -491,23 +604,33 @@ textarea {
   min-height: 120px;
 }
 
+/*
+ * The primary action.
+ *
+ * The label is ink, not white: white on #ea580c is 3.6:1, which is under what 14.5px
+ * text needs, and the honest way to keep the brand value on the button is to put ink
+ * on it rather than a white that fails. It is the landing page's own button — same
+ * fill, same label, same lift on hover — because a person who signs in should not
+ * arrive at a different product's controls.
+ */
 button {
   width: auto;
   cursor: pointer;
   font-weight: 600;
   letter-spacing: -0.01em;
-  color: #05070f;
-  background: linear-gradient(120deg, #cfe0ff, var(--pearl) 46%, #bed1ff);
+  color: var(--on-accent);
+  background: var(--accent-solid);
   border-color: transparent;
-  box-shadow: 0 10px 34px rgba(42, 91, 255, 0.24);
+  box-shadow: 0 10px 30px rgba(234, 88, 12, 0.26);
 }
 
 button:hover:not(:disabled) {
-  filter: brightness(1.05);
-  box-shadow: 0 14px 46px rgba(42, 91, 255, 0.36);
+  filter: brightness(1.04);
+  transform: translateY(-1px);
+  box-shadow: 0 14px 40px rgba(234, 88, 12, 0.36);
 }
 
-button:active:not(:disabled) { transform: translateY(1px); }
+button:active:not(:disabled) { transform: translateY(0); }
 
 button:focus-visible,
 input:focus-visible,
@@ -538,7 +661,7 @@ button.ghost:hover:not(:disabled) {
 
 @media (prefers-reduced-motion: reduce) {
   input, select, textarea, button { transition: none; }
-  button:active:not(:disabled) { transform: none; }
+  button:hover:not(:disabled), button:active:not(:disabled) { transform: none; }
 }
 
 .row { display: flex; gap: var(--sp-3); align-items: center; }
@@ -930,9 +1053,17 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
 
 /* -------------------------------------------------------------------- boot */
 
-/* The first thing anybody sees: a hairline that fills, not a spinner. */
+/*
+ * The first thing anybody sees: a hairline that fills, not a spinner.
+ *
+ * This state is the one screen in the product that is the surface rather than paper,
+ * and it is deliberate: it is the moment before the workspace knows who is signed in,
+ * the landing page paints its dark base for the same reason, and two screens that
+ * arrive within a second of each other should not flash between white and ink. It
+ * takes the viewport, so there is no seam at the moment the workspace replaces it.
+ */
 .boot {
-  min-height: 70svh;
+  min-height: 100svh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -978,7 +1109,7 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
   margin: clamp(56px, 12vh, 140px) auto var(--sp-8);
   padding: var(--sp-6);
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   background: var(--panel);
   backdrop-filter: blur(26px) saturate(1.1);
   box-shadow: var(--shadow);
@@ -990,7 +1121,15 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
 
 /* --------------------------------------------------------------------- otp */
 
-/* Six-box OTP entry: one digit per box, no autofill surface. */
+/*
+ * Six-box OTP entry: one digit per box, no autofill surface.
+ *
+ * The row is allowed to give up width rather than push the sheet sideways: six 46px
+ * boxes and their gaps are 316px, and a 320px phone has less room than that inside a
+ * card. So each box is a 46px basis that can shrink, and it never falls under its own
+ * digit, because the fallback for a box that cannot fit is a horizontal scrollbar on
+ * a sign-in screen.
+ */
 .otprow {
   display: flex;
   gap: var(--sp-2);
@@ -998,7 +1137,9 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
 }
 
 .otpbox {
+  flex: 0 1 46px;
   width: 46px;
+  min-width: 0;
   height: 58px;
   padding: 0;
   text-align: center;
@@ -1264,8 +1405,8 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
 /*
  * The preview's frame.
  *
- * The markup inside it is the respondent's own — `.collect` and everything under it
- * comes from the component the collection page renders — so the only thing this rule
+ * The markup inside it is the respondent's own (`.collect` and everything under it
+ * comes from the component the collection page renders), so the only thing this rule
  * changes is the container it sits in: the collection page centres an 820px column
  * on a phone-sized viewport, and a panel is neither.
  */
@@ -1314,6 +1455,10 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
   /* The studio is a stack by now, so its panels lose the padding a wide column has. */
   .studio-body { padding: var(--sp-3); }
   th, td { padding: 10px 10px; }
+  /* Six digits across a phone: shorter boxes and a smaller digit, so the row keeps
+     its even rhythm instead of squeezing unevenly. */
+  .otprow { gap: var(--sp-1); }
+  .otpbox { height: 52px; font-size: 20px; }
 }
 
 /* ----------------------------------------------------------------- the builder */
@@ -1327,7 +1472,13 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
 .studio-builder { display: grid; gap: var(--sp-3); margin-top: var(--sp-4); }
 
 .studio-builder-list {
+  /*
+   * One column, allowed to be narrower than its content wants: an implicit grid track
+   * is sized to the widest thing in it, so a long question label would otherwise make
+   * the list wider than the panel it lives in, and the panel clips what it cannot show.
+   */
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-2, 6px);
   margin: 0;
   padding: 0;
@@ -1341,7 +1492,7 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
   padding: 4px 8px;
   /* A control boundary, so it takes the token the contrast test holds to 3:1. */
   border: 1px solid var(--line-control, currentColor);
-  border-radius: 10px;
+  border-radius: var(--radius-sm, 8px);
 }
 
 /* Which question the logic fields below belong to has to be visible without reading them. */
@@ -1351,6 +1502,7 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
 
 .studio-builder-label {
   flex: 1;
+  min-width: 0;
   padding: 2px 0;
   border: 0;
   background: none;
@@ -1361,3 +1513,21 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
 
 .studio-builder-logic { display: grid; gap: var(--sp-2, 6px); }
 .studio-builder-logic input { width: 100%; }
+
+/*
+ * The builder on a phone.
+ *
+ * This breakpoint is at the end of the file rather than with the others, and that is
+ * the point: a media query does not outrank a plain rule that comes after it, and the
+ * builder's own rules are the last ones here. Written up there it changed nothing and
+ * looked like it had.
+ *
+ * What it does: a question row is a label and three controls, and sharing one line on
+ * a 320px phone squeezes the label into a column of single words. The label takes its
+ * own line and the controls sit under it. It leads visually because the only thing
+ * before it in the markup is the decorative grip, which is `aria-hidden`.
+ */
+@media (max-width: 640px) {
+  .studio-builder-row { flex-wrap: wrap; }
+  .studio-builder-label { flex: 1 1 100%; order: -1; }
+}

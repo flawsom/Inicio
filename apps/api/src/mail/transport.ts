@@ -78,6 +78,7 @@ function smtpSender(transporter: Transporter): MailSender {
         subject: job.subject,
         html: job.html,
         text: job.text,
+        ...(env.MAIL_REPLY_TO ? { replyTo: env.MAIL_REPLY_TO } : {}),
       });
       return {};
     },
@@ -91,6 +92,7 @@ function activeSender(): MailSender {
     return createResendSender({
       apiKey: env.RESEND_API_KEY ?? '',
       from: env.MAIL_FROM,
+      ...(env.MAIL_REPLY_TO ? { replyTo: env.MAIL_REPLY_TO } : {}),
       url: env.RESEND_API_URL,
     });
   }
@@ -250,7 +252,7 @@ export async function mailStatus(force = false): Promise<MailStatus> {
         basis: d ? 'last-send' : 'none',
         detail:
           d?.detail ??
-          'no message sent yet — the next login code will show whether the relay accepts it',
+          'no message sent yet; the next login code will show whether the relay accepts it',
         checkedAt: new Date(now).toISOString(),
       },
     };
@@ -274,7 +276,7 @@ export async function mailStatus(force = false): Promise<MailStatus> {
   } catch (err) {
     cachedStatus = {
       at: now,
-      status: failed(`cannot reach ${env.SMTP_HOST}:${env.SMTP_PORT} — ${(err as Error).message}`),
+      status: failed(`cannot reach ${env.SMTP_HOST}:${env.SMTP_PORT}: ${(err as Error).message}`),
     };
   }
   return cachedStatus.status;

@@ -359,7 +359,7 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
         // A published version is immutable: it answered real responses, and
         // rewriting it would rewrite history. Edit by making a draft from it.
         if (current.status === 'published') {
-          throw new HttpError(409, 'version_immutable', 'published versions are immutable — create a new draft from it');
+          throw new HttpError(409, 'version_immutable', 'published versions are immutable: create a new draft from it');
         }
         if (current.status === 'archived') throw new HttpError(409, 'version_archived');
 

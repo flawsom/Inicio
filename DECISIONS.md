@@ -875,7 +875,7 @@ download. The presign route exists for the mirror-image reason: a file path with
 keeps a video from becoming a video-sized response body, and it is why the same content type has to travel
 inside the signature.
 
-## D31 — The landing page carries the brand palette, on two materials
+## D31 — The landing page carries the brand palette, on two materials (superseded in part by D34)
 
 **Context.** The public page was built in the product's dark theme: near-black ground, pearl type, blue and
 violet accents — the same palette as the console, applied to a marketing page. The brand palette is not
@@ -886,9 +886,11 @@ read as a different material.
 ground is `#ffffff` with ink type (`#111827`); the surface is `#191c21`, and it is what the stage and the
 footer are made of; the primary is `#ea580c`; the accent is `#fdba74`. Type on the ground cannot be type on
 the surface, and vice versa — those are four distinct roles rather than one palette with a tint applied —
-and a border is a hairline of whichever material it is drawn on. The console is deliberately **not**
-rethemed: it is a dark room with glass in it, it is a working surface rather than a marketing one, and a
-palette is not a reason to redesign the thing people do their job in.
+and a border is a hairline of whichever material it is drawn on. The console was deliberately **not**
+rethemed in this change: it is a dark room with glass in it, it is a working surface rather than a marketing
+one, and a palette is not a reason to redesign the thing people do their job in. That last sentence was
+wrong on the evidence and is reversed by **D34**, which found that the cost of leaving the workspace behind
+was a person crossing from an orange page on white into a different product's blue.
 
 **Why the primary is two tokens.** `#ea580c` as a glyph on `#ffffff` measures 3.6:1 — under the 4.5:1 that
 text needs, and this was measured rather than assumed. So the primary is `--l-primary` wherever it is a
@@ -915,3 +917,200 @@ near-black on a near-black ground for half of all visitors, and the screenshots 
 headless browsers ask for a light colour scheme while rendering a dark page for real. The landing page now
 declares the colour of its own headings. The lesson is not "add a colour"; it is that a page assembled from
 two stylesheets has to be measured as rendered, in a browser, at the widths people actually use.
+
+## D32 — An email is a surface, the code never travels in the subject, and a verified domain is not an inbox
+
+**Context.** Four messages leave this product: the sign-in code, the welcome a new member gets when an
+invitation is redeemed, the notice that a sign-in finished, and the receipt a submission can send. All four
+were a heading, a paragraph and a `<p>` around a value — the shape every project starts with, and the one
+piece of this product that had never been designed at all. They are also the first thing most people ever
+see from it, which is the worst possible place to look unfinished: nobody gives a second chance to a mail
+that looks like spam, and the reader who has already decided that is not going to open the next one.
+
+**Decision: one layout, four messages, five rules.** `apps/api/src/mail/templates.ts` builds them from a
+single card. (1) **Nothing is fetched** — no image, no pixel, no web font, no linked stylesheet: an email
+that loads a file from a server is a read receipt with a design, and a product that does not track its
+readers does not get to track them because the medium made it convenient. Every mark is text or a border,
+so the message is complete with images off, which is how most of them will be read. (2) **Tables and inline
+styles**, because Outlook renders with Word's engine: the one `<style>` block that survives carries only
+what inline styles cannot express — the dark palette and hiding the preheader — and a client that strips it
+still gets the whole light design. (3) **The code is never in the subject.** A subject is drawn by the
+operating system on a locked screen, quoted back inside every reply, and written into every mail log and
+gateway on the way out; a one-time code in it is a code published to places the reader cannot see. (4) **The
+palette is the product's own and the arithmetic is the same one**: `#ea580c` as a fill, `#c2410c` as type,
+the ink label on the primary button, `#191c21` and `#fdba74` for the dark scheme — including the reason the
+label is ink, because white on `#ea580c` is 3.6:1 (D31). (5) **The plain-text part is written, not
+derived.** The clients that ask for `text/plain` are watches, terminals and screen readers; the HTML with
+the tags stripped is unreadable in all three.
+
+**A card, not a rule, for what the reader needs.** The OTP email gives the code the only treatment nothing
+else gets — a monospaced block on the tinted panel, sized to be read off a phone held at arm's length while
+typing it into a laptop — and its one button is deliberately the quiet outline rather than the primary
+orange, because the code is the action and two competing calls to action is how a person clicks the wrong
+one. It states the lifetime from `OTP_TTL_MINUTES` instead of a hardcoded ten minutes, so the sentence and
+the server cannot disagree. The welcome answers the three questions a new member actually has (what this
+is, what I can do, what my role means — the role sentences match the guards in `platform/orgs.ts`), and it
+says out loud that accounts here are invitation-only, because a reader who does not know that will spend
+their first afternoon looking for a sign-up page. The sign-in notice records the instant in UTC and the
+address it came from, and its advice is about the inbox rather than a password, because an inbox is the
+only credential this product has.
+
+**Why escaping happens at the layout boundary, and the bug that proved it.** `layout` escapes the title,
+the heading and the preheader itself; the rows are composed by builders that escape the values they are
+handed. The first version escaped at the call sites instead, which is exactly the arrangement that fails
+quietly: a template's preheader interpolated the organisation name raw, so an organisation called
+`St Mary's <b>School</b>` put a live `<b>` inside the hidden div of a live email. No test we had would have
+caught it — the escaping *looked* consistent — and `mail-templates.test.ts` now asserts the property rather
+than the habit: a hostile address, organisation, role and submission id cannot carry a tag into any field
+of any template.
+
+**Why `MAIL_REPLY_TO` is its own variable.** `MAIL_FROM` is a claim about *sending*: the relay has verified
+the domain and will accept the message. A reply target is a claim about *receiving*, and the two are not
+the same address — a sender does not need an inbox, and this deployment's does not have one. So the reply
+target is configuration rather than an assumption, and the welcome's invitation to reply is printed only
+when it is set: with no mailbox named it offers an owner or an admin instead, because an instruction that
+bounces is worse than no instruction, in that the reader believes they asked.
+
+**What the browser found that the suite could not.** The string tests cannot see whether a media query applies,
+and the first pass through a real layout engine found one that did not: the phone rule that steps the code down
+to 30px targeted `.e-code-inner`, and the span it was written for had no class, so a rule that looked
+considered did nothing at all. That is now `apps/api/src/mail/templates.ts`'s only class-selector-dependent
+typographic rule, and it wears the class. The same pass measured what a string cannot: the dark ground really
+is `#191c21`, the dark card separates from it, the label really is ink on `#ea580c`, the preheader is really
+`display: none`, and nothing overflows a 390px phone (`39/39`).
+
+**What the live relay answered.** Sending was verified against Resend rather than reasoned about: all four
+templates left `inicio@unifies.codes` and arrived in a real mailbox with their links, both alternatives and
+their palette intact — 4/4 reported `delivered` and 26/26 content checks passed. Sending *to* that address is
+another story, and it is the one worth writing down: it bounced with `554 5.1.1 … User unknown`, because the
+domain has three mail providers claiming it at the same priorities (Zoho, Namecheap and ImprovMX) and no
+mailbox called `inicio` at any of them. The same lookup explains why mail still leaves correctly: Resend's
+own records are `send.unifies.codes` (its SPF) and `resend._domainkey` (its DKIM), which is what makes the
+domain verifiable for sending while the root MX stays ambiguous. Two consequences for whoever runs this
+deployment: the root domain carries **three** `v=spf1` records, which by RFC 7208 is not a policy at all but
+a permanent error, so they should be collapsed into one; and either a mailbox (or a catch-all) for
+`inicio@unifies.codes` should exist — at which point `MAIL_REPLY_TO` can be set and the invitation to reply
+comes back — or replies should be pointed at an address somebody reads. Production must carry the same
+identity in its own environment: a workspace and a deployment have different environments, and mail identity
+is not the one place to assume otherwise.
+
+## D33 - A private deployment's public page does not name its source, and its copy carries no typographic dashes
+
+**Context.** The landing page was written as the front page of a public repository. Every capability card
+linked to the file that implemented it, the navigation offered `Source`, the footer carried the repository
+URL beside the licence, and the honesty section ended with "Read the honest status document" pointing at
+`docs/ROADMAP.md` on GitHub. The deployment is one organisation's private application, and its readers are
+people who are about to type real school data into it. A link to a private repository is a dead end for a
+visitor and a disclosure for everyone else: it names the location, the host and the owner of the source, on
+the one page whose whole argument is that nothing is being hidden from you.
+
+**Decision: a claim is proven inside the product or it is not made.** The evidence chip became a **Where to
+check it** line, written as something a reader can actually do in two taps: write a relevance rule and watch
+the preview hide the question, put a device in flight mode and answer anyway, sign in as two organisations
+and try to reach the other one. That is the stronger half of the same promise, because it needs no
+repository to be true and the person reading it can see it work. The status button opens this deployment's
+own `GET /api/v1/public/summary`, which is the honest status the section was pointing at all along. The
+footer names the host it is served from rather than the host the code is stored on.
+
+**Why the rule is a test and not a review note.** A link added to a card or a status link pasted into a
+footer reads as harmless in a diff, and the people who would notice it are the ones who already know the
+repository's address. So `apps/web/test/landing.test.tsx` resolves every anchor the rendered page produces
+and fails if any of them leaves the deployment's origin or names a source host, and it asserts the words
+that give it away even without a link (`github`, `repository`, `open source`, `apache`). A browser pass over
+the live page then checks the same thing against the served HTML, because the component and the document are
+not the same artifact.
+
+**No em dash, and no en dash, in anything a reader sees.** The dashes were worth removing for the reason
+they were noticed: an em dash is the punctuation a generated paragraph reaches for, and a product whose copy
+leans on it reads as written by something that does not care who reads it. The sweep covered everything that
+renders, which is wider than the marketing page: the four emails, the studio's panel copy, the XLSForm
+importer's twelve notes, the analyser's validation messages, the export's missing-code labels, the console's
+placeholder for "no conflicts" (now `0`, which is the fact rather than a dash standing in for one) and the
+shipped questionnaire's section titles. It is held by tests: the landing page's rendered text is asserted to
+contain no `U+2014` or `U+2013`, and `mail-templates.test.ts` and the queue and studio suites assert the
+strings they always did, which is what makes the change safe to make at all.
+
+**The boundary is "what a browser can be served", and it is drawn tight.** The stylesheets' comments went
+too, which reads as excessive until you watch a dev server inline a stylesheet into a document with its
+comments intact: a comment in CSS is text a browser really is handed, and the check asserts the served
+document rather than the rendered text. So `apps/web/index.html`, `apps/web/public/sw.js` and both
+stylesheets are clean as well. The JavaScript and TypeScript comments did not go, and the difference is
+measured rather than assumed: esbuild strips them, so the built bundle contains zero of either dash, and a
+recursive scan of the whole build output finds neither dash and no source reference in any file it ships.
+The markdown still carries 488 of them (`README.md` 181, `DECISIONS.md` 121, `CHANGELOG.md` 72,
+`docs/ROADMAP.md` 58, `specs/PLATFORM.md` 26, `docs/MARKET-RESEARCH.md` 20, `specs/BUILD.md` 9,
+`specs/AGENTS.md` 1) and the JavaScript comments hold 242 more. They are repository documents rather than
+served ones, and rewriting that much prose would produce a diff large enough to hide a real change inside
+it. If they should be clean as well, that is its own sweep and its own commit.
+
+**And one measurement the string tests could not make.** The honesty list's bullet was a `12px` by `1px`
+rule in `::before`, which is a hyphen drawn rather than typed and read as a list of corrections beside
+statements that are proud of themselves. It is the brand's dot now (6px, radius 3px, `#ea580c`), the same
+mark the wordmark wears. jsdom applies no stylesheet, so the only way to say that is a browser: the live
+page was measured for the dot's computed box, for the six **Where to check it** labels, for a dash scan over
+the served document rather than over the rendered text, and for a response log with nothing third-party in
+it but the font (`12/12`).
+
+## D34 — One palette for the whole product, and the dark material as a class
+
+**Context.** D31 stopped at the landing page: the workspace kept the theme the brand replaced. That was
+defensible while the two were read by different people and stopped being defensible the moment they were
+not. A visitor reads an orange page on white, presses the one button on it, and arrives at a near-black
+console with a blue primary and a violet highlight — the same product, two visual languages, and the second
+one is the one they will spend their working day in. It is also the version with the defect that matters:
+looking at both stylesheets side by side is when you notice that the workspace's own `--accent` (a link, a
+focus ring, a live indicator) and the brand's primary were never the same colour, so "the primary action"
+meant two different things in two places.
+
+**Decision: one palette, two materials, chosen per region rather than per visitor.** The palette is declared
+once at its brand values and both stylesheets read it. The dark material is `.surface`, a class that
+re-binds every colour role for its subtree, and every screen is explicitly one of the two:
+
+- **the surface** — the first paint (which is the moment before the workspace knows who is signed in), the
+  sign-in sheet, the consent gate, the invitation, the policy documents, and the studio's source panel;
+- **the paper** — the workspace, its tables and panels, the quality queue, the integration screens, the
+  respondent's form, the studio's preview, and the landing page's reading sections.
+
+**Why code is ink rather than paper.** The studio's source panel holds a JSON definition, and the material a
+text is set in is part of what it says: code on a dark panel reads as code, the same text on the same white
+as the prose around it reads as a paragraph. It is also the panel's own logic, since it is the region the
+reader edits rather than the region they read. The preview beside it stays paper, deliberately: it is a
+preview of the respondent's page, and a preview that does not match the page it previews is a lie with a
+frame around it.
+
+**Why a class rather than a second stylesheet or a media query.** Two reasons, one of which is a defect
+this repository has already shipped. The first: re-binding tokens on a subtree means the material stays
+correct as the subtree grows — a card, a field, a table row or a heading added inside a surface region
+arrives in that material without anybody remembering to add a rule, and the roles cannot be half-applied.
+The second: the earlier leak was `styles.css` styling `h1, h2, h3, h4` globally with `color: var(--text)`, which
+put near-black headlines on a near-black ground for anyone whose operating system was in light mode. A
+`.surface` region is exactly where that class of bug lives, so `contrast.test.ts` now asserts that the
+material re-binds **every** colour role a rule in the file can read, and fails if one is added without an
+answer. As for `prefers-color-scheme`: a product with two materials is not a product with two themes, and a
+console that changed colour under a visitor nobody can see was one more state to get wrong.
+
+**One subtlety worth writing down.** `.surface.surface` appears in the stylesheet and is not a typo. `.card`
+and `.studio-panel` fill a pane that sits *on* a material, their rules come later in the file than this one,
+and on an element that is both — the front door is a card, the source panel is a panel — the pane's fill won
+the tie on source order and left the region a six per cent white film with the surface's white type on top of
+it: white on white, invisible, and a browser was the only thing that caught it. Repeating the class wins the
+tie by specificity instead of by position, so the rule keeps working wherever it sits and whatever component
+is built out of it next.
+
+**What the browser settled that the stylesheets could not.** Every route and every workspace view, at five
+viewports (320, 390, 768, 1280, 1440), measured for the computed colour of each role, for anything sticking
+out sideways, for the size and reachability of every control on screen, and for a clean console log: **502
+checks, 0 failures**. Three defects existed only at 320px and none of them was visible in a diff — a code row
+wider than the sheet that holds it, a `<select>` that cannot shrink below its longest option and so pushed
+its row past the panel clipping it, and a builder row whose label was squeezed to 54px of single words. Two
+more were skin deep and equally real: a navigation link 2px under the minimum target size, and metadata set
+at 11.5px. And the pass found a genuine bug unrelated to colour, which is the argument for walking a product
+rather than reading it: `test/offline/store.ts` passed a key to a store declared with a keyPath, so
+**every offline draft write threw** and only the memory fallback — the one the unit tests use — worked.
+
+**Honest limits.** The palette is measured to the 4.5:1 floor for text and 3:1 for boundaries, and the two
+stylesheets are held to each other's values; what is *not* measured is whether the surfaces look good, which
+is a judgement and not a test. Repository documents (this file, `README.md`, `CHANGELOG.md`, `specs/`) still
+carry their em dashes by D33's reasoning, which is unchanged by this work. And `login-desktop.jpg` and
+`login-mobile.jpg` in the README are photographs of the front door as it was before this change until
+`scripts/screenshots.mjs` is run against the deployment that carries it.

@@ -25,11 +25,11 @@ export type MissingCode = 'system' | 'not_asked' | 'skipped' | 'refused' | 'dont
  * in this comment.
  */
 export const MISSING_CODES: Record<MissingCode, { numeric: number | null; label: string }> = {
-  system: { numeric: null, label: 'System missing — the question was asked and no answer was recorded' },
-  not_asked: { numeric: -99, label: 'Not asked — the response ended (or the version changed) before this question' },
-  skipped: { numeric: -98, label: 'Skipped by logic — the question was not shown to this respondent' },
-  refused: { numeric: -97, label: 'Refused — the respondent declined to answer' },
-  dont_know: { numeric: -96, label: "Don't know — the respondent answered that they do not know" },
+  system: { numeric: null, label: 'System missing: the question was asked and no answer was recorded' },
+  not_asked: { numeric: -99, label: 'Not asked: the response ended (or the version changed) before this question' },
+  skipped: { numeric: -98, label: 'Skipped by logic: the question was not shown to this respondent' },
+  refused: { numeric: -97, label: 'Refused: the respondent declined to answer' },
+  dont_know: { numeric: -96, label: "Don't know: the respondent answered that they do not know" },
 };
 
 export type ResponseStatus = 'in_progress' | 'submitted' | 'screened_out' | 'quota_full';
@@ -219,7 +219,7 @@ export function buildColumns(def: FormDefinition, options: BuildOptions = {}): E
           columns.push({
             variable: `${q.name}__${choice.value}`,
             question: q.name,
-            prompt: `${prompt} — ${choice.label}`,
+            prompt: `${prompt}: ${choice.label}`,
             type: q.type,
             numeric: true,
             valueLabels: [
@@ -234,7 +234,7 @@ export function buildColumns(def: FormDefinition, options: BuildOptions = {}): E
           columns.push({
             variable: `${q.name}_${index + 1}`,
             question: q.name,
-            prompt: `${prompt} — slot ${index + 1}`,
+            prompt: `${prompt}, slot ${index + 1}`,
             type: 'slot',
             numeric: false,
             valueLabels: choices.map((c) => ({ code: c.value, label: c.label })),
@@ -400,7 +400,7 @@ export function buildDataset(def: FormDefinition, responses: ExportResponse[], o
       columnCount: columns.length,
       missingCount: missing.length,
       notes: [
-        'Blank data cells mean "no value" — the kind of missingness is in the missing table (system / not_asked / skipped / refused / dont_know), not in the data cell.',
+        'Blank data cells mean "no value". The kind of missingness is in the missing table (system / not_asked / skipped / refused / dont_know), not in the data cell.',
         `Multi-select questions are expanded ${multiSelect === 'dichotomous' ? 'dichotomously (one 0/1 column per option)' : 'into ordered value slots'}.`,
         'Values are stored codes, not labels; the value-labels table is the code→label mapping.',
       ],

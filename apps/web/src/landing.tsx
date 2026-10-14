@@ -54,8 +54,6 @@ interface Summary {
   };
 }
 
-const REPOSITORY = 'https://github.com/flawsom/Inicio';
-
 /**
  * Split an element's text into per-character spans once, so they can be animated.
  *
@@ -450,48 +448,50 @@ function LiveBand({ summary, readAt, failed }: { summary: Summary | null; readAt
   );
 }
 
- const CAPABILITIES: Array<{ title: string; body: string; evidence: string; href: string }> = [
+/**
+ * What is finished, and how a reader can see it for themselves.
+ *
+ * The `check` line was a path into the source once. It is an instruction now, and
+ * that is the better half of the same promise: "this is deployed, and here is the
+ * two-tap way to watch it work" needs no repository to be true, and a reader who
+ * cannot see the code can still see the product.
+ */
+const CAPABILITIES: Array<{ title: string; body: string; check: string }> = [
   {
     title: 'One expression engine, two runtimes',
     body:
       'Relevance, constraints, calculations and choice filters are parsed, validated and evaluated by a single implementation. A question the server hides is hidden on the device, and a calculation is never trusted from the client.',
-    evidence: 'packages/engine',
-    href: `${REPOSITORY}/tree/main/packages/engine`,
+    check: 'Write a relevance rule in the studio and the preview hides the question as you type.',
   },
   {
     title: 'Collection that works with no signal',
     body:
       'The device owns its response: a client-generated UUID is the response id, every keystroke lands in IndexedDB before anything is sent, and a durable outbox syncs when the network returns. A retried submission never becomes a second response.',
-    evidence: 'apps/web/src/offline',
-    href: `${REPOSITORY}/tree/main/apps/web/src/offline`,
+    check: 'Open a collection link, put the device in flight mode, answer, then reconnect.',
   },
   {
     title: 'Conflicts kept, not resolved away',
     body:
       'Every sync sends the last server state the device saw, so the merge is decided per question. When two devices disagree, the server value is stored, the device value is retained beside it, and the disagreement is recorded as a row.',
-    evidence: 'apps/api/test/collect-sync.test.ts',
-    href: `${REPOSITORY}/blob/main/apps/api/test/collect-sync.test.ts`,
+    check: 'Answer the same question from two devices and the response lists the disagreement.',
   },
   {
     title: 'Tenancy the database enforces',
     body:
       'Fourteen tenant tables carry ENABLE and FORCE row level security, and the organisation is a parameter of the transaction. The API refuses to start in production on a connection that can bypass it.',
-    evidence: 'apps/api/src/db/pool.ts',
-    href: `${REPOSITORY}/blob/main/apps/api/src/db/pool.ts`,
+    check: 'Sign in as two organisations and neither can reach the other, not even by id.',
   },
   {
     title: 'Exports built from the version that collected the data',
     body:
       'CSV bundle with a codebook, value labels and the missing-code table, plus XLSX and JSON. They are generated from the published definition the responses actually answered, not from the current draft.',
-    evidence: 'packages/engine/src/export',
-    href: `${REPOSITORY}/tree/main/packages/engine/src/export`,
+    check: 'Open any submitted response and download it in each format you have configured.',
   },
   {
     title: 'Pushed, not polled',
     body:
       'Open a form and the server tells the browser which aggregate changed, coalesced per tick, over one server-sent event stream per form. The screens refetch only what moved, and a quiet form costs nothing.',
-    evidence: 'apps/api/src/platform/events.ts',
-    href: `${REPOSITORY}/blob/main/apps/api/src/platform/events.ts`,
+    check: 'Leave the console open on a form and submit from another tab.',
   },
 ];
 
@@ -523,9 +523,7 @@ export function Landing(): JSX.Element {
           <a href="#live">Live</a>
           <a href="#capabilities">Capabilities</a>
           <a href="#templates">Templates</a>
-          <a href={REPOSITORY} rel="noreferrer noopener" target="_blank">
-            Source
-          </a>
+          <a href="#honest">Also true</a>
           <button type="button" className="lcta small" onClick={signIn}>
             Sign in
           </button>
@@ -582,11 +580,11 @@ export function Landing(): JSX.Element {
         <header>
           <span className="leyebrow">Capabilities</span>
           <h2 data-split data-reveal>
-            Six things that are finished, and where to check them
+            Six things that are finished, and not on a roadmap
           </h2>
           <p data-reveal>
-            Each one names the file that implements it. Nothing here is a plan: if it is on this page, it is in the
-            repository that is deployed.
+            Nothing on this page is a plan. Every one of these is in the deployment you are using, and each card ends
+            with the two taps that let you watch it work for yourself.
           </p>
         </header>
         <div className="lcards">
@@ -594,9 +592,10 @@ export function Landing(): JSX.Element {
             <article key={capability.title} data-reveal>
               <h3>{capability.title}</h3>
               <p>{capability.body}</p>
-              <a href={capability.href} target="_blank" rel="noreferrer noopener" className="lcode">
-                {capability.evidence}
-              </a>
+              <p className="lwhere">
+                <span>Where to check it</span>
+                {capability.check}
+              </p>
             </article>
           ))}
         </div>
@@ -610,8 +609,8 @@ export function Landing(): JSX.Element {
           </h2>
           <p data-reveal>
             These load from the API, which reads them from the database the deployment is running on. A template is a
-            canonical definition, not a spreadsheet: it is type-checked when the code is built and it goes through the
-            same publish-time analyser as anything an author writes by hand.
+            canonical definition, not a spreadsheet: it is validated before it is published, and it goes through the
+            same analyser as anything an author writes by hand.
           </p>
         </header>
         <div className="ltemplate-grid">
@@ -651,7 +650,7 @@ export function Landing(): JSX.Element {
         </div>
       </section>
 
-      <section className="lhonest">
+      <section className="lhonest" id="honest">
         <header>
           <span className="leyebrow">Also true</span>
           <h2 data-split data-reveal>
@@ -660,14 +659,13 @@ export function Landing(): JSX.Element {
         </header>
         <ul>
           <li>
-            <strong>No analytics or trackers.</strong> This page makes one request, to this deployment, and loads a
-            font. There is no third-party script in the path.
+            <strong>No analytics or trackers.</strong> Every number on this page is read from this deployment, in the
+            request that rendered it, and loads a font. There is no third-party script in the path.
           </li>
           <li>
-            <strong>No invented SPSS export.</strong> A <code>.sav</code> or <code>.dta</code> is written by the
-            pyreadstat worker (<code>services/pyreadstat</code>); where no worker is deployed the request answers 501
-            naming the variable that would change it, because a file that fails inside SPSS is worse than an honest
-            refusal.
+            <strong>No invented SPSS export.</strong> A <code>.sav</code> or <code>.dta</code> file comes from a
+            dedicated export worker. Where a deployment has none, the request answers <code>501</code> and names the
+            setting that would change it, because a file that fails inside SPSS is worse than an honest refusal.
           </li>
           <li>
             <strong>No half-built uploads.</strong> An <code>image</code>, <code>audio</code>, <code>video</code> or{' '}
@@ -675,12 +673,12 @@ export function Landing(): JSX.Element {
             deployment has no object storage, the question says so rather than silently skipping the answer.
           </li>
           <li>
-            <strong>No mock data anywhere.</strong> The console shows live queries, the collection app shows what is on
-            the device, and this page shows numbers the API just computed.
+            <strong>No mock data anywhere.</strong> The console runs live queries, the collection app shows what is on
+            the device, and this page shows numbers the API computed while it rendered.
           </li>
         </ul>
-        <a className="lghost" href={`${REPOSITORY}/blob/main/docs/ROADMAP.md`} target="_blank" rel="noreferrer noopener">
-          Read the honest status document
+        <a className="lghost" href="/api/v1/public/summary" target="_blank" rel="noreferrer">
+          Open the live summary
         </a>
       </section>
 
@@ -692,25 +690,20 @@ export function Landing(): JSX.Element {
           </h2>
           <p>
             There is no open signup path on purpose. If you already have an account, sign in with a one-time code. If
-            you want to run this yourself, the repository has a five minute local path with Docker or without it.
+            your organisation has not added you yet, an owner or an admin can invite you from the members list.
           </p>
         </div>
         <div className="lfooter-actions">
           <button type="button" className="lcta" onClick={signIn}>
             Sign in
           </button>
-          <a className="lghost" href={`${REPOSITORY}#-quick-start`} target="_blank" rel="noreferrer noopener">
-            Run it locally
+          <a className="lghost" href="#templates">
+            Start from a real instrument
           </a>
         </div>
         <div className="lfooter-legal">
           <span>Inicio</span>
-          <span>
-            Apache 2.0 ·{' '}
-            <a href={REPOSITORY} target="_blank" rel="noreferrer noopener">
-              github.com/flawsom/Inicio
-            </a>
-          </span>
+          <span>Private deployment on {window.location.host}</span>
         </div>
       </footer>
     </div>

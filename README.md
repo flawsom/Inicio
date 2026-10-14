@@ -19,7 +19,7 @@ there is no signal** — and exporting data that is ready for analysis rather th
 [![License](https://img.shields.io/badge/license-Apache--2.0-34d399?style=flat-square&labelColor=0f172a)](LICENSE)
 [![Build](https://img.shields.io/badge/build-clean-34d399?style=flat-square&labelColor=0f172a)](#-testing)
 [![CI](https://img.shields.io/badge/CI-lint_·_types_·_tests_·_budgets-34d399?style=flat-square&labelColor=0f172a)](#enforced-on-every-push)
-[![Tests](https://img.shields.io/badge/tests-305%20passing-34d399?style=flat-square&labelColor=0f172a)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-332%20passing-34d399?style=flat-square&labelColor=0f172a)](#-testing)
 [![Typecheck](https://img.shields.io/badge/typecheck-0%20errors-38bdf8?style=flat-square&labelColor=0f172a)](#-testing)
 [![Lint](https://img.shields.io/badge/lint-0%20errors-a78bfa?style=flat-square&labelColor=0f172a)](#-testing)
 [![Production](https://img.shields.io/badge/production-live-22c55e?style=flat-square&labelColor=0f172a&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app/health)
@@ -365,13 +365,13 @@ standing, rather than showing the definition they used to have.
 | 🔔 **Webhooks that survive a bad receiver** | Enqueued in the publishing transaction, signed over a timestamp and the body, retried with backoff, and self-disabling with a stated reason after five consecutive failures — plus a **Send test** button that reports what the receiver actually answered. |
 | 🧾 **A quality queue, not a score** | Speeding, straight-lining, duplicates and findings raised by hand, each row showing the evidence behind it and recording who decided what, when and why. |
 | 🌌 **A public surface with nothing invented on it** | Every figure on the landing page is read in that request from `GET /api/v1/public/summary`, and the scene is decoration: it is `aria-hidden`, it stops when the tab is hidden or the stage has scrolled past, and the page is complete with no WebGL at all. |
-| 🎨 **A brand palette with the contrast measured, not hoped for** | The landing page is the brand's: an orange primary on a white ground, with one near-black surface (`#191c21`) for the stage and the footer, and a peach accent that appears **only** on that surface, where it is 10:1 rather than the 1.9:1 it would be on white. The primary is two tokens for the same reason — `#ea580c` as a fill, a darker `#c2410c` as type, because the brand value is 3.6:1 as a glyph on white and text needs 4.5:1. All 25 pairs are computed from the stylesheets in `apps/web/test/contrast.test.ts`. |
-| 🪞 **One product, two materials** | The signed-in app keeps the product's own dark-pearl theme over an ambient light field drawn from the same node-and-filament structure as the landing page's scene, with the same type scale, the same radius language and the same entrance. Every figure on a console screen is live, and the whole shell is complete with no canvas and under `prefers-reduced-motion`. |
+| 🎨 **A brand palette with the contrast measured, not hoped for** | One palette, in both stylesheets: an orange primary (`#ea580c`) on a white ground, one near-black surface (`#191c21`) for the stage, the footer and the front door, and a peach accent that appears **only** on that surface, where it is 10:1 rather than the 1.9:1 it would be on white. The primary is two tokens for the same reason — `#ea580c` as a fill, a darker `#c2410c` as type — because the brand value is 3.6:1 as a glyph on white and text needs 4.5:1. All **31 pairs** are computed from the stylesheets in `apps/web/test/contrast.test.ts`, which also holds the two stylesheets to each other's values and asserts that the surface re-binds every colour role. |
+| 🪞 **One product, two materials** | Every screen is made of the same two materials, and which one is a fact about the screen rather than about a visitor's operating system: paper is the workspace, the respondent's form and the reading sections of the landing page, and the surface is the first paint, the sign-in sheet, the consent and legal documents, the landing page's stage and the studio's source panel. The dark material is one class (`.surface`) that re-binds the palette for its subtree, so a card, a field or a heading added inside it arrives in the right material without a rule of its own. Over it all sits an ambient light field drawn from the same node-and-filament structure as the landing page's scene, with the same type scale, the same radius language and the same entrance. Every figure on a console screen is live, and the whole shell is complete with no canvas and under `prefers-reduced-motion`. |
 | 🏫 **A real template** | The 2026 school ranking survey — the project this platform grew out of — ships as template #1, not as the product. |
 | 📶 **Honest connection state** | "No connection. Your answers are saved on this device and will be sent automatically", plus a **Send now** button and the timestamp the server has everything up to. |
 | 🐳 **A self-hosted profile** | Compose brings up PostgreSQL 16, Valkey, MinIO, ClamAV and Mailpit, with Caddy in front. |
 | 🧪 **Two live harnesses** | 35 end-to-end consumer checks and 28 offline-sync checks drive a real database through the same origin the browser uses. Each harness prints its own pass/fail line and reports the count it actually ran. |
-| 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 305 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
+| 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 333 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
 | ⚖️ **Budgets, not intentions** | The build fails if the critical path grows past 80 kB gzipped, if any chunk passes 150 kB, if the WebGL scene *or the XLSForm writer* leaks out of its lazy chunk, if a measured colour pair drops under 4.5:1, or if `axe-core` finds a violation on the public page or the consent gate. |
 
 </details>
@@ -406,10 +406,10 @@ standing, rather than showing the definition they used to have.
 </td>
 <td valign="top" width="50%" align="center">
 
-<img src="./docs/assets/screenshots/landing-capabilities.jpg" alt="The capabilities section: each claim links to the file that implements it" width="100%" />
+<img src="./docs/assets/screenshots/landing-capabilities.jpg" alt="The capabilities section: each finished claim, with where to check it in the product" width="100%" />
 
 **🧭 Capabilities, claim by claim**
-<br /><sub>Each claim carries a link to the file that implements it</sub>
+<br /><sub>Each claim ends by naming the two taps that show it working, in the deployment rather than in a file</sub>
 
 </td>
 </tr>
@@ -900,8 +900,8 @@ Open **http://localhost:3000**, request a one-time code, read it in Mailpit, and
 ```bash
 pnpm lint        # ESLint 9, flat config
 pnpm typecheck   # tsc across four workspace packages
-pnpm test        # 305 tests
-pnpm coverage    # v8 coverage, per package
+pnpm test        # 332 tests
+pnpm coverage     # v8 coverage, per package
 pnpm build       # engine -> api -> web
 pnpm budgets     # the built bundle, gzipped, against its ceilings
 ```
@@ -1113,7 +1113,8 @@ deployment cannot have a test run create `…_test` on it and drop that schema. 
 | `SMTP_HOST`, `SMTP_PORT` | yes | `localhost`, `1025` | Relay for codes and invitations (Mailpit locally) |
 | `SMTP_SECURE` | | `false` | Implicit TLS, typically `true` with port `465` |
 | `SMTP_USER`, `SMTP_PASS` | | — | Credentials when the relay needs them |
-| `MAIL_FROM` | | `Inicio Survey <no-reply@…>` | Envelope sender |
+| `MAIL_FROM` | | `Inicio Survey <no-reply@…>` | Envelope sender. The live deployment sends as `Inicio <inicio@unifies.codes>`; it must be an address on a domain **verified with the relay**, which is a statement about sending and not about receiving |
+| `MAIL_REPLY_TO` | | — | Where a reply to one of these emails lands. **Set it only to a mailbox somebody reads**: the welcome invites a reply when it is set and offers an owner or an admin instead when it is not, because an instruction that bounces is worse than no instruction |
 | `MAIL_TRANSPORT` | | inferred | `smtp` or `resend`; inferred from `RESEND_API_KEY` when unset |
 | `RESEND_API_KEY` | | — | Choose the HTTPS API when the network refuses SMTP ports (25/465/587) |
 | `S3_BUCKET` | for file uploads | — | Where attachments live. With no bucket the upload control is not offered at all, and an `image`/`audio`/`video`/`file` question stays unanswered and says so |
@@ -1134,9 +1135,19 @@ knowing in advance because it arrives as a refusal rather than a bounce. With Re
 `MAIL_FROM` must be an address on a **verified** domain in that account: an unverified one is
 rejected outright (`This API key is not authorized to send emails from …`), and the shared
 `onboarding@resend.dev` sender is accepted but only reaches the account's own address. Neither
-is a guess — both are what the provider answered when asked. `GET /auth/mail-status` (and the
+is a guess — both are what the provider answered when asked. `GET /api/v1/auth/mail-status` (and the
 sign-in screen, which is built on it) reports the same evidence rather than an assumption:
-a probe, a message the relay actually accepted, or nothing yet.
+a probe, a message the relay actually accepted, or nothing yet. On a serverless deployment that last
+one resets with every cold start, so `basis: none` there means "nothing has been sent by this
+instance", which is a different thing from a relay that refused.
+
+**A verified domain is verified for sending, which is not the same as having an inbox.** The four
+emails this product writes — the sign-in code, the welcome, the sign-in notice and the submission
+receipt — are `apps/api/src/mail/templates.ts`, and the identity they leave under is `MAIL_FROM`.
+A sender does not need a mailbox; a reply target does, and the two are separate variables for that
+reason. The delivery path itself was verified against the live relay rather than assumed: all four
+went out through Resend from `inicio@unifies.codes` and arrived in a mailbox with their links, both
+alternatives and their palette intact (`26/26` content checks, `4/4` reported `delivered`).
 
 ### Attachments and object storage
 
@@ -1601,8 +1612,8 @@ the table below is a budget rather than a report:
 | `index.html` | 1.74 kB | 0.84 kB | — | everyone |
 | `index-*.css` (the whole app) | 20.2 kB | 5.1 kB | 7 kB | everyone |
 | `index-*.js` (console, collection, admin, legal) | **239.9 kB** | **75.1 kB** | 80 kB | everyone |
-| `landing-*.css` | 13.9 kB | 3.6 kB | 6 kB | the landing page |
-| `landing-*.js` | 15.9 kB | 5.5 kB | 8 kB | the landing page |
+| `landing-*.css` | 14.0 kB | 3.7 kB | 6 kB | the landing page |
+| `landing-*.js` | 15.7 kB | 5.5 kB | 8 kB | the landing page |
 | `instrument-*.js` (three.js) | 521.0 kB | 132.6 kB | 150 kB | the landing page, after first paint |
 
 The console bundle is 239.9 kB raw, which carries the push channel, the console — including the
@@ -1640,19 +1651,19 @@ than pretending the score is 100. What can be verified today is verifiable: the 
 ```bash
 pnpm lint         # ESLint 9, flat config — 0 errors
 pnpm typecheck    # tsc across engine, api, web and the serverless entry
-pnpm test         # 305 tests
+pnpm test         # 332 tests
 pnpm coverage     # v8 coverage, per package
 pnpm build        # engine -> api -> web
 pnpm budgets      # the built bundle, gzipped, against its ceilings
 ```
 
-### What the 305 tests actually cover
+### What the 332 tests actually cover
 
 | Suite | Tests | Focus |
 |---|---:|---|
 | `packages/engine` | **55** | Expression parsing and evaluation, validation, XLSForm round-trip fixpoint, XLSX read/write, dataset and codebook assembly, every export writer, and **the workbook the studio shows**: `xlsFormSheets` asserted row by row against the file `exportXlsForm` zips, so the viewer and the download cannot drift |
-| `apps/api` | **126** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers, and **the push channel over a real socket**: `ready` first, silence while nothing changes, then one coalesced event naming the aggregate that moved, with a 404 and no stream for a form the caller cannot see, plus the public summary: read live, and asserted key by key to carry no tenant data, **and the integration surface**: a key whose secret is shown once and stored as a hash, its scope enforced at the route that declares it and *named* when it is missing, a key refused across organisations even though its creator belongs to both, revocation effective on the very next request, an endpoint that disables itself after five consecutive failures, a delivery signature checked against an independent HMAC in the test, a duplicate scan that refuses to record the same finding twice, and **the read scopes**: a key granted `forms:read` reaches the forms list *narrowed to its own organisation*, is `403 key_org_mismatch` on another organisation's form even though its creator belongs to both, and is told it is missing `responses:export` when it tries to export with only `responses:read` |
-| `apps/web` | **124** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer), **and the cards that arrive after the mount** (the template articles the API renders are handed to the reveal observer instead of keeping the hidden state, which is how three invisible cards reached production) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request), **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure), **25 measured contrast pairs** taken from the stylesheets themselves — including the landing page's two materials, its primary-as-type pair and both of its control boundaries — **`axe-core` audits** of the two public surfaces, **the quality queue** (the evidence behind each finding is on the row, a decision carries the reason typed with it and re-reads the list it just changed, dismissing is asserted to be a different outcome from resolving, and a second scan is reported as finding nothing new rather than as doing nothing) and **the integration screen** (the scope catalogue's `enforced` flag genuinely disables a scope no route declares, a key secret is shown once in a read-only field that carries a panel saying so, an `http://` endpoint cannot be added at all, and "send test" reports the receiver's real `500` rather than "sent"), **raising a finding by hand** from a response row (the raise waits for a reason, and "already in the queue" is asserted to read differently from "recorded"), **the definition studio** (the JSON panel is the server's own definition; its rows move the XLSForm sheets and the preview with no request at all, because all three read one object; the sheets are the workbook the download writes; the preview hides a question whose relevance rule says so, renders the two inline choices, sends nothing and stores nothing when it is typed into, and produces *field-for-field identical markup* to the component the collection page renders), and **the shell guard** that keeps the ambient layer and a form field from ever sharing a class name again |
+| `apps/api` | **150** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers, and **the push channel over a real socket**: `ready` first, silence while nothing changes, then one coalesced event naming the aggregate that moved, with a 404 and no stream for a form the caller cannot see, plus the public summary: read live, and asserted key by key to carry no tenant data, **and the integration surface**: a key whose secret is shown once and stored as a hash, its scope enforced at the route that declares it and *named* when it is missing, a key refused across organisations even though its creator belongs to both, revocation effective on the very next request, an endpoint that disables itself after five consecutive failures, a delivery signature checked against an independent HMAC in the test, a duplicate scan that refuses to record the same finding twice, and **the read scopes**: a key granted `forms:read` reaches the forms list *narrowed to its own organisation*, is `403 key_org_mismatch` on another organisation's form even though its creator belongs to both, and is told it is missing `responses:export` when it tries to export with only `responses:read`, **and the emails**: the sign-in code is in the body and never in the subject, no template fetches anything (no image, no pixel, no web font, no `url()`), every colour pair it uses is measured at 4.5:1 in both schemes, a hostile organisation name cannot close an attribute or reach the hidden preheader, the text alternative is prose rather than tags with the tags removed, and the header a transport composes is the one the environment named |
+| `apps/web` | **128** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer), **and the cards that arrive after the mount** (the template articles the API renders are handed to the reveal observer instead of keeping the hidden state, which is how three invisible cards reached production) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request), **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure), **31 measured contrast pairs** taken from the stylesheets themselves — both of the workspace's materials, both of the landing page's, the primary-as-type pair, the label on the primary action, and every control boundary — plus the assertions that hold the two stylesheets to one set of brand values and that the surface material re-binds **every** colour role it borrows (the defect that once put near-black headings on a near-black ground) — **`axe-core` audits** of the two public surfaces, **the quality queue** (the evidence behind each finding is on the row, a decision carries the reason typed with it and re-reads the list it just changed, dismissing is asserted to be a different outcome from resolving, and a second scan is reported as finding nothing new rather than as doing nothing) and **the integration screen** (the scope catalogue's `enforced` flag genuinely disables a scope no route declares, a key secret is shown once in a read-only field that carries a panel saying so, an `http://` endpoint cannot be added at all, and "send test" reports the receiver's real `500` rather than "sent"), **raising a finding by hand** from a response row (the raise waits for a reason, and "already in the queue" is asserted to read differently from "recorded"), **the definition studio** (the JSON panel is the server's own definition; its rows move the XLSForm sheets and the preview with no request at all, because all three read one object; the sheets are the workbook the download writes; the preview hides a question whose relevance rule says so, renders the two inline choices, sends nothing and stores nothing when it is typed into, and produces *field-for-field identical markup* to the component the collection page renders), **the shell guard** that keeps the ambient layer and a form field from ever sharing a class name again, and **the public page's own boundaries**: every anchor it renders resolves to this deployment and no source host is named anywhere in it, no em dash or en dash reaches a reader, and the honesty bullets are measured as the brand's dot rather than as a rule that reads like one |
 
 ### Enforced on every push
 
@@ -1737,7 +1748,10 @@ vercel link                      # one project: SPA + API, one origin
 vercel env add APP_DATABASE_URL  # the least-privilege role, NOT the owner
 vercel env add MIGRATION_DATABASE_URL
 vercel env add OTP_PEPPER
-vercel env add APP_ORIGIN
+vercel env add APP_ORIGIN        # the deployment's own origin — the emails' links are built from it
+vercel env add MAIL_FROM         # e.g. "Inicio <inicio@unifies.codes>", on a domain verified with the relay
+vercel env add RESEND_API_KEY    # the relay that carries mail when SMTP ports are refused
+# vercel env add MAIL_REPLY_TO    # only if that mailbox is read
 vercel --prod
 ```
 

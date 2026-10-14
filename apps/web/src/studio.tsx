@@ -465,7 +465,7 @@ function BuilderPanel({
           </label>
           <p className="muted small">
             These are the strings the expression engine evaluates, and nothing here is checked by a second
-            parser. The analyser above reports what is wrong with them, and the preview shows what they do —
+            parser. The analyser above reports what is wrong with them, and the preview shows what they do,
             including an edit that named a question you have since removed.
           </p>
         </div>
@@ -532,7 +532,7 @@ export function DefinitionStudio({
     try {
       parsed = JSON.parse(text);
     } catch (err) {
-      return { ok: false, problem: `not valid JSON — ${err instanceof Error ? err.message : 'unparseable'}` };
+      return { ok: false, problem: `not valid JSON: ${err instanceof Error ? err.message : 'unparseable'}` };
     }
     const read = readDefinition(parsed);
     if ('problem' in read) return { ok: false, problem: read.problem };
@@ -587,13 +587,20 @@ export function DefinitionStudio({
 
   return (
     <div className="studio">
-      {/* ------------------------------------------------------------- the JSON */}
-      <section className="studio-panel" aria-label={PANEL.json}>
+      {/*
+        --------------------------------------------------------------- the JSON
+
+        This panel is the one surface in the workspace: what it holds is code, and
+        code is ink here rather than paper. It re-binds the whole palette underneath
+        it (see `.surface` in styles.css), so its heading, its hairline, its field and
+        the sheet below all arrive in the other material without a rule of their own.
+      */}
+      <section className="studio-panel surface" aria-label={PANEL.json}>
         <header className="studio-head">
           <span className="eyebrow">1 · {PANEL.json}</span>
           <h2>JSON</h2>
           <p className="muted small">
-            The definition as the API stores it, and what the XLSForm importer produces — one model, two
+            The definition as the API stores it, and what the XLSForm importer produces: one model, two
             representations. Edits here repaint both panels to the right as you type.
           </p>
         </header>
@@ -710,7 +717,7 @@ export function DefinitionStudio({
           <span className="eyebrow">3 · {PANEL.preview}</span>
           <h2>What the respondent opens</h2>
           <p className="muted small">
-            Rendered by the same component and the same engine as the collection page, from this definition —
+            Rendered by the same component and the same engine as the collection page, from this definition,
             including edits that have not been saved yet.
           </p>
         </header>

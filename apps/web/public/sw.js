@@ -1,5 +1,5 @@
 /*
- * Inicio service worker — the app shell, and nothing else.
+ * Inicio service worker: the app shell, and nothing else.
  *
  * The one rule that matters: this worker never stores a response from the API.
  * Survey data is stateful and must be live (SPEC §0.2: nothing is ever mock or

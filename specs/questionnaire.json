@@ -1,11 +1,11 @@
 {
   "version": "1.0.0",
-  "title": "School Ranking Survey 2026 — Delhi/NCR",
+  "title": "School Ranking Survey 2026: Delhi/NCR",
   "languages": ["en", "hi"],
   "sections": [
     {
       "id": "admin",
-      "title": { "en": "Section A — Administration & Institutional Profile", "hi": "खंड अ — प्रशासन एवं संस्थागत प्रोफ़ाइल" },
+      "title": { "en": "Section A: Administration & Institutional Profile", "hi": "खंड अ: प्रशासन एवं संस्थागत प्रोफ़ाइल" },
       "order": 1,
       "questions": [
         { "id": "a1", "type": "text", "label": { "en": "School name", "hi": "विद्यालय का नाम" }, "required": true, "order": 1 },
@@ -32,7 +32,7 @@
     },
     {
       "id": "finance",
-      "title": { "en": "Section B — Finance & Financial Health", "hi": "खंड ब — वित्त एवं आर्थिक स्थिति" },
+      "title": { "en": "Section B: Finance & Financial Health", "hi": "खंड ब: वित्त एवं आर्थिक स्थिति" },
       "order": 2,
       "questions": [
         { "id": "b1", "type": "currency", "label": { "en": "Annual tuition fee (lowest grade)", "hi": "वार्षिक ट्यूशन शुल्क (न्यूनतम कक्षा)" }, "required": true, "order": 1 },
@@ -48,7 +48,7 @@
     },
     {
       "id": "academic",
-      "title": { "en": "Section C — Academics & Learning Outcomes", "hi": "खंड स — शैक्षणिक एवं अधिगम परिणाम" },
+      "title": { "en": "Section C: Academics & Learning Outcomes", "hi": "खंड स: शैक्षणिक एवं अधिगम परिणाम" },
       "order": 3,
       "questions": [
         { "id": "c1", "type": "percentage", "label": { "en": "Board pass percentage (latest year)", "hi": "बोर्ड उत्तीर्ण प्रतिशत" }, "required": true, "validation": { "min": 0, "max": 100 }, "order": 1 },

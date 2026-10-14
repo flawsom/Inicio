@@ -467,7 +467,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
   const syncedAt = timeOf(draft?.syncedAt ?? null);
   // One notice box, in priority order: a file that was refused is the most useful
   // thing to say, then whatever went wrong submitting.
-  const noticeText = attachmentError ? `“${attachmentError.question}” — ${attachmentError.message}` : error;
+  const noticeText = attachmentError ? `“${attachmentError.question}”: ${attachmentError.message}` : error;
 
   return (
     <RespondentForm

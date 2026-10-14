@@ -47,6 +47,8 @@ export type FetchLike = (
 export interface ResendConfig {
   apiKey: string;
   from: string;
+  /** Where a reply should land, when that is a real mailbox. */
+  replyTo?: string;
   /** Overridable so tests (and self-hosted gateways) never hit the network. */
   url?: string;
   timeoutMs?: number;
@@ -88,6 +90,9 @@ export function createResendSender(cfg: ResendConfig): {
           subject: job.subject,
           html: job.html,
           text: job.text,
+          // Only sent when set: a field the provider has to interpret as empty is
+          // a field that shows up in a bounce report one day.
+          ...(cfg.replyTo ? { reply_to: cfg.replyTo } : {}),
         }),
         // The OTP route waits for this, so it must never hang the login.
         signal: AbortSignal.timeout(cfg.timeoutMs ?? 10_000),

@@ -21,7 +21,7 @@ const SURVEY_ROWS: string[][] = [
   SURVEY_HEADER,
   ['begin_group', 'admin', 'Administration', 'प्रशासन', '', '', '', '', '', '', '', '', 'field-list'],
   ['start', 'start', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
-  ['text', 'school_name', 'School name — official', 'विद्यालय का नाम', 'As printed on the board', 'yes', '', '', '', '', '', '', '', '', '', '', '', 'Enter it exactly'],
+  ['text', 'school_name', 'School name (official)', 'विद्यालय का नाम', 'As printed on the board', 'yes', '', '', '', '', '', '', '', '', '', '', '', 'Enter it exactly'],
   ['select_one school_types', 'school_type', 'School type', 'विद्यालय प्रकार', '', 'yes', 'Choose one', '', '', '', '', '', 'minimal'],
   ['select_one states', 'state', 'State', 'राज्य', '', 'yes', '', '', '', '', '', '', '', '', '', '', '', ''],
   ['select_one districts', 'district', 'District', 'जिला', '', 'yes', '', '', '', '', '', 'state = ${state}', '', '', '', '', '', ''],

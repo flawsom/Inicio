@@ -75,7 +75,7 @@ const viewEndpoint = (row: EndpointRow) => ({
   disabledAt: row.disabled_at,
   // "Why did my webhooks stop" as a field rather than a support ticket.
   reason: row.disabled_at
-    ? `${row.failure_count} consecutive failures — re-enable it once the receiver answers`
+    ? `${row.failure_count} consecutive failures. Re-enable it once the receiver answers.`
     : null,
 });
 

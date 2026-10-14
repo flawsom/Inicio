@@ -119,10 +119,13 @@ export function createAmbientField(canvas: HTMLCanvasElement, options: AmbientOp
   const perStrand = low ? 15 : 20;
   const count = strands * perStrand;
 
+  // The three colours the field is drawn in come from the stylesheet, so the field
+  // changes with the palette rather than beside it. The fallbacks are the brand's own
+  // values, for the case where the tokens cannot be read at all.
   const style = getComputedStyle(canvas);
-  const accent = toRgb(token(style, '--accent', '#6f95ff'), [111, 149, 255]);
-  const accent2 = toRgb(token(style, '--accent-2', '#7b4dff'), [123, 77, 255]);
-  const live = toRgb(token(style, '--live', '#1cc7d0'), [28, 199, 208]);
+  const accent = toRgb(token(style, '--accent', '#c2410c'), [194, 65, 12]);
+  const accent2 = toRgb(token(style, '--accent-2', '#b45309'), [180, 83, 9]);
+  const live = toRgb(token(style, '--live', '#c2410c'), [194, 65, 12]);
 
   // Three arrangements of one set of nodes, blended by progress: a folded knot, a
   // spine, and the wide lattice the structure takes when it is working. This is the

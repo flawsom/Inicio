@@ -3,8 +3,8 @@ import { z } from 'zod';
 import { pool } from '../db/pool.js';
 import { env } from '../env.js';
 import { generateOtpCode, sha256Hex, timingSafeEqualHex } from '../lib/crypto.js';
-import { deliverForLogin, mailStatus, type MailStatus } from '../mail/transport.js';
-import { otpEmail } from '../mail/templates.js';
+import { deliverForLogin, deliverInBackground, mailStatus, type MailStatus } from '../mail/transport.js';
+import { otpEmail, otpVerifiedEmail, welcomeEmail } from '../mail/templates.js';
 import { issueSession, revokeSession } from '../auth/session.js';
 import { termsSatisfied } from './terms.js';
 import { sessionCookieOptions } from '../auth/routes.js';
@@ -208,6 +208,12 @@ export const platformAuthRoutes: FastifyPluginAsync = async (app) => {
     const session = await issueSession(`user:${user.id}`, req.ip);
     reply.setCookie(env.SESSION_COOKIE_NAME, session.token, sessionCookieOptions(env.SESSION_IDLE_MINUTES * 60));
     await audit(req, `user:${user.id}`, 'platform.signed_in', user.id, { email });
+    // The notice goes out on every sign-in, off the response path (D32). For an
+    // account whose only credential is an inbox, this is the one thing that
+    // makes a compromise visible, and it costs the reader one line if it was
+    // them. No `schoolId`: this is a platform user, and `email_log.school_id`
+    // references `school` — an organisation id is a different table.
+    deliverInBackground({ ...otpVerifiedEmail(email, { at: new Date(), ip: req.ip }) });
     return reply.code(200).send({ subject: session.subject });
   });
 
@@ -311,6 +317,15 @@ export const platformAuthRoutes: FastifyPluginAsync = async (app) => {
     await audit(req, `user:${joined.user_id}`, 'user.invite_accepted', joined.org_id, {
       role: joined.role,
       email: joined.email,
+    });
+
+    // The welcome, and the only email in the product that is not about a code.
+    // It is fire-and-forget because the reader is already signed in by the time
+    // it would send: a relay that is down must not turn accepting an invitation
+    // into a failure. `schoolId` stays empty for the same reason as above — the
+    // log's column is a school, and this is an organisation.
+    deliverInBackground({
+      ...welcomeEmail(joined.email, { organisation: joined.org_name, role: joined.role }),
     });
 
     return reply.send({

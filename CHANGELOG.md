@@ -11,6 +11,35 @@ what changed and why.
 
 ### Added
 
+- **The four emails are a designed surface, not a template with a heading on it.** The sign-in code, the
+  welcome a new member gets when an invitation is redeemed, the notice that a sign-in finished and the
+  submission receipt are now one card, built by `apps/api/src/mail/templates.ts`: a table layout that holds
+  together in Word's renderer, a dark scheme for the client that switches, a written plain-text
+  alternative, and **nothing remote anywhere** — no image, no pixel, no web font, no `url()` — because an
+  email that loads a file from a server is a read receipt with a design. The code gets the one treatment
+  nothing else in the message gets, and is deliberately **never in the subject**: a subject line is drawn on
+  a locked screen, quoted back in every reply and written into every mail log and gateway on the way, so a
+  one-time code in it is a code published where the reader cannot see it. The lifetime it promises is read
+  from `OTP_TTL_MINUTES` rather than typed a second time in prose. `mail-templates.test.ts` pins the rules
+  as properties rather than habits — a hostile address, organisation, role or submission id cannot carry a
+  tag into any field of any template, no template fetches anything, every colour pair it uses measures
+  4.5:1 in both schemes, and the message stays far inside the size at which clients clip it. The suite found
+  a real defect on its first run: an organisation called `St Mary's <b>School</b>` put a live `<b>` inside
+  the hidden preheader, because escaping was done at the call sites rather than at the layout.
+- **A welcome email when an invitation is redeemed.** The platform had no message for the moment somebody
+  stopped being a name on a list. The redemption now sends one that names the organisation and the role,
+  describes what that role can actually do in the words the authorisation guards already enforce, and gives
+  the three things to try first — plus the fact that accounts here are invitation-only, because a reader
+  who does not know that will spend their first afternoon looking for a sign-up page.
+- **A sign-in notice on every platform sign-in.** The legacy school route sent one; the platform route,
+  which is the one the console signs in through, sent none — so most readers never learned that a code had
+  been used on their address. It now goes out on both, off the response path, with the instant in UTC and
+  the address the sign-in came from, and with advice about the inbox rather than a password, because an
+  inbox is the only credential this product has.
+- **`MAIL_REPLY_TO`**, the reply target as its own configuration, carried by both transports (an SMTP
+  `Reply-To:` header and Resend's `reply_to`, sent only when it is set). The welcome invites a reply when it
+  is set and offers an owner or an admin when it is not: a sender does not need an inbox, and an instruction
+  that bounces is worse than no instruction because the reader believes they asked.
 - **Offline-first collection and the installable app.** The device owns its response: a
   client-generated UUID *is* the response id, so a start that is retried after a dropped connection
   resumes the same response instead of creating a second one. Answers are written to IndexedDB before
@@ -247,6 +276,57 @@ what changed and why.
 
 ### Changed
 
+- **One palette and two materials, everywhere in the product, not only on the marketing page.** The
+  workspace was the last surface still built in the theme the brand replaced: near-black ground, pearl type,
+  one blue, one violet and a cyan reserved for "live". A person who clicked through from an orange page on
+  white therefore arrived in a different product's colours — and the two stylesheets shared nothing but the
+  type scale. The palette is now declared once, at its brand values (`#ea580c` primary, `#fdba74` accent,
+  `#ffffff` ground, `#191c21` surface, `#111827` type), and the two stylesheets are asserted to hold the same
+  values as each other rather than assumed to agree.
+- **The dark material is a class rather than a second theme.** `.surface` re-binds every colour role for its
+  subtree — type, support type, boundaries, control boundaries, panels, the sheen along a card's top edge, the
+  scrim behind the sticky bar, the accent, all four status colours and the lift — so the material a region is
+  made of is a fact about the region, not about the visiting operating system. Every screen is one of the two
+  materials and the choice was made explicitly: **surface** for the first paint, the sign-in sheet, the
+  consent gate, the invitation, the policy documents and the studio's source panel (code is ink here, not
+  paper); **paper** for the workspace, the quality queue, the integration screens, the respondent's form and
+  the landing page's reading sections. The `prefers-color-scheme` block is gone: a product with two materials
+  is not a product with two themes, and a console that changed colour under a visitor it cannot see was one
+  more state to get wrong.
+- **The chrome follows the palette.** The primary action is the brand's own button in both stylesheets — the
+  same fill, the same ink label, the same lift on hover — instead of a blue-to-pearl gradient; the ambient
+  field behind the workspace draws its filaments and its pool of light from the brand's warm values rather
+  than from a blue, a violet and a cyan; the vignette is a warm grey on paper and black on the surface;
+  `index.html` declares `light` with a `#191c21` theme colour (the colour of the first frame on every route)
+  and the manifest's splash and theme colours follow it; and the control radius, the card radius and the pill
+  radius are now the landing page's own values, so the two files share one radius language.
+- **The public page no longer points at the source.** The landing page advertised this repository in four
+  places: a `Source` item in the navigation, a link on every capability card naming the file that
+  implements it, a "Read the honest status document" button aimed at `docs/ROADMAP.md` on GitHub, and a
+  footer line with the repository URL beside the licence. This deployment is one organisation's private
+  application, so a public page that publishes where its code lives is a leak with good intentions. Each
+  capability card now ends with the two taps that show the claim working inside the product ("Where to
+  check it"), the status button opens `GET /api/v1/public/summary` on this deployment instead, and the
+  footer names the host it is served from. Enforced rather than promised: `landing.test.tsx` resolves
+  every anchor the page renders and fails on an off-site or source host, and a browser pass over the live
+  page checks the served HTML for the same thing. The repository itself is private, which makes the old
+  links dead ends as well as signposts.
+- **No em dash or en dash reaches a reader.** Punctuation on screen and in the inbox is now full stops,
+  commas, colons and parentheses: the web app's copy, the four emails, the XLSForm importer's notes, the
+  validation messages, the export's missing-code labels and the shipped questionnaire. The honesty
+  list's bullet marker is the brand's dot rather than a 12px rule that read as a long hyphen, and the
+  capability cards' evidence chip is an instruction rather than a path. The boundary is what a browser can
+  be served rather than what is rendered: `index.html`, the service worker and both stylesheets are clean
+  too, because a dev server inlines a stylesheet as text with its comments intact, while a built bundle is
+  stripped, and a recursive scan of the build output finds neither dash in any file it ships. Developer
+  documents (this file, `DECISIONS.md`, `specs/`) still carry theirs; the sweep covered everything that is
+  served.
+- **Mail leaves as `Inicio <inicio@unifies.codes>`, which is this deployment's identity for everything it
+  sends.** Verified against the live relay rather than assumed: all four templates were sent through Resend
+  and arrived in a real mailbox with their links, both alternatives and their palette intact — 4/4 reported
+  `delivered`, 26/26 content checks passed. Sending *to* that address is a different question, and it
+  bounced (`554 5.1.1 … User unknown`), which is exactly why the reply target is separate configuration
+  (D32).
 - **The landing page is the brand's palette now, and the console keeps its own.** The page is anchored on
   the brand values — primary `#ea580c`, accent `#fdba74`, background `#ffffff`, surface `#191c21`, type
   `#111827` — and it is one page made of **two materials** rather than one flat theme: the stage and the
@@ -297,6 +377,31 @@ what changed and why.
 
 ### Fixed
 
+- **Offline drafts never persisted in a real browser, and the fallback hid it.** Both IndexedDB object
+  stores are declared with `keyPath: 'token'`, and `putDraft`/`putCachedForm` also handed the key in as an
+  argument. That is a `DataError` the browser raises **synchronously**, before the promise those methods
+  return is even created, so every save threw past its caller: the collect page's own error log carried an
+  uncaught exception on the first visit, and a respondent's answers survived a refresh only through the
+  server. The unit suite could not see it, because it exercises the memory fallback — which implements the
+  same interface perfectly — and jsdom has no `put`. Found by a browser pass over `/collect/:token`, fixed by
+  dropping the key argument at both call sites, and re-checked there: the route now loads with no page error
+  at all.
+- **Three layout defects that only exist at 320px.** Measuring every route and every workspace view at five
+  viewports (320, 390, 768, 1280, 1440) turned up: the six one-time-code boxes (6 × 46px plus gaps, 316px)
+  inside a 272px sign-in sheet, so the code row pushed the sheet sideways on a small phone — each box is now
+  a 46px basis that may shrink, with a smaller digit below 640px, and the row measures 206px inside 208px of
+  available width; a `<select>` in a flex row cannot shrink below its longest option, because that is a form
+  control's automatic minimum size, which made rows in the studio's builder and the console push past the
+  panel that clips them — every field may now be narrower than it would like; and a builder question row
+  shared one line with three buttons, squeezing its label into a column of single words, so below 640px the
+  label takes its own line. Each was verified by measurement, not by eye: the label is 240px wide where it
+  was 54px.
+- **Two controls a finger could not hit.** The landing page's navigation links were 22px tall — two pixels
+  under the 24px a target needs — and the same pass measured a text link to the sign-in page at 15px. The
+  nav links keep their appearance and gain padding taken straight back off with a negative margin; the inline
+  link inside a sentence is exempt by the standard's own wording and is now reported rather than failed. The
+  template cards' metadata line was set at 11.5px and is 12px, which is the floor this product holds its
+  copy to.
 - **The README's roadmap listed CI as outstanding while the same document enforced it.** "CI on every push"
   and "Accessibility and performance budgets" sat unchecked under *Next, in order* — and the README's own
   *Enforced on every push* table, a few screens above, already runs lint, typecheck, the whole suite against
