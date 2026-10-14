@@ -11,6 +11,46 @@ what changed and why.
 
 ### Added
 
+- **A scheduled drift check, because the one failure a green build cannot see is a production database that
+  never ran a migration.** A migration merged to `main` either runs against production or it does not, and
+  when it does not the application is deployed and *reachable* — the health check, the landing page and
+  every older screen keep answering `200` — while the tables its newest screen reads do not exist there.
+  That is how this deployment once spent a day nine migrations deep with nothing red to show for it.
+  `scripts/check-drift.mjs` (`pnpm drift`) reads `GET /api/v1/public/summary`, which reports the
+  `schema_migrations` ledger the running service has just read **on the connection the application uses**,
+  and compares it with the migration files in the checkout: no credentials, no cluster access, nothing
+  about tenants. `.github/workflows/drift.yml` runs it every six hours and, on a disagreement, opens or
+  appends to one issue carrying the report and the command that closes it. The exit codes are the design:
+  `0` in step, `1` drift, `2` unreadable — a deployment nobody can reach is an outage rather than a schema
+  problem, so it fails the run and opens nothing. Verified in all three states, because a check that has
+  only ever passed is a check nobody has seen work: in step against the live deployment, drifting by adding
+  a real `0011_*.sql` to the checkout for one run (which named the missing file), and unreadable through a
+  closed port.
+- **The pointer trail is on every route, and the app has one pointer treatment instead of two.** The trail
+  was mounted by the landing page alone, so a visitor following the sign-in link watched the cursor change
+  behaviour halfway through arriving — and the signed-in app wore a labelled ring that followed the same
+  pointer with a different idea of what hovering means. The shell now mounts the trail for the whole
+  product: `/`, `/login`, `/console`, `/terms`, `/privacy`, an invitation and a collection link. The ring
+  and its stylesheet rules are gone; `landing-cursor.ts` became `cursor-trail.ts` and `.lcursor` became
+  `.cursor-trail` because the old names had stopped being true; and the canvas rule moved out of
+  `landing.css` into `styles.css`, since a canvas styled by a stylesheet only one route loads is an
+  unstyled box in the flow of every other route. It stays decoration: imported on demand, so nobody
+  downloads it to read a page, with its own **4 kB** budget and an assertion that no critical chunk contains
+  it; hidden under reduced motion by both the script and the stylesheet; and `pointer-events: none`, so
+  every control underneath still receives its click. `cursor-trail-everywhere.test.tsx` mounts the app at
+  each route and requires **exactly one** trail, mounted once even under StrictMode's double mount, disposed
+  by reference when the route goes.
+- **The four public pages are listed in a sitemap, with `robots.txt` closing everything else.** The console,
+  an invitation and a collection link are deliberately absent: they are behind a session or a single-use
+  token, and `/console` renders the sign-in sheet to a stranger, so listing it would advertise a page whose
+  only content is "sign in". Neither file carries a `lastmod` — a build timestamp is not the date a page's
+  content changed, and a sitemap that says "changed today" on every deploy is one a crawler learns to
+  ignore. Both are served as themselves rather than as the app shell: they were added to Vercel's catch-all
+  exclusions in the same pass that wrote them, and `apps/web/test/sitemap.test.ts` holds the negative
+  lookahead, Netlify's `force` flags (which would otherwise override the filesystem) and the set of routes
+  in the sitemap. The guard was broken on purpose once — one name removed from the exclusion list — to
+  confirm it fails with the file named.
+
 - **The app icons are generated from the palette, and every committed colour is checked.** A stylesheet is
   edited; a PNG is not, which is why the tab icon and the home-screen icon were the last things still
   wearing the palette before this one — measured at **92 % blue-dominant pixels** against a product that had
@@ -290,6 +330,22 @@ what changed and why.
 
 ### Changed
 
+- **There is one database, and it is the one the deployment answers from.** This workspace's
+  `DATABASE_URL` named one Neon project (`proud-field-04065571`, `us-east-2`, database `inicio`) while the
+deployment answered from another (`cold-leaf-32411407`, `ap-southeast-1`, database `neondb`), so
+`pnpm db:migrate` here migrated a database nothing served and the two disagreed about their ledger — the
+state D36 recorded and D37 decided. The repository's three connection variables
+(`DATABASE_URL`, `APP_DATABASE_URL`, `MIGRATION_DATABASE_URL`) now name the deployment's database, which
+is the one with the live accounts in it and the one nearest those users; `pnpm db:migrate` at the root is
+therefore a migration of production, and `pnpm drift` compares production's own ledger with `main`.
+Confirmed by running it: all ten migrations were **skipped**, not applied. Both sides were counted first,
+which is what makes this a decision about plumbing rather than about records — one account and one
+organisation on the workspace's side against two accounts and one organisation on the deployment's, and
+**zero responses on both**. Every account on the retired side also exists on the surviving one, so the
+only thing left behind is an organisation called `Unifies` with a single empty form, and that project is
+left in place and read-only rather than deleted. The guard in `apps/api/test/setup.ts` — the suite refuses
+to run against a host that is not this machine — is what makes a workspace wired to production safe
+rather than reckless, and it now matters more than it did: see D37.
 - **The drawings and the badges caught up with the product, and the numbers stopped disagreeing.** Nine of
   the ten SVGs the README shows were still rendered in the previous palette — navy grounds, a light blue
   accent, a violet second hue and cool blue-grey type — because changing a stylesheet does not change a
@@ -304,7 +360,7 @@ what changed and why.
   ground becomes `#191c21`; the Node, pnpm, TypeScript, React, Fastify and PostgreSQL badges keep their
   vendors' colours, because repainting those would be a claim about somebody else's brand. The counts were
   stale in the same pass and in three different ways: the suite said 332 in one document and 333 in another
-  (345 now), and the contrast suite was described as **31** pairs in two places and **25** in a third when
+  (361 now), and the contrast suite was described as **31** pairs in two places and **25** in a third when
   it measures **26**.
 - **One palette and two materials, everywhere in the product, not only on the marketing page.** The
   workspace was the last surface still built in the theme the brand replaced: near-black ground, pearl type,
@@ -407,18 +463,52 @@ what changed and why.
 
 ### Fixed
 
-- **The deployment's database is a different database, and the migration gap is a configuration gap.** The
-  published summary reports nine migrations while this workspace's production connection has ten, and the two
-  are not the same Postgres endpoint: `18.6 (c021049)` against `18.6 (653b019)`, two different compute start
-  times, and `api_key`, `webhook`, `webhook_delivery`, `response_flag` and their four functions present on
-  one side and absent on the other. So `0010` **is** applied — to the database the workspace's own API,
-  console and harnesses run against, where a session-minted walk of every view at five viewports now passes,
-  including the Quality and Integrations screens that migration is what makes usable. What is behind is the
-  endpoint the deployment dials, and its connection string exists only in the hosting project's environment:
-  a workspace with no credential for it cannot migrate it, and inventing a host would be worse than saying
-  so. Both readings are in the README's deployment section, with the command that closes it — and with the
-  acknowledgement that until it runs, the API-key, webhook and quality-flag surfaces are deployed in that
-  deployment but not usable there.
+- **The deployment answered from a database in a different Neon project entirely, and migration `0010` is
+  now applied there.** The published summary reported nine migrations where this workspace's production
+  connection had ten, and the reason was not a missing migration but two databases: read from each side,
+  `18.6 (c021049)` against `18.6 (653b019)`, compute start times two hours apart, and `0010`'s objects present
+  on one side and absent on the other. This workspace's Neon project is `proud-field-04065571` (us-east-2);
+  the deployment's environment names `cold-leaf-32411407` at `ep-winter-frost-b3ke8cyz` in **ap-southeast-1**,
+  database `neondb` — a project this workspace had no key for, which is why the gap could not be closed here
+  on evidence alone. Once the hosting project's environment was read through the provider's own CLI, its
+  owner connection took `0010` (every earlier migration skipped, one applied), and the result is verified
+  from both ends: the deployment's public summary now reports `"migrationsApplied": 10,
+  "latestMigration": "0010_api_keys_webhooks_flags.sql"`, and the database itself shows four tables with row
+  level security **enabled and forced** and two or three policies each, the four functions the API calls by
+  name, sixteen `app_role` grants over `SELECT`/`INSERT`/`UPDATE`/`DELETE`, and the twelve columns and
+  indexes the migration adds. Both hosts this repository answers on report the same reading —
+  `"migrationsApplied": 10`, `"latestMigration": "0010_api_keys_webhooks_flags.sql"` and
+  `"startedAt": "2026-10-14T05:29:45.273Z"`, which is the cold-leaf cluster's own compute start where this
+  workspace's database started at `03:10:46Z`; that arithmetic is what makes "the deployment dials *that*
+  database" a reading rather than a guess. The routes `0010` is what makes possible were then asked live,
+  on both hosts: the scope catalogue with each scope's `enforced` flag, the flag kinds, the event
+  catalogue, and an organisation's API keys, webhook endpoints and flag queue with its summary each answer
+  `200` to a session minted **in the deployment's own database** and `401` without one — six routes, twelve
+  requests. That session was deleted afterwards, and the role serving those routes is `app_role` rather than
+  the owner connection, which is the deployment's own tenancy guard passing rather than a hopeful reading.
+- **The deployment's console was walked signed in, and the two screens `0010` is what makes usable were
+  opened by name.** The earlier walk measured every view at five viewports against the *workspace's* stack,
+  and said in writing that the deployment's own screens had not been walked. They have now: a session minted
+  in the deployment's database, `/console` measured at 1440×900 and 320×568 across the sidebar's form and
+  all four of its views — Builder, Responses & exports, Quality, Distribute — plus the studio's source panel,
+  **92/92 checks passed**, no console error, nothing under 12px, nothing overflowing. The Quality tab
+  renders its live queue and the Integrations view renders "API keys and webhooks" with the four reads
+  behind them answering `200` (`/orgs/:orgId/flags`, `/orgs/:orgId/api-keys`, `/orgs/:orgId/webhooks`,
+  `/api/v1/webhook-events`). The harness needed one fix to do it honestly: a signed-in route now waits for
+  the workspace to replace the boot screen instead of sleeping past it, because `load` fires while
+  "Opening your workspace." is still on screen and the deployment's session and organisation reads put the
+  real first paint later than any fixed sleep — twelve "failures" that were a stopwatch measuring a loading
+  state. The session was revoked and its audit row removed; the database holds no row the probes added.
+- **The live console was walked signed in, and the harness could not have done it.** The scratch browser
+  harness set its session cookie with `domain: '127.0.0.1'` hard-coded, so against a deployment it set a
+  cookie the deployment never received and every signed-in route quietly measured the *sign-in sheet* — which
+  is exactly the kind of pass that reads as a pass. With the domain taken from the target origin, and with a
+  wait for the workspace to decide who is there rather than a fixed delay, the walk ran against
+  `https://inicio.unifies.codes` with a session minted in the production database: the sidebar lists the real
+  form, the form opens on `Builder`, `Responses & exports`, `Quality` and `Distribute`, every per-view check
+  holds — colours, overflow, control sizes, console log — and the tallies are **119 checks with 0 failures**
+  at 1440 and **119 with 0 failures** at 320. The session was revoked through the deployment's own logout
+  route at the end (`204`, then `401` on the next read), so the only trace left is the audit row.
 - **The API suite could not run in this workspace at all, and ran anyway.** `test/setup.ts` refuses to run
   when the environment names a database that is not on this machine — a guard that exists so a test run
   cannot drop a schema one database over from real data, and which is doing its job when `APP_DATABASE_URL`

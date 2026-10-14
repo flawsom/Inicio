@@ -19,7 +19,7 @@ there is no signal** — and exporting data that is ready for analysis rather th
 [![License](https://img.shields.io/badge/license-Apache--2.0-15803d?style=flat-square&labelColor=191c21)](LICENSE)
 [![Build](https://img.shields.io/badge/build-clean-15803d?style=flat-square&labelColor=191c21)](#-testing)
 [![CI](https://img.shields.io/badge/CI-lint_·_types_·_tests_·_budgets-15803d?style=flat-square&labelColor=191c21)](#enforced-on-every-push)
-[![Tests](https://img.shields.io/badge/tests-345%20passing-15803d?style=flat-square&labelColor=191c21)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-361%20passing-15803d?style=flat-square&labelColor=191c21)](#-testing)
 [![Typecheck](https://img.shields.io/badge/typecheck-0%20errors-c2410c?style=flat-square&labelColor=191c21)](#-testing)
 [![Lint](https://img.shields.io/badge/lint-0%20errors-9a3412?style=flat-square&labelColor=191c21)](#-testing)
 [![Production](https://img.shields.io/badge/production-live-15803d?style=flat-square&labelColor=191c21&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app/health)
@@ -372,7 +372,8 @@ standing, rather than showing the definition they used to have.
 | 📶 **Honest connection state** | "No connection. Your answers are saved on this device and will be sent automatically", plus a **Send now** button and the timestamp the server has everything up to. |
 | 🐳 **A self-hosted profile** | Compose brings up PostgreSQL 16, Valkey, MinIO, ClamAV and Mailpit, with Caddy in front. |
 | 🧪 **Two live harnesses** | 35 end-to-end consumer checks and 28 offline-sync checks drive a real database through the same origin the browser uses. Each harness prints its own pass/fail line and reports the count it actually ran. |
-| 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 345 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
+| 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 361 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
+| 🛰️ **Checked on a schedule, against production** | Every six hours `.github/workflows/drift.yml` asks the deployment which migrations its own database has applied and compares that with `main`, opening one issue when they disagree. This is the failure a green CI run cannot see: the code and its migrations agree with each other while the deployed database is behind. |
 | ⚖️ **Budgets, not intentions** | The build fails if the critical path grows past 80 kB gzipped, if any chunk passes 150 kB, if the WebGL scene *or the XLSForm writer* leaks out of its lazy chunk, if a measured colour pair drops under 4.5:1, or if `axe-core` finds a violation on the public page or the consent gate. |
 
 </details>
@@ -901,10 +902,11 @@ Open **http://localhost:3000**, request a one-time code, read it in Mailpit, and
 ```bash
 pnpm lint        # ESLint 9, flat config
 pnpm typecheck   # tsc across four workspace packages
-pnpm test        # 345 tests
+pnpm test        # 361 tests
 pnpm coverage     # v8 coverage, per package
 pnpm build       # engine -> api -> web
 pnpm budgets     # the built bundle, gzipped, against its ceilings
+pnpm drift       # is production running the migrations this checkout has?
 ```
 
 </td>
@@ -1089,6 +1091,13 @@ ALTER ROLE app_role WITH LOGIN PASSWORD '<generated>';
 Put that connection in `APP_DATABASE_URL` and the owner's direct connection in `MIGRATION_DATABASE_URL`.
 Both can be verified rather than assumed: `SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname =
 current_user` for the role, and `pg_stat_activity` for the connection the running API actually holds.
+
+Behind those three names there is **one** database: this repository and the deployment name the same Neon
+project, so a migration run here is a migration of production and `pnpm drift` compares production's own
+ledger against `main` ([Deployment](#-deployment)). A workspace whose variables still name a different
+database is a workspace whose `pnpm db:migrate` silently changes nothing that matters — which is the state
+this project was in, and the reason `pnpm drift` reports the two readings side by side instead of trusting
+the local one.
 
 Because the suite reads the same variable names the application does, it owns a **local** database and says
 so: `apps/api/test/setup.ts` refuses to run when either host is not this machine, so a workspace wired to a
@@ -1652,20 +1661,21 @@ than pretending the score is 100. What can be verified today is verifiable: the 
 ```bash
 pnpm lint         # ESLint 9, flat config — 0 errors
 pnpm typecheck    # tsc across engine, api, web and the serverless entry
-pnpm test         # 345 tests
+pnpm test         # 361 tests
 pnpm coverage     # v8 coverage, per package
 pnpm build        # engine -> api -> web
 pnpm budgets      # the built bundle, gzipped, against its ceilings
+pnpm drift        # is the deployment running the migrations this checkout has?
 pnpm icons        # regenerate the app icons from the palette — committed output, not edited
 ```
 
-### What the 345 tests actually cover
+### What the 361 tests actually cover
 
 | Suite | Tests | Focus |
 |---|---:|---|
 | `packages/engine` | **55** | Expression parsing and evaluation, validation, XLSForm round-trip fixpoint, XLSX read/write, dataset and codebook assembly, every export writer, and **the workbook the studio shows**: `xlsFormSheets` asserted row by row against the file `exportXlsForm` zips, so the viewer and the download cannot drift |
 | `apps/api` | **150** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers, and **the push channel over a real socket**: `ready` first, silence while nothing changes, then one coalesced event naming the aggregate that moved, with a 404 and no stream for a form the caller cannot see, plus the public summary: read live, and asserted key by key to carry no tenant data, **and the integration surface**: a key whose secret is shown once and stored as a hash, its scope enforced at the route that declares it and *named* when it is missing, a key refused across organisations even though its creator belongs to both, revocation effective on the very next request, an endpoint that disables itself after five consecutive failures, a delivery signature checked against an independent HMAC in the test, a duplicate scan that refuses to record the same finding twice, and **the read scopes**: a key granted `forms:read` reaches the forms list *narrowed to its own organisation*, is `403 key_org_mismatch` on another organisation's form even though its creator belongs to both, and is told it is missing `responses:export` when it tries to export with only `responses:read`, **and the emails**: the sign-in code is in the body and never in the subject, no template fetches anything (no image, no pixel, no web font, no `url()`), every colour pair it uses is measured at 4.5:1 in both schemes, a hostile organisation name cannot close an attribute or reach the hidden preheader, the text alternative is prose rather than tags with the tags removed, and the header a transport composes is the one the environment named |
-| `apps/web` | **140** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer), **and the cards that arrive after the mount** (the template articles the API renders are handed to the reveal observer instead of keeping the hidden state, which is how three invisible cards reached production) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request), **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure), **26 measured contrast pairs** taken from the stylesheets themselves — both of the workspace's materials, both of the landing page's, the primary-as-type pair, the label on the primary action, and every control boundary — plus the assertions that hold the two stylesheets to one set of brand values and that the surface material re-binds **every** colour role it borrows (the defect that once put near-black headings on a near-black ground) — **`axe-core` audits** of the two public surfaces, **the quality queue** (the evidence behind each finding is on the row, a decision carries the reason typed with it and re-reads the list it just changed, dismissing is asserted to be a different outcome from resolving, and a second scan is reported as finding nothing new rather than as doing nothing) and **the integration screen** (the scope catalogue's `enforced` flag genuinely disables a scope no route declares, a key secret is shown once in a read-only field that carries a panel saying so, an `http://` endpoint cannot be added at all, and "send test" reports the receiver's real `500` rather than "sent"), **raising a finding by hand** from a response row (the raise waits for a reason, and "already in the queue" is asserted to read differently from "recorded"), **the definition studio** (the JSON panel is the server's own definition; its rows move the XLSForm sheets and the preview with no request at all, because all three read one object; the sheets are the workbook the download writes; the preview hides a question whose relevance rule says so, renders the two inline choices, sends nothing and stores nothing when it is typed into, and produces *field-for-field identical markup* to the component the collection page renders), **the shell guard** that keeps the ambient layer and a form field from ever sharing a class name again, and **the public page's own boundaries**: every anchor it renders resolves to this deployment and no source host is named anywhere in it, no em dash or en dash reaches a reader, and the honesty bullets are measured as the brand's dot rather than as a rule that reads like one — **plus the brand in the artifacts a stylesheet cannot reach**: the README's nine drawings held to the palette by value and to no pre-brand colour or saturated blue-violet accent, every badge colour on this page (their label grounds all the one surface tone, their vendor colours left alone where they belong), and the three app icons **decoded pixel by pixel** and required to be the palette's own ground, to carry the primary, to be free of blue-dominant pixels and to contain none of the three colours the previous icon was drawn from — the guard that would have caught an icon still wearing the palette it was made in |
+| `apps/web` | **156** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, **the pointer trail** (mounted exactly once on each route by the shell, mounting the real effect through a recorded 2D context so one route cannot become two trails under StrictMode, and removed by reference when the route goes), **the sitemap and `robots.txt`** (exactly the four public routes on the canonical origin, no `lastmod`, and the two hosting catch-alls asserted not to be able to answer either file with the app shell — the `/sw.js` defect in a new dress), the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer), **and the cards that arrive after the mount** (the template articles the API renders are handed to the reveal observer instead of keeping the hidden state, which is how three invisible cards reached production) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request), **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure), **26 measured contrast pairs** taken from the stylesheets themselves — both of the workspace's materials, both of the landing page's, the primary-as-type pair, the label on the primary action, and every control boundary — plus the assertions that hold the two stylesheets to one set of brand values and that the surface material re-binds **every** colour role it borrows (the defect that once put near-black headings on a near-black ground) — **`axe-core` audits** of the two public surfaces, **the quality queue** (the evidence behind each finding is on the row, a decision carries the reason typed with it and re-reads the list it just changed, dismissing is asserted to be a different outcome from resolving, and a second scan is reported as finding nothing new rather than as doing nothing) and **the integration screen** (the scope catalogue's `enforced` flag genuinely disables a scope no route declares, a key secret is shown once in a read-only field that carries a panel saying so, an `http://` endpoint cannot be added at all, and "send test" reports the receiver's real `500` rather than "sent"), **raising a finding by hand** from a response row (the raise waits for a reason, and "already in the queue" is asserted to read differently from "recorded"), **the definition studio** (the JSON panel is the server's own definition; its rows move the XLSForm sheets and the preview with no request at all, because all three read one object; the sheets are the workbook the download writes; the preview hides a question whose relevance rule says so, renders the two inline choices, sends nothing and stores nothing when it is typed into, and produces *field-for-field identical markup* to the component the collection page renders), **the shell guard** that keeps the ambient layer and a form field from ever sharing a class name again, and **the public page's own boundaries**: every anchor it renders resolves to this deployment and no source host is named anywhere in it, no em dash or en dash reaches a reader, and the honesty bullets are measured as the brand's dot rather than as a rule that reads like one — **plus the brand in the artifacts a stylesheet cannot reach**: the README's nine drawings held to the palette by value and to no pre-brand colour or saturated blue-violet accent, every badge colour on this page (their label grounds all the one surface tone, their vendor colours left alone where they belong), and the three app icons **decoded pixel by pixel** and required to be the palette's own ground, to carry the primary, to be free of blue-dominant pixels and to contain none of the three colours the previous icon was drawn from — the guard that would have caught an icon still wearing the palette it was made in |
 
 ### Enforced on every push
 
@@ -1676,12 +1686,22 @@ server, waits for both to answer, and runs both end-to-end harnesses over the sa
 so the route from a build to 35 consumer checks and 28 offline-sync checks is exercised on every push,
 with the API and web logs printed when a step fails.
 
+`.github/workflows/drift.yml` is the other half of that idea, on a clock rather than on a push: CI proves
+the code and its migrations agree *with each other*, against a database the job creates itself, and cannot
+see the one database that matters. So every six hours the workflow runs `pnpm drift`, which reads the
+ledger the deployment publishes about itself (`GET /api/v1/public/summary`) and compares it with the
+migration files in the checkout. A disagreement opens — or appends to — a single issue carrying the
+report and the command that closes it; a deployment that cannot be read at all fails the run *without*
+an issue, because "we cannot see production" and "production is missing a migration" are different
+problems and an alert that conflates them is one people learn to scroll past.
+
 | Check | Fails the build when |
 |---|---|
 | Critical-path JS / CSS | over **80 kB** / **7 kB** gzipped, for everything `index.html` references |
 | Landing JS / CSS | over **8 kB** / **6 kB** gzipped |
 | Any single chunk | over **150 kB** gzipped |
 | The renderer split | a critical chunk contains `WebGLRenderer` or `createInstrument` — what a stray static import of the scene would do |
+| The trail's chunk | over **4 kB** gzipped, absent from the build entirely, or present in a critical chunk (`quadraticCurveTo`, `any-pointer: fine`) — the decoration on every route is the one somebody would import statically "because it is only a canvas" |
 | Colour | any of the 26 measured pairs drops below 4.5:1 for text, or 3:1 for a control boundary or the live dot |
 | The brand's artifacts | a drawing, a badge or an app icon carries a value from the palette this replaced, or an icon serves a blue-dominant pixel |
 | Accessibility | `axe-core` reports any violation on the landing page or the terms gate |
@@ -1774,43 +1794,74 @@ vercel --prod
 | Read | Answer | What it means |
 |---|---|---|
 | `GET /health` | `200 {"status":"ok","dbTime":…}` | The function reaches the database and runs a real query |
-| `GET /api/v1/public/summary` | `"migrationsApplied": 9, "latestMigration": "0009_collection_sync.sql"` | **The database this deployment talks to is one migration behind the code** — and, as the next table shows, it is not the database this workspace migrates |
+| `GET /api/v1/public/summary` | `"migrationsApplied": 10, "latestMigration": "0010_api_keys_webhooks_flags.sql"`, `"startedAt": "2026-10-14T05:29:45.273Z"` | The database this deployment talks to is the one this workspace migrates and the one `pnpm drift` compares against `main` |
 | `/assets/studio-*.js` | contains *"What the respondent opens"*, *"The workbook"*, *"Nothing typed here is sent or stored"* | The three-panel studio **is** deployed and reachable |
 | `/sw.js`, `/manifest.webmanifest` | `application/javascript`, `application/manifest+json` | The static-asset trap below is genuinely fixed in production, not just locally |
 | `/`, `/login`, `/terms`, `/privacy`, `/console` | `200`; **no `4xx` and no console error on any of them** | The signed-out console is the sign-in sheet *in place*: `/console` keeps its URL, draws the email field and "Send me a code", and renders no workspace chrome at all |
 | `/icon-192.png`, `/icon-512.png`, `/apple-touch-icon.png` | `image/png`; ground `rgb(25,28,33)`, primary `rgb(234,88,12)`, **0 blue-dominant pixels** | The tab and home-screen icons are the palette's — they were 92 % old-palette blue pixels until this pass |
-| `/api/v1/api-scopes`, `/api/v1/flag-kinds` | `401` | The machine surface denies by default: those two routes answer only to a session or a key |
+| `/api/v1/api-scopes`, `/api/v1/flag-kinds` | `401` signed out, `200` with a session | The machine surface denies by default and answers to a session — measured against the deployment after `0010`, not before it |
+| `/sitemap.xml`, `/robots.txt` | `application/xml` and `text/plain`, with the four public routes and the private ones closed | The two files are served as themselves rather than as the app shell, which is what the catch-all below would otherwise do to them |
+| The pointer trail, on every route | a `canvas.cursor-trail` on `/`, `/login`, `/console`, `/terms`, `/privacy`, an invitation and a collection link, drawn by the lazily loaded `cursor-trail-*.js` (1.4 kB gzipped) | One mark follows the pointer everywhere. The console used to wear a labelled ring instead and the trail used to stop at the landing page, so a visitor who followed the sign-in link watched the cursor change behaviour halfway through arriving |
 
-### The migration gap: two databases, and how that was established
+### One database, and the check that keeps it that way
 
-The deployment's own summary reports nine migrations, and this workspace's production connection has ten.
-They are not the same database — read from each side rather than inferred:
+Production is **one** database, and this repository points at it: `pnpm db:migrate` here migrates
+production rather than something that resembles it. Read from the connection rather than from a diagram:
 
-| | The connection this workspace names production (`INICIO_PROD_DB_*`, `MIGRATION_DATABASE_URL`) | The database the deployment answers from |
-|---|---|---|
-| `current_setting('server_version')` | `18.6 (c021049)` | `18.6 (653b019)` |
-| `pg_postmaster_start_time()` | `2026-10-14T03:10:46Z` | `2026-10-14T05:29:45Z` — a different compute |
-| `schema_migrations` | **10**, latest `0010_api_keys_webhooks_flags.sql` | **9**, latest `0009_collection_sync.sql` |
-| Migration `0010`'s objects | `api_key`, `webhook`, `webhook_delivery`, `response_flag`, four functions, the `app_role` grants | none of them |
+| | Production — the database the deployment answers from, and the one this workspace uses |
+|---|---|
+| Neon project / region | `cold-leaf-32411407`, `ap-southeast-1`, the region nearest the people using it |
+| Endpoint, database | `ep-winter-frost-b3ke8cyz`, `neondb` |
+| `current_setting('server_version')` | `18.6 (653b019)` |
+| `pg_postmaster_start_time()` | `2026-10-14T05:29:45Z` — the instant both live hosts report in `GET /api/v1/public/summary`, which is what makes "the deployment dials *this* database" a reading instead of a guess |
+| `schema_migrations` | **10**, latest `0010_api_keys_webhooks_flags.sql` |
+| The application's role | `app_role`, the least-privilege role from migration `0002` — so the API's tenancy refusal is a check that passes rather than one that is skipped |
+| Migration `0010`'s objects | `api_key`, `webhook`, `webhook_delivery`, `response_flag` — RLS enabled *and* forced, 2–3 policies each, four functions, the `app_role` grants |
 
-So `0010` *is* applied — to the database this workspace migrates, which is the one the workspace's own
-API, console and harnesses run against, and the Quality and Integrations screens were walked against it
-at five viewports with a session. What is behind is the endpoint the *deployment* dials, and its
-connection string exists only in the hosting project's environment: a workspace with no credential for it
-cannot migrate it, and guessing at a host would be worse than saying so. It closes one of two ways, both
-one step:
+**It used to be two, and that is worth keeping written down.** A second copy of the schema lived in this
+workspace's own Neon project (`proud-field-04065571`, `us-east-2`), and for a while `DATABASE_URL` here
+named that one while the deployment answered from the other — so the two disagreed about the ledger and
+neither reading was wrong. They were unified onto the deployment's database, which is the one with the
+accounts in it and the one nearest those users; the reasoning and what it costs are in
+[DECISIONS.md](DECISIONS.md) D37, and [D36](DECISIONS.md) keeps the record of why the answer was
+"measure both and write down which one is behind" for as long as no credential for the other side existed.
+The retired project is left in place and read-only, holding one organisation (`Unifies`) that exists
+nowhere else — nothing was deleted, and nothing writes to it again.
+
+### The check that keeps it honest
+
+Unifying them was one thing; noticing when they come apart again is the other, and that failure hides
+well. A migration merged to `main` either runs against production or it does not, and when it does not the
+application is deployed and *reachable* while the tables its newest screens read do not exist there.
+Nothing 500s until somebody opens the new screen, and the health check, the landing page and every older
+surface keep answering `200`. That is how this deployment once spent a day nine migrations deep while the
+repository believed it was migrated — and why the fix was not only to migrate it but to make the gap
+somebody's job to notice:
 
 ```bash
-# Either apply the migration with the deployment's own owner connection …
-MIGRATION_DATABASE_URL='postgres://…' pnpm --filter @inicio/api db:migrate
-# … or point that project's DATABASE_URL / APP_DATABASE_URL / MIGRATION_DATABASE_URL at the
-# database this repository migrates, and redeploy.
+pnpm drift        # the deployment's own ledger against this checkout: 0 in step, 1 drift, 2 unreadable
+pnpm db:migrate   # the migration itself, against the same database, over the owner connection
 ```
 
-Until one of them runs, the API-key, webhook and quality-flag surfaces, and the Quality and Integrations
-screens that read them, are deployed but not *usable* in that deployment — which is the same class of
-quiet lie as a `sent` for a mail that never left, so it is written down here instead of being left to a
-dashboard.
+`pnpm drift` reads `GET /api/v1/public/summary`, which reports the `schema_migrations` ledger the running
+service has just read on the connection the application uses: no credentials, no cluster access, nothing
+about tenants. `.github/workflows/drift.yml` runs it every six hours and opens (or appends to) one issue
+when it fails. The three exit codes are deliberately distinct, and the distinction is the whole design:
+in step, drift, or *unreadable*. A deployment nobody can reach is not a schema problem, and an alert that
+reports it as one is an alert people learn to scroll past.
+
+So the API-key, webhook and quality-flag surfaces — and the Quality and Integrations screens that read
+them — are deployed *and* usable in that deployment, and that was measured rather than argued. Signed in
+with a session minted in *that* database, the console was walked **on the deployment**: `/console` at
+1440×900 and 320×568, the sidebar's form, all four of its views (`Builder`, `Responses & exports`,
+`Quality`, `Distribute`), the studio's source panel, every control at least 24px, no sideways scroll at
+either width, no console error — **92/92 checks**. The two screens `0010` is what makes usable were opened
+by name as well: a form's Quality tab renders its live queue ("Scan for duplicates", the speeding and
+straight-lining thresholds) off `GET /orgs/:orgId/flags` → `200`, and the sidebar's Integrations view
+renders "API keys and webhooks" off `GET /orgs/:orgId/api-keys` → `200` and `GET /orgs/:orgId/webhooks` →
+`200`, with the event catalogue (`GET /api/v1/webhook-events`) → `200`. The session those walks used was
+minted the way the server mints one, in that database, and deleted afterwards; what it left is the audit
+rows a real sign-in also leaves, which is the only trace there should be.
 
 <details>
 <summary><b>⚠️ The deployment trap this project actually hit</b></summary>
@@ -1825,6 +1876,12 @@ manifest was never parsed. The offline app worked locally and was silently dead 
 The fix is to name each root static file in the catch-all's exclusions, and the lesson is in the
 verification: **check static assets by content type, not by status code.** Recorded as D26 in
 [`DECISIONS.md`](DECISIONS.md).
+
+`sitemap.xml` and `robots.txt` are the same defect in a new dress — a sitemap answered with `index.html`
+and a `200` is a sitemap a crawler reads nothing from — so they were added to that exclusion list in the
+same pass that wrote them, and the guard is a test rather than a memory: `apps/web/test/sitemap.test.ts`
+reads `vercel.json`'s negative lookahead and Netlify's `force` flags, and holds both. It was broken on
+purpose once, by removing one name from the list, to confirm it fails.
 
 </details>
 

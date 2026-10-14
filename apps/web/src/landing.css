@@ -201,35 +201,6 @@ html:has(.landing) {
   .landing::after { animation: none; }
 }
 
-/* -------------------------------------------------------------- cursor trail */
-
-/*
- * The pointer trail.
- *
- * One fixed canvas across the viewport that the springs are drawn into. It is
- * decoration and it behaves like it: `pointer-events: none`, so every control
- * underneath still receives its click, and `aria-hidden` in the markup, so it is
- * nothing to a screen reader. The canvas is transparent, so what a reader sees when
- * the trail is at rest is the page behind it, unchanged.
- *
- * Reduced motion hides it here as well as switching it off in the effect. Two
- * guards for one rule is deliberate: the script decides whether to spend frames,
- * the stylesheet decides whether a decoration is painted at all, and a reader who
- * asked for less motion should not depend on the script having loaded.
- */
-.lcursor {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .lcursor { display: none; }
-}
-
 /* ------------------------------------------------------------------ reveal */
 
 .landing.l-anim [data-reveal]:not(.in) {

@@ -1,0 +1,101 @@
+name: Database drift
+
+# The one failure that a green CI run cannot see.
+#
+# `ci.yml` proves the code and its migrations are consistent with each other, against a
+# database the job creates itself. It cannot see production, and production is where a
+# migration has to actually run. So this asks the running service what schema it has
+# (`GET /api/v1/public/summary` reports the ledger it just read on the connection the
+# application uses) and compares that with the migration files in this checkout.
+#
+# Every six hours, because the gap is measured in how long the two may disagree without
+# anyone being told — Vercel finishes deploying `main` within minutes of a push, so an
+# hour of drift is already an hour of a screen that cannot work. `workflow_dispatch` is
+# there for the moment somebody has just migrated production and wants to be told so.
+#
+# What it does with a failure matters more than the check: a disagreement opens (or
+# appends to) one issue, and an unreachable deployment fails the run *without* opening
+# one. Conflating "we cannot see production" with "production is missing a migration"
+# is how an alert becomes something people scroll past.
+
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: drift
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    name: does production's schema match this checkout?
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # The exit code is the finding, so the step records it rather than failing: a
+      # failing step ends the job before the issue can be filed, which was the whole
+      # point of running it.
+      - name: Compare the deployed ledger with this checkout
+        id: drift
+        run: |
+          set +e
+          node scripts/check-drift.mjs 2>&1 | tee drift-report.txt
+          echo "code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Say what was found, on the run itself
+        if: always()
+        run: |
+          {
+            echo '### Drift check'
+            echo ''
+            echo '```'
+            cat drift-report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: One issue, updated in place, when they disagree
+        if: steps.drift.outputs.code == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          title='Schema drift: production and main disagree about the migrations'
+          # The report is the issue body, so the fix (which migration, and the command
+          # that applies it) travels with the notification instead of living in a log
+          # that expires in ninety days.
+          {
+            echo 'The scheduled drift check found that production has not applied every migration in `main` — or has applied one `main` does not have.'
+            echo ''
+            echo '```'
+            cat drift-report.txt
+            echo '```'
+            echo ''
+            echo "_Found by [run ${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) against \`${{ github.sha }}\`._"
+          } > drift-issue.md
+          existing=$(gh issue list --state open --search "in:title \"$title\"" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file drift-issue.md
+          else
+            gh issue create --title "$title" --body-file drift-issue.md
+          fi
+
+      # A code of 2 means the summary could not be read at all: an outage, a moved host or
+      # a bad `DRIFT_URL`. The run fails — somebody should look — but no issue is opened,
+      # because there is nothing to fix in the schema.
+      - name: Fail the run when the two disagree, or when production cannot be read
+        if: steps.drift.outputs.code != '0'
+        run: |
+          echo "drift check exited ${{ steps.drift.outputs.code }} (1 = drift, 2 = unreadable)"
+          cat drift-report.txt
+          exit 1

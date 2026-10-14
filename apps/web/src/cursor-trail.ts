@@ -6,9 +6,12 @@
  * the trail drifts between a deep tangerine and a warm amber without ever being
  * repainted by hand.
  *
- * It is a module of its own, imported on demand by `landing.tsx`, because it is
- * decoration: a reader who never moves a pointer over this page should not
- * download it, and the landing chunk has a budget measured in kilobytes.
+ * It is a module of its own, imported on demand by the shell that mounts the canvas
+ * (`CursorTrail` in `App.tsx`, rendered on every route), for two reasons: it is
+ * decoration, so a reader who never moves a pointer should not download it at all, and
+ * it must not be on the critical path — the entry chunk is what everybody pays before
+ * the first paint, and a trail is not a reason to wait. `scripts/check-budgets.mjs`
+ * asserts both halves of that: the chunk exists, and no critical chunk contains it.
  *
  * What this deliberately does *not* do, each of which is a defect in the snippet
  * it descends from:

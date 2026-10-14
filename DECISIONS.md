@@ -1175,8 +1175,118 @@ sides, put the readings in the README's deployment section next to the command t
 the person who holds the credential run it. A migration is not a code change, and a gap that cannot be closed
 from here is a sentence to write down rather than a silence to keep.
 
-**What that leaves true.** The workspace's own stack is on the current schema: the API answers
-`"migrationsApplied": 10` and a session-minted walk of every route and every workspace view — including the
-Quality and Integrations screens that `0010` is what makes usable — passes at five viewports. What is not
-true, and is written in the README instead of implied, is that the API-key, webhook and quality-flag
-surfaces are *usable in that deployment* until one of the two commands runs.
+**How it closed.** The credential existed in the one place it had to exist — the hosting project's own
+environment — and that project's provider CLI reads it without a dashboard. The read named a Neon project
+this workspace had no key for at all (`cold-leaf-32411407` at `ep-winter-frost-b3ke8cyz`, database
+`neondb`, region `ap-southeast-1`; this workspace's is `proud-field-04065571` in `us-east-2`), and its
+owner connection took `0010` while skipping the nine already in its ledger. Verification ran from both
+ends rather than from the command's exit code: the deployment's own summary now reports the ledger
+(`"migrationsApplied": 10`) *and* its compute start time, which is what identifies the database —
+`2026-10-14T05:29:45.273Z` on both hosts against `03:10:46Z` for this workspace's; the database shows the
+four tables with row level security enabled **and forced**, the four functions, and the `app_role` grants;
+the six routes `0010` is what makes possible were asked live (each `401` signed out, `200` to a session
+that exists only in that database); and the console itself was walked signed in on the deployment —
+**92/92 checks** at 1440×900 and 320×568 across all four of a form's views, with the Quality queue and the
+Integrations view opened by name and the four reads behind them answering `200`. That session was minted
+the way the server mints one and revoked afterwards.
+
+**What the decision still buys.** Nothing above was available from this workspace when D36 was written, and
+the entry is kept in that shape on purpose: it records why "measure both sides and write down which one is
+behind" was the right answer for as long as the credential was absent, and what changed when it arrived.
+The rule stands — a workspace still does not guess a host, and the migration is still not run from a
+startup path — and the gap it described is closed, so the README says so with the command that closed it
+to hand instead of a warning to read.
+
+## D37 — One database, and it is the deployment's
+
+**Context.** Two Neon projects held the same schema. This workspace's `DATABASE_URL` named
+`proud-field-04065571` (`us-east-2`, database `inicio`); the deployment answered from `cold-leaf-32411407`
+(`ap-southeast-1`, database `neondb`). Both were migrated, both were real, and the only reason the
+disagreement in D36 lasted as long as it did is that each looked complete from where it was being read.
+D36 closed the gap by migrating the second one; this decides which one survives the pair.
+
+**Decision: unify on the deployment's database, and move this repository's variables to it.** Three
+reasons, in the order they decided it. The live accounts are there — one organisation, two active people,
+none of it a fixture — so unifying on that side keeps production's data rather than copying it into a
+second project and repointing the environment that production runs from, which is a larger change to the
+thing that is live. It is in the region nearest the people using it, and this product's own landing page
+advertises its database round trip, so `ap-southeast-1` against `us-east-2` is a figure on a page and not
+an abstraction. And the hosting project's environment is managed by a provider integration that claims
+`DATABASE_URL` for the owner connection, so leaving it alone means not fighting that integration on every
+future deploy — the repository's variables are ours to set, that environment is not.
+
+**What had to be true first.** Unification is only safe if it loses nothing, so both sides were counted
+before anything moved: one account and one organisation on the workspace's side against two accounts and
+one organisation on the deployment's, and **zero responses on both** — the same near-empty development
+state, which is why this was a decision about plumbing rather than about a migration of records. Every
+account on the retired side also exists on the surviving one; the one thing that exists nowhere else is an
+organisation called `Unifies` with a single empty form, and the retired project is left in place, read-only,
+holding it. Nothing was deleted, and nothing will write there again — a project that is an archive is
+cheaper than a project that is a surprise.
+
+**What it costs, stated plainly.** A workspace wired to production points the API suite at production, and
+`apps/api/test/setup.ts` refuses to run against a host that is not this machine — which was already true of
+this workspace and is exactly why the unification is safe rather than reckless: the guard turns "I ran the
+tests" into "I ran the tests somewhere they could not touch the live database". Rotating `app_role`'s
+password is now a production act; `pnpm db:migrate` at the workspace root is now a production act; both are
+supposed to feel like that. And the retired project still exists, so the two databases are one only for as
+long as somebody remembers which one is which — which is why the README names it, names the region, names
+the retired project, and says what it holds.
+
+**Verified.** `pnpm db:migrate` against the unified connection skipped all ten migrations rather than
+applying any: the workspace is now migrating the same database the deployment answers from, and the
+ledger it reports (`"migrationsApplied": 10`) is the one both live hosts publish about themselves.
+
+## D38 — The drift alert is a schedule, and "unreadable" is not "drift"
+
+**Context.** D36's gap was not a broken build or a failed request. The application was deployed and
+reachable the whole time, its health check answered, its landing page answered, and its older screens
+worked — because the tables only a *new* screen reads simply were not there. Everything green, and a
+screen that could not load. No push-triggered CI can see that: `ci.yml` proves the code and its migrations
+agree *with each other*, against a database the job creates itself.
+
+**Decision: ask the deployment about its own schema, on a clock, and treat the three answers differently.**
+`scripts/check-drift.mjs` (`pnpm drift`) reads `GET /api/v1/public/summary` and compares the ledger the
+running service reports with the migration files in the checkout. `.github/workflows/drift.yml` runs it
+every six hours and, on a disagreement, opens or appends to **one** issue carrying the report and the
+command that closes it.
+
+The source is the deployment's own public summary rather than the database, and that is deliberate: CI has
+no business holding production database credentials, the endpoint is public by design and reports nothing
+about tenants, and it is the strongest available evidence — the number is read by the same process, on the
+same connection, that serves the routes. The exit codes are the design rather than an implementation
+detail: `0` in step, `1` drift, `2` unreadable. A deployment nobody can reach is an outage, not a schema
+problem, and an alert that files it as drift is an alert people learn to scroll past — so `2` fails the run
+and opens nothing. One issue, commented on rather than duplicated, for the same reason: an alert that
+leaves a trail of issues is an alert nobody reads twice.
+
+**Verified in all three states, because a check that has only ever passed is a check nobody has seen
+work:** in step against the live deployment; drift by adding a real `0011_*.sql` to the checkout's
+migrations for the length of one run, which named the missing file; and unreadable with `DRIFT_URL` pointed
+at a closed port, which exited `2` without claiming anything about the schema.
+
+## D39 — One pointer treatment, mounted by the shell
+
+**Context.** The product had two. The landing page drew a trail of twenty springs from an on-demand module
+(`landing-cursor.ts`); the signed-in app drew a labelled ring around the pointer from `ImmersiveChrome`.
+Both followed the same pointer, with different ideas of what hovering means, and the landing page's own
+comment already recorded the direction of travel — "the label the ring used to render is gone with the
+ring" — while the ring was still being rendered on every other route.
+
+**Decision: the trail is the product's one pointer mark, and the shell mounts it, once, for every route.**
+The ring and its stylesheet rules are gone. The canvas rule moved from `landing.css` into `styles.css`,
+because a canvas styled by a stylesheet that only one route loads is an unstyled box in the flow of every
+other route; the module was renamed from `landing-cursor.ts` to `cursor-trail.ts` because the old name had
+stopped being true, which is the same reason the class is `cursor-trail` and no longer `lcursor`.
+
+**Why the shell rather than each page.** A layer that appears and disappears with navigation reads as a
+glitch, and — the actual failure here — a per-page mount is a per-page chance to forget one. It was
+mounted by exactly one page because that was the page it was written on, and nothing about the routing
+would have told anybody. So the mount lives where the routing does, and the test counts:
+`cursor-trail-everywhere.test.tsx` mounts the app at each route the router resolves and requires **exactly one** trail,
+mounted exactly once per route even under StrictMode's double mount, disposed by reference when the route
+goes. The decoration's other three properties are held elsewhere: it stays off the critical path
+(`check-budgets.mjs` fails if a critical chunk contains `quadraticCurveTo` or `any-pointer: fine`, and the
+chunk has its own 4 kB budget), it stays hidden under reduced motion (both the script and the stylesheet,
+asserted in `shell.test.ts`), and it takes no pointer events, so every control underneath still gets its
+click.

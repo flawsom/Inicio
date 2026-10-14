@@ -159,6 +159,54 @@ export function liveLabel(status: StreamStatus, live: boolean, fallbackMs: numbe
 }
 
 /**
+ * The pointer trail, on every route rather than only on the landing page.
+ *
+ * A fixed, full-viewport canvas the trail is drawn into, mounted once by the shell below
+ * so that the sign-in sheet, the console, the documents, an invitation and a collection
+ * link all carry the same mark as the front door: the product is one room, and a visitor
+ * who follows a link into it should not watch the cursor stop behaving like the one on
+ * the page that sent them there.
+ *
+ * The canvas is decoration and behaves like it: no pointer events, so every control
+ * underneath still receives its click; hidden outright under reduced motion, both here
+ * and in the effect, because a reader who asked for less motion should not depend on a
+ * chunk having loaded; and the effect itself is imported on demand, so a device with no
+ * fine pointer — which is also the device least able to afford the frames — never
+ * downloads it.
+ *
+ * The canvas is mounted by the shell rather than by each route for the reason the
+ * ambient field is: a layer that appears and disappears with navigation reads as a
+ * glitch, and a per-route mount would also mean a per-route chance to forget one.
+ */
+export function CursorTrail(): JSX.Element {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    let handle: { dispose(): void } | null = null;
+    let disposed = false;
+
+    void import('./cursor-trail')
+      .then((module) => {
+        // The mount can lose the race with an unmount, which is normal under
+        // StrictMode's double mount: a trail created after teardown would draw into
+        // a canvas nobody is watching, forever.
+        if (disposed) return;
+        handle = module.mountCursorTrail(canvas);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      disposed = true;
+      handle?.dispose();
+    };
+  }, []);
+
+  return <canvas ref={canvasRef} className="cursor-trail" aria-hidden="true" />;
+}
+
+/**
  * The chrome that puts the signed-in app in the same world as the landing page.
  *
  * Three fixed layers, none of them interactive and none of them load-bearing: the
@@ -175,7 +223,6 @@ export function liveLabel(status: StreamStatus, live: boolean, fallbackMs: numbe
  */
 function ImmersiveChrome(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const ringRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -205,20 +252,18 @@ function ImmersiveChrome(): JSX.Element {
 
     const onResize = (): void => field?.resize();
 
+    /*
+     * The field leans towards the pointer. Nothing here moves the pointer itself and
+     * nothing draws a second cursor: the trail the shell mounts is the only mark that
+     * follows it, and the ring that used to sit around it is gone — two decorations
+     * chasing one pointer, each with its own idea of what hovering means, is how a tool
+     * ends up looking like two products.
+     */
     const onPointer = (event: PointerEvent): void => {
       field?.setPointer(
         (event.clientX / window.innerWidth) * 2 - 1,
         -((event.clientY / window.innerHeight) * 2 - 1),
       );
-      const ring = ringRef.current;
-      if (!ring) return;
-      ring.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0)`;
-      // The ring is a halo around the real pointer, never a replacement for it: a
-      // tool full of text fields keeps the cursor it was born with.
-      const target = event.target as HTMLElement | null;
-      const interactive = target?.closest('a, button, select, input, textarea, [role="button"]');
-      ring.classList.toggle('on', Boolean(interactive));
-      ring.dataset.label = interactive?.getAttribute('data-cursor') ?? '';
     };
 
     const onVisibility = (): void => {
@@ -249,7 +294,6 @@ function ImmersiveChrome(): JSX.Element {
       </div>
       <div className="vignette" aria-hidden="true" />
       <div className="grain" aria-hidden="true" />
-      <div ref={ringRef} className="cursor-ring" aria-hidden="true" />
     </>
   );
 }
@@ -2109,6 +2153,14 @@ export function App(): JSX.Element {
 
   return (
     <>
+      {/*
+       * The trail is the one layer that is on *every* route, including the marketing
+       * page — it is the page the trail was written for, and the only reason it used to
+       * be mounted there alone was that nothing else had it yet. The ambient field stays
+       * behind the signed-in app, because the landing page carries its own scene and two
+       * renderers on one page is two worlds at once.
+       */}
+      <CursorTrail />
       {!marketing && <ImmersiveChrome />}
       {page}
     </>

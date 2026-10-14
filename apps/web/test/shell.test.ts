@@ -59,6 +59,28 @@ describe('the shell layers and the form', () => {
     }
   });
 
+  it('keeps the pointer trail a fixed, click-through layer on every route', () => {
+    /*
+     * The trail is mounted by the shell for every route, so its rule has to live in the
+     * stylesheet every route loads rather than in `landing.css`, which arrives with the
+     * marketing chunk. A canvas with no rule is not invisible — it is an unstyled 300x150
+     * box in the flow of whatever page it lands on — so this is the difference between a
+     * decoration and a defect on five of the six routes.
+     */
+    expect(app).toContain('<CursorTrail />');
+    expect(app).not.toContain('cursor-ring');
+    const trail = rules('.cursor-trail').join(' ');
+    expect(trail).toContain('position: fixed');
+    expect(trail).toContain('pointer-events: none');
+    expect(trail).toContain('z-index');
+    // Hidden outright for a reader who asked for less motion, so a chunk that has not
+    // loaded cannot leave it painted.
+    expect(css).toContain('.cursor-trail { display: none; }');
+    // And not in the landing stylesheet, where it used to be: that stylesheet is only
+    // fetched by one route, and it no longer names the layer at all.
+    expect(readFileSync(join(SRC, 'landing.css'), 'utf8')).not.toContain('lcursor');
+  });
+
   it('still uses that class for the question the respondent answers', () => {
     // The guard above is only meaningful while the form really does use `.field`:
     // renaming the form's class away would otherwise let both assertions pass while

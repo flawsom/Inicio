@@ -14,7 +14,10 @@
  *      lazily imported chunk precisely so that a person reading a table of responses
  *      never pays 135 kB for it. A single static import of the scene would silently
  *      move three.js into the entry chunk and nobody would notice until a phone on
- *      a train did, so the split is asserted rather than assumed.
+ *      a train did, so the split is asserted rather than assumed. The definition
+ *      studio and the pointer trail are held to the same rule, and the trail is the
+ *      one most easily broken by hand: it is mounted on every route, so `import`
+ *      instead of `import()` looks harmless and is exactly the mistake this catches.
  *   3. A ceiling on any chunk at all, so a dependency added for one screen cannot
  *      quietly arrive as half a megabyte.
  *
@@ -46,6 +49,11 @@ const budgets = {
   // tool, so it is allowed to be bigger than a landing page and is still held to
   // a third of the single-chunk ceiling.
   studioJs: 40 * 1024,
+  // The pointer trail. Twenty springs of fifty beads and the curve through them, on
+  // every route but only after a pointer has moved — it is the smallest lazy chunk in
+  // the build, and it is the one that must never be *imported* statically, because it
+  // is decoration and nobody should wait for it before the first paint.
+  cursorJs: 4 * 1024,
 };
 
 let failed = 0;
@@ -88,6 +96,7 @@ for (const entry of entries.sort((a, b) => b.gzip - a.gzip)) {
   const isInstrument = entry.name.startsWith('instrument-');
   const isLanding = entry.name.startsWith('landing-');
   const isStudio = entry.name.startsWith('studio-');
+  const isCursor = entry.name.startsWith('cursor-trail-');
   const budget = entry.critical
     ? kind === 'css'
       ? budgets.criticalCss
@@ -100,7 +109,9 @@ for (const entry of entries.sort((a, b) => b.gzip - a.gzip)) {
           : budgets.landingJs
         : isStudio
           ? budgets.studioJs
-          : budgets.instrumentJs;
+          : isCursor
+            ? budgets.cursorJs
+            : budgets.instrumentJs;
   // Named honestly. A lazy chunk used to be labelled "landing, lazy" whether or not
   // it was the landing page, which made the table describe the build inaccurately at
   // exactly the moment somebody was reading it to find out what grew.
@@ -112,7 +123,9 @@ for (const entry of entries.sort((a, b) => b.gzip - a.gzip)) {
         ? 'landing, lazy'
         : isStudio
           ? 'studio, lazy'
-          : 'lazy, unnamed';
+          : isCursor
+            ? 'cursor, lazy'
+            : 'lazy, unnamed';
   const over = entry.gzip > budget;
   if (over) fail(`${entry.name} is ${kb(entry.gzip)} gzipped, over its ${kb(budget)} budget (${where})`);
   console.log(
@@ -147,6 +160,27 @@ if (!instrument) {
         fail(`${entry.name} contains "${marker}": the definition studio has leaked into the critical path`);
       }
     }
+    /*
+     * And the trail, on the same argument: a decoration on every route is exactly the thing
+     * somebody is tempted to import statically because "it is only a canvas".
+     *
+     * The markers are the curve call and the media query the effect asks for, both of which
+     * exist nowhere else in the app and both of which survive minification (a canvas method
+     * is a property name, and a media query is a string). `mountCursorTrail` deliberately
+     * is *not* a marker: the call site — `module.mountCursorTrail(canvas)` — is in the entry
+     * chunk by definition, because the property being called on a dynamically imported
+     * module cannot be renamed. That is the call, not the code.
+     */
+    for (const marker of ['quadraticCurveTo', 'any-pointer: fine']) {
+      if (source.includes(marker)) {
+        fail(`${entry.name} contains "${marker}": the pointer trail has leaked into the critical path`);
+      }
+    }
+  }
+
+  const cursor = entries.find((entry) => entry.name.startsWith('cursor-trail-'));
+  if (!cursor) {
+    fail('no cursor-trail-*.js chunk in the build: the pointer trail is no longer split out of the app');
   }
 
   const studio = entries.find((entry) => entry.name.startsWith('studio-'));

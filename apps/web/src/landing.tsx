@@ -366,47 +366,6 @@ function InstrumentStage({ quality }: { quality: 'high' | 'low' }): JSX.Element 
   );
 }
 
-/**
- * The pointer trail, and never the only way to see something.
- *
- * A fixed, full-viewport canvas the trail is drawn into. It is decoration: it takes
- * no pointer events, so every control underneath still receives its click, and it is
- * hidden outright where there is no pointer to follow or motion is unwelcome. The
- * effect itself lives in `landing-cursor.ts` and is imported on demand, for the same
- * reason the scene is: nobody should download a decoration they will not see.
- *
- * The type below is structural rather than imported, which is the pattern this file
- * already uses for the scene's handle — a type-only import would be erased anyway,
- * and this keeps the dependency one-way.
- */
-function CursorTrail(): JSX.Element {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    let handle: { dispose(): void } | null = null;
-    let disposed = false;
-
-    void import('./landing-cursor')
-      .then((module) => {
-        // The mount can lose the race with an unmount, which is normal under
-        // StrictMode's double mount: a trail created after teardown would draw into
-        // a canvas nobody is watching, forever.
-        if (disposed) return;
-        handle = module.mountCursorTrail(canvas);
-      })
-      .catch(() => undefined);
-
-    return () => {
-      disposed = true;
-      handle?.dispose();
-    };
-  }, []);
-
-  return <canvas ref={canvasRef} className="lcursor" aria-hidden="true" />;
-}
-
 function LiveBand({ summary, readAt, failed }: { summary: Summary | null; readAt: Date | null; failed: boolean }): JSX.Element {
   const figures = useMemo(() => {
     if (!summary) return [];
@@ -512,7 +471,6 @@ export function Landing(): JSX.Element {
   return (
     <div className="landing" ref={root}>
       <InstrumentStage quality={quality} />
-      <CursorTrail />
 
       <header className="lnav">
         <span className="lbrand">

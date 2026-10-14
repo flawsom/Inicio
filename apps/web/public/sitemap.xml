@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The four pages a stranger can read.
+
+  The console, an invitation and a collection link are deliberately absent. They are
+  behind a session or a single-use token, so a crawler could only be told they exist and
+  never shown them — and this platform's promise is that a distribution link reaches one
+  person rather than a search index. `/console` is the sharper case: without a session it
+  renders the sign-in sheet, so listing it would advertise a page whose only content is
+  "sign in".
+
+  No `lastmod`, and no `changefreq` or `priority` either. `lastmod` is supposed to be the
+  date the page's content changed, and a build timestamp is not that: a sitemap that says
+  "changed today" on every deploy is a sitemap a crawler learns to ignore. The other two
+  are documented as ignored by Google, so writing them would be writing decoration.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://inicio.unifies.codes/</loc>
+  </url>
+  <url>
+    <loc>https://inicio.unifies.codes/login</loc>
+  </url>
+  <url>
+    <loc>https://inicio.unifies.codes/terms</loc>
+  </url>
+  <url>
+    <loc>https://inicio.unifies.codes/privacy</loc>
+  </url>
+</urlset>

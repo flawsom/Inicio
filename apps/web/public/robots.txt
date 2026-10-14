@@ -1,0 +1,18 @@
+# Inicio is invitation only, so this file is about what a crawler may read rather than
+# about growing an index.
+User-agent: *
+Allow: /
+
+# Everything behind a session or a single-use token. This is a courtesy and not a
+# control: the API refuses those requests without a session or a valid token whatever a
+# crawler has been told, and a distribution link is single-use by construction.
+Disallow: /console
+Disallow: /invite/
+Disallow: /collect/
+Disallow: /api/
+Disallow: /auth/
+
+# The app shell and hashed assets are not pages.
+Disallow: /assets/
+
+Sitemap: https://inicio.unifies.codes/sitemap.xml

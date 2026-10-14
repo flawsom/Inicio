@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mountCursorTrail, shouldDrawCursorTrail } from '../src/landing-cursor';
+import { mountCursorTrail, shouldDrawCursorTrail } from '../src/cursor-trail';
 
 /**
  * The pointer trail, and the four things it must not do.

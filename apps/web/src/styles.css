@@ -368,50 +368,39 @@ body:has(.surface) .vignette {
 /* ------------------------------------------------------------------- cursor */
 
 /*
- * The halo.
+ * The pointer trail.
  *
- * A thin ring that trails the real pointer, so everything under it has somewhere to
- * live. It is not a substitute for the cursor: this product is full of text fields
- * and selects, and taking the pointer away from a form is a usability bug dressed as
- * a style. It grows over anything interactive and never appears on touch.
+ * One fixed canvas across the viewport that the springs are drawn into, mounted by the
+ * shell so every route carries the same mark: the front door, the sign-in sheet, the
+ * console, the documents, an invitation and a collection link. It is the only thing that
+ * follows the pointer — a ring used to sit around it on the signed-in app, and two
+ * decorations chasing one pointer is how one product comes to look like two.
+ *
+ * It is decoration and it behaves like it: `pointer-events: none`, so every control
+ * underneath still receives its click; `aria-hidden` in the markup, so it is nothing to a
+ * screen reader; and transparent at rest, so the page behind it is unchanged.
+ *
+ * Reduced motion hides it here as well as switching it off in the effect. Two guards for
+ * one rule is deliberate: the script decides whether to spend frames, the stylesheet
+ * decides whether a decoration is painted at all, and a reader who asked for less motion
+ * should not depend on the script having loaded.
+ *
+ * The rule lives in this stylesheet rather than in `landing.css`, where it used to be,
+ * because the trail is no longer a landing-page decoration: `landing.css` arrives with the
+ * marketing chunk, and a canvas styled by a stylesheet that only loads on one route is a
+ * full-viewport box on every other one.
  */
-.cursor-ring {
+.cursor-trail {
   position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 70;
-  width: 34px;
-  height: 34px;
-  margin: -17px 0 0 -17px;
+  inset: 0;
+  z-index: 40;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  border: 1px solid color-mix(in srgb, var(--text) 42%, transparent);
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 8px;
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--text);
-  opacity: 0;
-  transition: width 0.3s ease, height 0.3s ease, margin 0.3s ease, background 0.3s ease,
-    border-color 0.3s ease, opacity 0.4s ease;
 }
 
-.cursor-ring.on {
-  width: 62px;
-  height: 62px;
-  margin: -31px 0 0 -31px;
-  border-color: color-mix(in srgb, var(--accent) 75%, transparent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.cursor-ring.on::after {
-  content: attr(data-label);
-}
-
-@media (hover: none), (prefers-reduced-motion: reduce) {
-  .cursor-ring { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .cursor-trail { display: none; }
 }
 
 /* --------------------------------------------------------------------- type */

@@ -28,7 +28,7 @@
       "destination": "/api/ingest?inicio_route=health"
     },
     {
-      "source": "/((?!api/|assets/|sw\\.js|manifest\\.webmanifest|icon-192\\.png|icon-512\\.png|apple-touch-icon\\.png|favicon\\.ico).*)",
+      "source": "/((?!api/|assets/|sw\\.js|manifest\\.webmanifest|sitemap\\.xml|robots\\.txt|icon-192\\.png|icon-512\\.png|apple-touch-icon\\.png|favicon\\.ico).*)",
       "destination": "/index.html"
     }
   ]
