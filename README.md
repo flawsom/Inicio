@@ -1813,7 +1813,7 @@ production rather than something that resembles it. Read from the connection rat
 | Neon project / region | `cold-leaf-32411407`, `ap-southeast-1`, the region nearest the people using it |
 | Endpoint, database | `ep-winter-frost-b3ke8cyz`, `neondb` |
 | `current_setting('server_version')` | `18.6 (653b019)` |
-| `pg_postmaster_start_time()` | `2026-10-14T05:29:45Z` — the instant both live hosts report in `GET /api/v1/public/summary`, which is what makes "the deployment dials *this* database" a reading instead of a guess |
+| `pg_postmaster_start_time()` | read as `2026-10-14T07:50:59.635Z` on this workspace's two connections **and** in the deployment's own `GET /api/v1/public/summary` — the same instant from both sides, which is what makes "the deployment dials *this* database" a reading instead of a guess. It is a reading and not a constant: a free Neon compute suspends after five idle minutes and starts again with a new timestamp, so the check is that both sides agree *when read together*, not that either equals the number above. `pnpm drift` is the same trick one level up, comparing the ledger rather than the start time |
 | `schema_migrations` | **10**, latest `0010_api_keys_webhooks_flags.sql` |
 | The application's role | `app_role`, the least-privilege role from migration `0002` — so the API's tenancy refusal is a check that passes rather than one that is skipped |
 | Migration `0010`'s objects | `api_key`, `webhook`, `webhook_delivery`, `response_flag` — RLS enabled *and* forced, 2–3 policies each, four functions, the `app_role` grants |
