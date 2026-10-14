@@ -266,6 +266,11 @@ describe('the palettes, measured', () => {
     expect(palette['surface']).toBe('#191c21');
     expect(palette['ink']).toBe('#111827');
     expect(palette['on-primary']).toBe('#111827');
+    // The palette names one white and it does two jobs, which is why there is one
+    // token for it rather than two: the paper the product is printed on, and the type
+    // on the surface. "Secondary" and "background" are the same value, and a second
+    // token for either is how the two drift apart.
+    expect(palette['on-surface']).toBe('#ffffff');
     // And the roles are the palette's values rather than a second set of literals:
     // a primary that is not the brand value is the defect this catches.
     expect(ground['bg']).toBe('var(--paper)');
