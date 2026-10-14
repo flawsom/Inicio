@@ -1304,3 +1304,73 @@ second can only ever be *more* conservative than the first in the sense that mat
 cost is a fetch nobody used, because the module still refuses to draw. `cursor-trail-lazy.test.tsx` is what
 makes that a measurement: it counts the mocked module's evaluation and requires none on a coarse pointer,
 under reduced motion, or with no `matchMedia`, and one where a mouse is present.
+
+## D40 — A copy of a device's answers is a file, and the three ways a send can fail are three failures
+
+**Context.** Everything in `apps/web/src/offline` protects answers from the *network*: the draft is
+written to IndexedDB before anything is sent, a save supersedes the save before it, the queue retries with
+backoff, and a disagreement about a value is kept twice rather than resolved away. None of that survives
+the protection failing for a reason that is not the network. Clearing a browser's storage, reinstalling the
+PWA, moving to a replacement phone and a tablet reclaiming its own disk all take the draft with them, and
+any answer that had not reached the server is gone with no second copy anywhere. In the field this is the
+second most expensive failure in the category, after a delete-after-send default: the device is the only
+copy, and nothing in the product could produce a second one.
+
+The other half is that the page could describe its state only as one sentence. "Your answers are saved on
+this device" does not answer the question somebody actually has after twenty minutes of failed sending,
+which is *how many times has it tried, what did it say, and when will it try again* — so the queue was
+durable and invisible at the same time. And a file whose upload was cut off had one treatment for two
+completely different events: the bytes never arriving was reported with the same words as the server
+refusing them, and the only recovery offered was to pick the file again.
+
+**Decision: the device's own state is a structure, its copy is a file, and the three failures stay three.**
+
+`deviceState(draft, { online, syncing, now })` returns what the device knows about its own queue — phase,
+whether the server holds everything, what is waiting, the attempt count, the last failure and the instant
+the next try is due — computed from the draft rather than remembered in state, because the draft is the
+one thing the next flush will read. `retryText()` turns the last of those into a time, and nothing else
+claims a schedule: a wait that is already over has no instant to name, because the next attempt happens on
+the next trigger. The page renders both beside the connection pill.
+
+`offline/backup.ts` builds the copy, validates it and restores it, with no DOM in the module so the rules
+are tested as rules rather than through a screen. The file carries a format marker, a version, the link's
+token, the survey and version it came from, and the whole draft with its queue intact. Three refusals are
+decided here rather than at a call site: a file that is not ours, a file written by a **newer** app (read
+halfway is worse than not read, because the draft it produces looks valid), and a copy that is **older**
+than the answers already on the device, which is the one case where restoring would destroy work instead of
+recovering it. Restoring a copy onto a *different* link is refused by name, because a response full of
+questions the form does not ask is a submission the server can only reject, with nothing the person holding
+the phone could have done about it. A restored draft keeps its `clientId` and `responseId`, so the queue
+resumes the response it had already created rather than making a second one — the same idempotency the
+retry path depends on, reused for the case where the device is new.
+
+`attachmentOutcome(err)` splits a file's failure by whether the server answered at all. A status is a
+verdict, and re-sending it unchanged would fail identically, so it is not remembered. No status means the
+bytes never arrived, which is a fact about the connection, so the `File` is kept in memory — the one thing
+about a picked file that cannot be reconstructed from the draft — and the retry pass sends it, one at a
+time, when the connection returns, stopping at the first failure because a connection that has just failed
+twice has no bandwidth to spare. The answer is written only after the server has accepted the file: a
+reference to something nobody verified must never become an answer.
+
+`storageHealth(estimate)` is the fourth piece, and it is deliberately a warning rather than a gate.
+`navigator.storage.estimate()` is the only way to learn what room is left, and enough browsers do not answer
+that "unknown" is a real verdict rather than a zero — a browser reporting a quota of `0` must not become a
+reported fraction of infinity. At 80 % the page says so at the top of the form, before it costs anything;
+at 95 % it says what is at risk; under both it keeps collecting, because a full disk is a reason to tell
+somebody, never a reason to refuse the answer in front of them.
+
+**What holds it.** `offline.test.ts` covers the queue's shape, the storage verdicts (including the two
+refusals to divide by a quantity nobody gave), the file-versus-network distinction, and the copy's three
+refusals, then proves the recovery end to end: a copy taken from a store with an unsent submission restores
+into an **empty** store, and the submission then goes out once, on the original response id.
+`collect-offline.test.tsx` mounts the real collection page over a stubbed wire — the real client, queue and
+renderer, with only `fetch` replaced — and holds the three claims a unit test cannot: an upload interrupted
+by the network is held, retried by itself after a reconnect and recorded only once the server accepts it; a
+refusal is not retried at all; and a full device is told before it costs anything. It also closes the page
+and opens it again, and requires the answers back from the device rather than from the server.
+
+**What this does not prove.** The download a real browser writes and the estimate a real browser reports
+are not measured here: the deployment has no collection link to walk, and creating one means writing a
+throwaway organisation into the production database and real bytes into its bucket. Both are stated as
+unmeasured in the changelog rather than assumed, which is the same standard the roadmap holds the frame
+rate of two canvases to.

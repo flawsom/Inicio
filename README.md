@@ -19,7 +19,7 @@ there is no signal** — and exporting data that is ready for analysis rather th
 [![License](https://img.shields.io/badge/license-Apache--2.0-15803d?style=flat-square&labelColor=191c21)](LICENSE)
 [![Build](https://img.shields.io/badge/build-clean-15803d?style=flat-square&labelColor=191c21)](#-testing)
 [![CI](https://img.shields.io/badge/CI-lint_·_types_·_tests_·_budgets-15803d?style=flat-square&labelColor=191c21)](#enforced-on-every-push)
-[![Tests](https://img.shields.io/badge/tests-366%20passing-15803d?style=flat-square&labelColor=191c21)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-388%20passing-15803d?style=flat-square&labelColor=191c21)](#-testing)
 [![Typecheck](https://img.shields.io/badge/typecheck-0%20errors-c2410c?style=flat-square&labelColor=191c21)](#-testing)
 [![Lint](https://img.shields.io/badge/lint-0%20errors-9a3412?style=flat-square&labelColor=191c21)](#-testing)
 [![Production](https://img.shields.io/badge/production-live-15803d?style=flat-square&labelColor=191c21&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app/health)
@@ -114,7 +114,9 @@ itself enforces.
 
 ### 📴 Works with no signal
 The collection app is an installable PWA. Answers live in IndexedDB, the queue survives a reload, a
-crash or a dead battery, and the header says plainly whether the server has everything.
+crash or a dead battery, and the header says plainly whether the server has everything, how many times
+it has tried and when it will try again. A copy of the draft can be saved to a file and restored on
+another device, with no connection involved.
 
 </td>
 <td valign="top" width="50%">
@@ -369,10 +371,10 @@ standing, rather than showing the definition they used to have.
 | 🖼️ **The brand in the things a stylesheet cannot reach** | The palette is not only CSS, and the artifacts that are not CSS are the ones that go stale: the README's drawings were still rendered in the previous navy-and-blue palette, the badges on this page were drawn in it, and the app icons — the one asset seen in every browser tab and on every home screen — were generated once before the palette existed and measured **92 % blue-dominant pixels** two palette changes later. The drawings and badges are now checked by value and the icons by decoding their pixels, in `apps/web/test/brand-assets.test.ts`; the icons are generated from the palette's own values by `pnpm icons` (`scripts/make-icons.mjs`) rather than edited, because a PNG is not something anybody re-reads. |
 | 🪞 **One product, two materials** | Every screen is made of the same two materials, and which one is a fact about the screen rather than about a visitor's operating system: paper is the workspace, the respondent's form and the reading sections of the landing page, and the surface is the first paint, the sign-in sheet, the consent and legal documents, the landing page's stage and the studio's source panel. The dark material is one class (`.surface`) that re-binds the palette for its subtree, so a card, a field or a heading added inside it arrives in the right material without a rule of its own. Over it all sits an ambient light field drawn from the same node-and-filament structure as the landing page's scene, with the same type scale, the same radius language and the same entrance. Every figure on a console screen is live, and the whole shell is complete with no canvas and under `prefers-reduced-motion`. |
 | 🏫 **A real template** | The 2026 school ranking survey — the project this platform grew out of — ships as template #1, not as the product. |
-| 📶 **Honest connection state** | "No connection. Your answers are saved on this device and will be sent automatically", plus a **Send now** button and the timestamp the server has everything up to. |
+| 📶 **Honest connection state** | "No connection. Your answers are saved on this device and will be sent automatically", plus the attempt count and the time of the next try, a **Send now** button, the timestamp the server has everything up to, and **Save a copy** / **Restore a saved copy** for the answers themselves — a file, written and read with no network at all. |
 | 🐳 **A self-hosted profile** | Compose brings up PostgreSQL 16, Valkey, MinIO, ClamAV and Mailpit, with Caddy in front. |
 | 🧪 **Two live harnesses** | 35 end-to-end consumer checks and 28 offline-sync checks drive a real database through the same origin the browser uses. Each harness prints its own pass/fail line and reports the count it actually ran. |
-| 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 366 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
+| 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 388 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
 | 🛰️ **Checked on a schedule, against production** | Every six hours `.github/workflows/drift.yml` asks the deployment which migrations its own database has applied and compares that with `main`, opening one issue when they disagree. This is the failure a green CI run cannot see: the code and its migrations agree with each other while the deployed database is behind. |
 | ⚖️ **Budgets, not intentions** | The build fails if the critical path grows past 80 kB gzipped, if any chunk passes 150 kB, if the WebGL scene *or the XLSForm writer* leaks out of its lazy chunk, if a measured colour pair drops under 4.5:1, or if `axe-core` finds a violation on the public page or the consent gate. |
 
@@ -902,7 +904,7 @@ Open **http://localhost:3000**, request a one-time code, read it in Mailpit, and
 ```bash
 pnpm lint        # ESLint 9, flat config
 pnpm typecheck   # tsc across four workspace packages
-pnpm test        # 366 tests
+pnpm test        # 388 tests
 pnpm coverage     # v8 coverage, per package
 pnpm build       # engine -> api -> web
 pnpm budgets     # the built bundle, gzipped, against its ceilings
@@ -1520,18 +1522,23 @@ question name in it — never a blank field in front of a respondent.
 
 ```ts
 // every keystroke goes to IndexedDB *before* anything is sent
-await store.saveDraft(linkToken, { answers: next, base });
+await recordAnswers(store, linkToken, next, [name]);
 
 // a save supersedes the previous save; a submit supersedes a pending save
-await outbox.enqueue({ kind: 'submit', answers: next, base });
+await requestSubmit(store, linkToken, next, Object.keys(next));
 
-// the core is pure — this is why it is unit-testable
-const plan = planSync({ local: answers, base, server: canonical });
-// -> { entries, values, missing, invalid, conflicts }
+// the draft is readable from the device alone: no session, no connection
+const copy = buildBackup(draft, { title, version });            // Save a copy
+const { warning } = storageHealth(await navigator.storage.estimate());
 ```
 
 A long outage therefore cannot build a backlog of stale payloads: the queue holds the **latest**
 intent, not a history of intentions.
+
+The other half of the same contract is on the server: `planSync` (`apps/api/src/platform/collect.ts`)
+is what decides, per question, whose value wins and which disagreement becomes a conflict row. The
+browser core decides only what to *send* and what to *keep*, which is why the merge rules above are
+asserted against the API rather than in the queue.
 
 </td>
 <td valign="top" width="50%">
@@ -1661,7 +1668,7 @@ than pretending the score is 100. What can be verified today is verifiable: the 
 ```bash
 pnpm lint         # ESLint 9, flat config — 0 errors
 pnpm typecheck    # tsc across engine, api, web and the serverless entry
-pnpm test         # 366 tests
+pnpm test         # 388 tests
 pnpm coverage     # v8 coverage, per package
 pnpm build        # engine -> api -> web
 pnpm budgets      # the built bundle, gzipped, against its ceilings
@@ -1669,13 +1676,13 @@ pnpm drift        # is the deployment running the migrations this checkout has?
 pnpm icons        # regenerate the app icons from the palette — committed output, not edited
 ```
 
-### What the 366 tests actually cover
+### What the 388 tests actually cover
 
 | Suite | Tests | Focus |
 |---|---:|---|
 | `packages/engine` | **55** | Expression parsing and evaluation, validation, XLSForm round-trip fixpoint, XLSX read/write, dataset and codebook assembly, every export writer, and **the workbook the studio shows**: `xlsFormSheets` asserted row by row against the file `exportXlsForm` zips, so the viewer and the download cannot drift |
 | `apps/api` | **150** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers, and **the push channel over a real socket**: `ready` first, silence while nothing changes, then one coalesced event naming the aggregate that moved, with a 404 and no stream for a form the caller cannot see, plus the public summary: read live, and asserted key by key to carry no tenant data, **and the integration surface**: a key whose secret is shown once and stored as a hash, its scope enforced at the route that declares it and *named* when it is missing, a key refused across organisations even though its creator belongs to both, revocation effective on the very next request, an endpoint that disables itself after five consecutive failures, a delivery signature checked against an independent HMAC in the test, a duplicate scan that refuses to record the same finding twice, and **the read scopes**: a key granted `forms:read` reaches the forms list *narrowed to its own organisation*, is `403 key_org_mismatch` on another organisation's form even though its creator belongs to both, and is told it is missing `responses:export` when it tries to export with only `responses:read`, **and the emails**: the sign-in code is in the body and never in the subject, no template fetches anything (no image, no pixel, no web font, no `url()`), every colour pair it uses is measured at 4.5:1 in both schemes, a hostile organisation name cannot close an attribute or reach the hidden preheader, the text alternative is prose rather than tags with the tags removed, and the header a transport composes is the one the environment named |
-| `apps/web` | **161** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, **the pointer trail** (mounted exactly once on each route by the shell, mounting the real effect through a recorded 2D context so one route cannot become two trails under StrictMode, and removed by reference when the route goes — and **not even fetched** by a device that would never draw it, asserted by counting the mocked module's own evaluation rather than by trusting the bundler), **the sitemap and `robots.txt`** (exactly the four public routes on the canonical origin, no `lastmod`, and the two hosting catch-alls asserted not to be able to answer either file with the app shell — the `/sw.js` defect in a new dress), the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer), **and the cards that arrive after the mount** (the template articles the API renders are handed to the reveal observer instead of keeping the hidden state, which is how three invisible cards reached production) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request), **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure), **26 measured contrast pairs** taken from the stylesheets themselves — both of the workspace's materials, both of the landing page's, the primary-as-type pair, the label on the primary action, and every control boundary — plus the assertions that hold the two stylesheets to one set of brand values and that the surface material re-binds **every** colour role it borrows (the defect that once put near-black headings on a near-black ground) — **`axe-core` audits** of the two public surfaces, **the quality queue** (the evidence behind each finding is on the row, a decision carries the reason typed with it and re-reads the list it just changed, dismissing is asserted to be a different outcome from resolving, and a second scan is reported as finding nothing new rather than as doing nothing) and **the integration screen** (the scope catalogue's `enforced` flag genuinely disables a scope no route declares, a key secret is shown once in a read-only field that carries a panel saying so, an `http://` endpoint cannot be added at all, and "send test" reports the receiver's real `500` rather than "sent"), **raising a finding by hand** from a response row (the raise waits for a reason, and "already in the queue" is asserted to read differently from "recorded"), **the definition studio** (the JSON panel is the server's own definition; its rows move the XLSForm sheets and the preview with no request at all, because all three read one object; the sheets are the workbook the download writes; the preview hides a question whose relevance rule says so, renders the two inline choices, sends nothing and stores nothing when it is typed into, and produces *field-for-field identical markup* to the component the collection page renders), **the shell guard** that keeps the ambient layer and a form field from ever sharing a class name again, and **the public page's own boundaries**: every anchor it renders resolves to this deployment and no source host is named anywhere in it, no em dash or en dash reaches a reader, and the honesty bullets are measured as the brand's dot rather than as a rule that reads like one — **plus the brand in the artifacts a stylesheet cannot reach**: the README's nine drawings held to the palette by value and to no pre-brand colour or saturated blue-violet accent, every badge colour on this page (their label grounds all the one surface tone, their vendor colours left alone where they belong), and the three app icons **decoded pixel by pixel** and required to be the palette's own ground, to carry the primary, to be free of blue-dominant pixels and to contain none of the three colours the previous icon was drawn from — the guard that would have caught an icon still wearing the palette it was made in |
+| `apps/web` | **183** | The offline core (`enqueueSave`/`enqueueSubmit` supersede rules, the backoff schedule, and the resume rule that keeps the device's copy while anything is pending), **the device's own copy of its answers** (the draft exported to a file and restored onto an empty device, which then sends the submission it had been holding on the same response id; a copy of another link, of a newer app, or older than what is already on the device each refused in a sentence), **the three ways a send can fail kept apart** (a file the network ate held and re-sent by itself after a reconnect, a file the server refused never retried, and a queue that names its attempt count, its last failure and when it will try again — with the collection page itself mounted over a stubbed wire, including the answers still there when the page is opened a second time and a device warned before a full disk costs anything), the service worker's routing executed in a VM, **the pointer trail** (mounted exactly once on each route by the shell, mounting the real effect through a recorded 2D context so one route cannot become two trails under StrictMode, and removed by reference when the route goes — and **not even fetched** by a device that would never draw it, asserted by counting the mocked module's own evaluation rather than by trusting the bundler), **the sitemap and `robots.txt`** (exactly the four public routes on the canonical origin, no `lastmod`, and the two hosting catch-alls asserted not to be able to answer either file with the app shell — the `/sw.js` defect in a new dress), the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer), **and the cards that arrive after the mount** (the template articles the API renders are handed to the reveal observer instead of keeping the hidden state, which is how three invisible cards reached production) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request), **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure), **26 measured contrast pairs** taken from the stylesheets themselves — both of the workspace's materials, both of the landing page's, the primary-as-type pair, the label on the primary action, and every control boundary — plus the assertions that hold the two stylesheets to one set of brand values and that the surface material re-binds **every** colour role it borrows (the defect that once put near-black headings on a near-black ground) — **`axe-core` audits** of the two public surfaces, **the quality queue** (the evidence behind each finding is on the row, a decision carries the reason typed with it and re-reads the list it just changed, dismissing is asserted to be a different outcome from resolving, and a second scan is reported as finding nothing new rather than as doing nothing) and **the integration screen** (the scope catalogue's `enforced` flag genuinely disables a scope no route declares, a key secret is shown once in a read-only field that carries a panel saying so, an `http://` endpoint cannot be added at all, and "send test" reports the receiver's real `500` rather than "sent"), **raising a finding by hand** from a response row (the raise waits for a reason, and "already in the queue" is asserted to read differently from "recorded"), **the definition studio** (the JSON panel is the server's own definition; its rows move the XLSForm sheets and the preview with no request at all, because all three read one object; the sheets are the workbook the download writes; the preview hides a question whose relevance rule says so, renders the two inline choices, sends nothing and stores nothing when it is typed into, and produces *field-for-field identical markup* to the component the collection page renders), **the shell guard** that keeps the ambient layer and a form field from ever sharing a class name again, and **the public page's own boundaries**: every anchor it renders resolves to this deployment and no source host is named anywhere in it, no em dash or en dash reaches a reader, and the honesty bullets are measured as the brand's dot rather than as a rule that reads like one — **plus the brand in the artifacts a stylesheet cannot reach**: the README's nine drawings held to the palette by value and to no pre-brand colour or saturated blue-violet accent, every badge colour on this page (their label grounds all the one surface tone, their vendor colours left alone where they belong), and the three app icons **decoded pixel by pixel** and required to be the palette's own ground, to carry the primary, to be free of blue-dominant pixels and to contain none of the three colours the previous icon was drawn from — the guard that would have caught an icon still wearing the palette it was made in |
 
 ### Enforced on every push
 
@@ -2027,6 +2034,7 @@ ceilings underneath — lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). This is t
 - [x] **Immutable versions** — publish, and restore-as-a-new-draft
 - [x] **Distribution** — anonymous, single-use, multiple and panel links
 - [x] **Offline-first collection** — cached definition, IndexedDB drafts, durable outbox, autosave
+- [x] **The answers in your hand** — a visible attempt count and next-try time, and a copy of the draft saved to a file and restored with no network at all
 - [x] **Conflict retention** — a disagreement is kept twice and recorded, never silently resolved
 - [x] **An installable PWA** that caches the shell and never the data
 - [x] **Exports that carry meaning** — CSV bundle (data + codebook + labels + missing codes), XLSX, JSON
@@ -2105,8 +2113,17 @@ the previous save, and a submit supersedes a pending save, so a long outage cann
 stale payloads.
 
 The header tells the truth the whole time: "No connection. Your answers are saved on this device and
-will be sent automatically", the local save time, the timestamp the server has everything up to, and a
-**Send now** button.
+will be sent automatically", the local save time, the timestamp the server has everything up to, how many
+times the last send was tried and when the next attempt is due, and a **Send now** button.
+
+And the answers can leave with you. **Save a copy** writes the whole draft, queue included, to a JSON file
+through the browser's own download — no session, no server, no connection — and **Restore a saved copy**
+reads one back, so a device that is wiped, reinstalled or replaced does not take unsent work with it. A
+copy names the survey and the version it came from; one belonging to another link, one written by a newer
+app, and one older than the answers already on the device are each refused with a sentence rather than
+half-applied. The room the device has left is shown at the top of the form when `navigator.storage.estimate()`
+says it is running out, before it costs anything, and a browser that will not answer is left silent rather
+than guessed at.
 
 </details>
 

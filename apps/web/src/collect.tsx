@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import {
   ApiError,
   api,
@@ -9,7 +9,8 @@ import {
   type Definition,
 } from './api';
 import { RespondentForm } from './respondent';
-import { pendingCount, resolveResume, syncLabel, timeOf } from './offline/core';
+import { attachmentOutcome, deviceState, resolveResume, retryText, storageHealth, timeOf, type StorageHealth } from './offline/core';
+import { buildBackup, fileNameFor, restoreBackup } from './offline/backup';
 import { openStore, type OfflineStore } from './offline/store';
 import {
   CollectorSync,
@@ -158,12 +159,33 @@ export function Collect({ token }: { token: string }): JSX.Element {
     phase: 'authorising' | 'uploading' | 'checking';
   } | null>(null);
   const [attachmentError, setAttachmentError] = useState<{ question: string; message: string } | null>(null);
+  // How much room this device has left, asked of the browser rather than assumed.
+  const [storage, setStorage] = useState<StorageHealth | null>(null);
+  // What the last save-a-copy or restore did, in the respondent's own words.
+  const [copyNote, setCopyNote] = useState<string | null>(null);
+  // Questions whose file never reached the server and is still held here.
+  const [waitingFiles, setWaitingFiles] = useState<string[]>([]);
+  // The form as this visit learned it, so a saved copy can say what it is a copy of.
+  const [formMeta, setFormMeta] = useState<{ title: string | null; version: number | null }>({
+    title: null,
+    version: null,
+  });
 
   const storeRef = useRef<OfflineStore | null>(null);
   const syncRef = useRef<CollectorSync | null>(null);
   const draftRef = useRef<StoredDraft | null>(null);
   const answersRef = useRef<Record<string, unknown>>({});
   const timer = useRef<number | null>(null);
+  const fileInput = useRef<HTMLInputElement | null>(null);
+  /**
+   * The files themselves, held in memory, for a question whose upload did not arrive.
+   *
+   * A `File` is a handle the person handed the page, and there is no way to get it back
+   * from the draft: only its name, once the server has accepted it. So the one thing kept
+   * here is the thing that cannot be reconstructed, and only until it has been sent.
+   */
+  const pendingAttachments = useRef<Map<string, File>>(new Map());
+  const attachFileRef = useRef<((questionName: string, file: File) => Promise<void>) | null>(null);
 
   draftRef.current = draft;
   answersRef.current = answers;
@@ -227,6 +249,46 @@ export function Collect({ token }: { token: string }): JSX.Element {
     [flush],
   );
 
+  /**
+   * Ask the browser how much room is left, and say so only when it answers.
+   *
+   * This is a warning, never a gate: the answers are already written to the draft, so a
+   * device with no room left is something to tell somebody about before they collect
+   * another fifty interviews, not a reason to refuse the one in front of them.
+   */
+  const refreshStorage = useCallback(async (): Promise<void> => {
+    if (typeof navigator === 'undefined' || typeof navigator.storage?.estimate !== 'function') {
+      setStorage(storageHealth(null));
+      return;
+    }
+    try {
+      setStorage(storageHealth(await navigator.storage.estimate()));
+    } catch {
+      setStorage(storageHealth(null));
+    }
+  }, []);
+
+  /**
+   * Send again the files that never arrived.
+   *
+   * A file that failed because there was no network is not a refused file, and the two
+   * are the difference between an enumerator waiting and an enumerator losing a photo. So
+   * the device keeps the file and tries it again by itself, one at a time, starting with
+   * the first that failed. A retry that fails the same way stops the pass: trying the
+   * next file against a connection that has just failed twice wastes the little bandwidth
+   * there is.
+   */
+  const retryAttachments = useCallback(async (): Promise<void> => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    for (const [question, file] of [...pendingAttachments.current.entries()]) {
+      if (pendingAttachments.current.get(question) !== file) continue;
+      pendingAttachments.current.delete(question);
+      setWaitingFiles([...pendingAttachments.current.keys()]);
+      await attachFileRef.current?.(question, file);
+      if (pendingAttachments.current.has(question)) return;
+    }
+  }, []);
+
   /* ----------------------------------------------------------------- lifecycle */
 
   useEffect(() => {
@@ -249,13 +311,17 @@ export function Collect({ token }: { token: string }): JSX.Element {
       // Paint from the cached definition first: it is what makes the form usable
       // before the network answers, and with no network at all.
       const cached = await store.getCachedForm(token);
-      if (cached && !cancelled) setDefinition(cached.definition as Definition);
+      if (cached && !cancelled) {
+        setDefinition(cached.definition as Definition);
+        setFormMeta({ title: cached.title, version: cached.version });
+      }
 
       try {
         const loaded = await api.collectForm(token);
         if (cancelled) return;
         setDefinition(loaded.form.definition);
         setAttachments(loaded.attachments ?? null);
+        setFormMeta({ title: loaded.form.title, version: loaded.form.version });
         setOnline(true);
         await adoptDefinition(store, token, {
           title: loaded.form.title,
@@ -299,11 +365,15 @@ export function Collect({ token }: { token: string }): JSX.Element {
   useEffect(() => {
     const onOnline = (): void => {
       setOnline(true);
-      void flush();
+      // The queue first, so the response exists on the server, and then anything a file
+      // is waiting for: an attachment cannot be authorised before its response does.
+      void flush().then(() => retryAttachments());
     };
     const onOffline = (): void => setOnline(false);
     const onVisible = (): void => {
-      if (document.visibilityState === 'visible') void flush();
+      if (document.visibilityState !== 'visible') return;
+      void flush();
+      void refreshStorage();
     };
     const onHide = (): void => void flush();
     window.addEventListener('online', onOnline);
@@ -318,14 +388,20 @@ export function Collect({ token }: { token: string }): JSX.Element {
       window.removeEventListener('focus', onVisible);
       window.removeEventListener('pagehide', onHide);
     };
-  }, [flush]);
+  }, [flush, refreshStorage, retryAttachments]);
 
   // Autosave on a timer as well as on change, so a respondent who types one
-  // answer and then thinks for ten minutes still has it on the server.
+  // answer and then thinks for ten minutes still has it on the server. The same
+  // tick re-reads the storage estimate, because a device that filled up during
+  // the day is exactly the case the warning exists for.
   useEffect(() => {
-    const id = window.setInterval(() => void flush(), AUTOSAVE_MS);
+    void refreshStorage();
+    const id = window.setInterval(() => {
+      void flush();
+      void refreshStorage();
+    }, AUTOSAVE_MS);
     return () => window.clearInterval(id);
-  }, [flush]);
+  }, [flush, refreshStorage]);
 
   /* ------------------------------------------------------------------- writing */
 
@@ -389,20 +465,98 @@ export function Collect({ token }: { token: string }): JSX.Element {
         setUploadPhase({ question: questionName, phase: 'checking' });
         const receipt = await completeAttachment(token, responseId, authorisation.attachmentId);
         setOnline(true);
+        pendingAttachments.current.delete(questionName);
+        setWaitingFiles([...pendingAttachments.current.keys()]);
         // Recorded through the same path every other answer takes, so the file's
         // reference is written to the draft and queued like an answer, not beside one.
         update(questionName, receipt.attachmentId);
       } catch (err) {
         // A refusal from the server is an answer; a failure with no code means the
         // bytes never reached the store, which is a connectivity fact, not a verdict.
-        if (!(err instanceof ApiError)) setOnline(false);
-        setAttachmentError({ question: questionName, message: attachFailure(err, maxBytes) });
+        // The two are answered differently rather than alike: a refused file is one to
+        // choose again, while a file that never arrived is held here and sent by itself
+        // when the connection returns, because a person who has walked to a hilltop for
+        // signal should not have to remember which question their photo belonged to.
+        if (attachmentOutcome(err) === 'retry') {
+          pendingAttachments.current.set(questionName, file);
+          setWaitingFiles([...pendingAttachments.current.keys()]);
+          setOnline(false);
+          setAttachmentError({
+            question: questionName,
+            message:
+              'That file did not reach the server, so it is still held on this device. It will be sent by itself when the connection comes back, and nothing else needs doing.',
+          });
+        } else {
+          pendingAttachments.current.delete(questionName);
+          setWaitingFiles([...pendingAttachments.current.keys()]);
+          if (!(err instanceof ApiError)) setOnline(false);
+          setAttachmentError({ question: questionName, message: attachFailure(err, maxBytes) });
+        }
       } finally {
         setUploadPhase(null);
       }
     },
     [attachments, token, update],
   );
+  // The retry pass reaches for the newest one, because a retry must run through exactly
+  // the checks an attempt does: too big is still too big, and a refusal is still a refusal.
+  attachFileRef.current = attachFile;
+
+  /**
+   * Write the device's own copy of its answers to a file.
+   *
+   * The whole point of this is that it needs nothing: no session, no server, no
+   * connection. It is the answer to "the tablet is being replaced tomorrow and forty
+   * interviews have not gone up yet", and to a browser clearing its own storage.
+   */
+  const saveCopy = (): void => {
+    const latest = draftRef.current;
+    if (!latest) return;
+    const backup = buildBackup(latest, { title: formMeta.title, version: formMeta.version });
+    const name = fileNameFor(backup);
+    if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+      setCopyNote('This browser will not let the page write a file, so no copy was saved. Your answers are still on this device.');
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([`${JSON.stringify(backup, null, 2)}\n`], { type: 'application/json' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = name;
+    anchor.rel = 'noopener';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    setCopyNote(`Saved a copy of your answers as ${name}. Keep it somewhere other than this device.`);
+  };
+
+  /**
+   * Read a copy back: the other half of "never loses an answer", and the half that works
+   * when the device the answers were on is gone. No network is involved, which is what
+   * makes it usable on the replacement phone that has not been set up yet.
+   */
+  const restoreFromFile = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = event.target.files?.[0];
+    // Cleared straight away, so choosing the same file twice raises the change event twice.
+    event.target.value = '';
+    const store = storeRef.current;
+    if (!file || !store) return;
+    setCopyNote(null);
+    try {
+      const result = await restoreBackup(store, await file.text(), token);
+      if (!result.ok) {
+        setCopyNote(result.reason);
+        return;
+      }
+      setDraft(result.draft);
+      setAnswers(result.draft.answers);
+      setStatus(result.draft.status);
+      setCopyNote('Restored the saved copy. Anything it was still holding will be sent now.');
+      void flush().then(() => retryAttachments());
+    } catch {
+      setCopyNote('That file could not be read. It is not a copy of saved answers this app wrote.');
+    }
+  };
 
   const submit = async (): Promise<void> => {
     const store = storeRef.current;
@@ -462,12 +616,18 @@ export function Collect({ token }: { token: string }): JSX.Element {
     );
   }
 
-  const waiting = draft ? pendingCount(draft.outbox) : 0;
+  // Everything the device can say about its own queue, computed from the draft rather
+  // than remembered in state: there is one source of truth for "is my work safe", and it
+  // is the record the next flush will read.
+  const device = draft ? deviceState(draft, { online, syncing, now: Date.now() }) : null;
+  const waiting = device?.waiting ?? 0;
+  const retry = device ? retryText(device) : null;
   const savedAt = timeOf(draft?.updatedAt ?? null);
   const syncedAt = timeOf(draft?.syncedAt ?? null);
   // One notice box, in priority order: a file that was refused is the most useful
   // thing to say, then whatever went wrong submitting.
   const noticeText = attachmentError ? `“${attachmentError.question}”: ${attachmentError.message}` : error;
+  const failed = device !== null && device.attempts > 0 && device.lastError !== null;
 
   return (
     <RespondentForm
@@ -480,18 +640,31 @@ export function Collect({ token }: { token: string }): JSX.Element {
       problems={problems}
       subtitle={
         <>
+          {storage?.warning && <><strong>{storage.warning}</strong>{' '}</>}
           {savedAt && <>Saved on this device at {savedAt}. </>}
           {syncedAt ? <>The server has everything up to {syncedAt}.</> : <>Not sent to the server yet.</>}
         </>
       }
       status={
         <>
-          <span className={online ? 'pill ok' : 'pill warn'} role="status" aria-live="polite">
-            {draft ? syncLabel(draft, online, syncing) : 'Loading…'}
+          <span className={online && !failed ? 'pill ok' : 'pill warn'} role="status" aria-live="polite">
+            {device ? device.headline : 'Loading…'}
           </span>
+          {failed && (
+            <span className="muted small" role="status" aria-live="polite">
+              {`Tried ${device.attempts} time${device.attempts === 1 ? '' : 's'}${retry ? `, ${retry}` : ''}.`}
+            </span>
+          )}
           {uploadPhase && (
             <span className="muted small" role="status" aria-live="polite">
               {`Attaching a file to “${uploadPhase.question}”: ${UPLOAD_PHASE_LABELS[uploadPhase.phase]}…`}
+            </span>
+          )}
+          {waitingFiles.length > 0 && (
+            <span className="muted small" role="status" aria-live="polite">
+              {waitingFiles.length === 1
+                ? 'One file is still on this device, waiting for a connection.'
+                : `${waitingFiles.length} files are still on this device, waiting for a connection.`}
             </span>
           )}
           {(waiting > 0 || outcome?.phase === 'error') && (
@@ -501,7 +674,44 @@ export function Collect({ token }: { token: string }): JSX.Element {
           )}
         </>
       }
-      notice={noticeText ? <div className="card error">{noticeText}</div> : null}
+      notice={
+        <>
+          {noticeText ? <div className="card error">{noticeText}</div> : null}
+          {draft ? (
+            <div className="card">
+              <p className="muted small">
+                <strong>Your answers on this device.</strong>{' '}
+                {waiting > 0
+                  ? `${waiting} change${waiting === 1 ? '' : 's'} waiting to be sent.`
+                  : 'Everything typed here is saved here, whatever happens to the connection.'}{' '}
+                {failed
+                  ? `The last attempt did not go through and has been tried ${device.attempts} time${device.attempts === 1 ? '' : 's'}${retry ? `, ${retry}` : ''}. Nothing has been discarded.`
+                  : ''}
+              </p>
+              <div className="row wrap">
+                <button type="button" className="ghost" onClick={saveCopy}>
+                  Save a copy
+                </button>
+                <button type="button" className="ghost" onClick={() => fileInput.current?.click()}>
+                  Restore a saved copy
+                </button>
+                <input
+                  ref={fileInput}
+                  type="file"
+                  accept="application/json,.json"
+                  style={{ display: 'none' }}
+                  onChange={(event) => void restoreFromFile(event)}
+                />
+              </div>
+              <p className="muted small">
+                A copy is a file on your own device. It needs no connection, and it is what brings your answers back if
+                this device is wiped, replaced, or runs out of space.
+              </p>
+              {copyNote && <p className="muted small" role="status" aria-live="polite">{copyNote}</p>}
+            </div>
+          ) : null}
+        </>
+      }
       submit={{ label: busy ? 'Submitting…' : 'Submit', busy, onClick: () => void submit() }}
       footer={
         <>

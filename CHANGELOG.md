@@ -11,6 +11,35 @@ what changed and why.
 
 ### Added
 
+- **The device can now show, and carry away, what it has not sent.** Keeping answers safe and saying
+  whether the server had them was the whole of what the collection page could do about a bad connection,
+  and that left three holes, each of which is a way field data is really lost. A failure was one sentence
+  with no attempt count and no next attempt, so "is my work safe" was answerable only as "not yet". There
+  was no way to take answers *off* a device about to be wiped, replaced or uninstalled. And a photo whose
+  upload was cut off by a dead zone had to be picked again from the question it belonged to, by somebody
+  standing on a hilltop. `deviceState()` now turns the draft into a structured answer about its own queue,
+  what is waiting, whether the server holds the rest, how many times the last send was tried, what it
+  said, and the instant the next try is due, rendered beside the connection pill as "Tried 3 times, next
+  try at 14:07". `offline/backup.ts` writes the whole draft, queue included, to plain JSON through the
+  browser's own download (**Save a copy**) and reads one back (**Restore a saved copy**) with no session,
+  no server and no network: the copy names the survey and the version it came from, restoring it onto a
+  *different* link is refused by name, a copy written by a newer app is refused rather than half-read, and
+  a copy older than the answers already on the device never overwrites them. The restored draft keeps the
+  device's UUID, so the work continues on the response it had already created instead of starting again.
+  `attachmentOutcome()` keeps the two ways a file can fail apart: a file the *network* ate is held in
+  memory and sent by itself once the connection returns, while a file the *server* refused is not
+  remembered at all, because sending it again unchanged would fail in exactly the same way. And the room a
+  device has left is reported at the top of the form before it costs anything, from
+  `navigator.storage.estimate()`, with "the browser will not say" as a real answer rather than a guess at
+  zero. 22 tests in `apps/web`: the queue's shape and the storage verdicts without a browser; a copy that
+  restores onto a device with nothing and carries on sending; a copy of another link, or from a newer app,
+  or older than what is already there; and, mounted as the page itself, an upload interrupted by the
+  network that lands after a reconnect, a refusal that is not retried, a warning before a full disk costs
+  anything, and the answers still there when the page is opened a second time. **Not measured:** a browser
+  pass over any of it. The deployment has no collection link to walk, and making one means writing a
+  throwaway organisation into the production database and real bytes into its bucket, so what a page-level
+  test cannot reach is stated as unmeasured rather than assumed: the file a real browser writes from
+  `Save a copy`, and the estimate a real browser reports for its own storage.
 - **A scheduled drift check, because the one failure a green build cannot see is a production database that
   never ran a migration.** A migration merged to `main` either runs against production or it does not, and
   when it does not the application is deployed and *reachable* — the health check, the landing page and

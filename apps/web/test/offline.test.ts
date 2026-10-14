@@ -1,16 +1,22 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  attachmentOutcome,
+  deviceState,
   emptyOutbox,
   enqueueSave,
   enqueueSubmit,
   isDrained,
+  markFailed,
   newClientId,
   nextDelayMs,
   outboxForNewDraft,
   pendingCount,
   resolveResume,
+  retryText,
+  storageHealth,
   syncLabel,
 } from '../src/offline/core.js';
+import { buildBackup, fileNameFor, parseBackup, restoreBackup, validateBackup } from '../src/offline/backup.js';
 import {
   CollectorSync,
   defaultContext,
@@ -249,5 +255,225 @@ describe('the sync runner', () => {
     release();
     await Promise.all([first, second]);
     expect(save).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** A draft built by hand, so each rule below is read against one field at a time. */
+function draftWith(overrides: Partial<StoredDraft> = {}): StoredDraft {
+  return {
+    token: TOKEN,
+    clientId: 'c1',
+    responseId: 'r1',
+    answers: { score: 5 },
+    base: {},
+    dirty: [],
+    status: 'in_progress',
+    updatedAt: '2026-10-14T09:00:00.000Z',
+    syncedAt: null,
+    outbox: emptyOutbox(),
+    ...overrides,
+  };
+}
+
+describe('what the device says about its own queue', () => {
+  it('says the server holds everything once a save has been acknowledged', () => {
+    const draft = draftWith({ syncedAt: '2026-10-14T09:00:01.000Z' });
+    const state = deviceState(draft, { online: true, syncing: false, now: 1_000_000 });
+    expect(state.phase).toBe('synced');
+    expect(state.serverHasEverything).toBe(true);
+    expect(state.waiting).toBe(0);
+    expect(state.lastError).toBeNull();
+    expect(state.retryAt).toBeNull();
+    expect(state.headline).toBe('All answers saved.');
+  });
+
+  it('counts what is waiting and does not claim the server has it', () => {
+    let outbox = outboxForNewDraft();
+    outbox = enqueueSave(outbox, { answers: { score: 5 }, base: {} });
+    // A draft that has never been acknowledged, however much of it is queued.
+    const state = deviceState(draftWith({ outbox }), { online: true, syncing: false, now: 1_000_000 });
+    expect(state.phase).toBe('queued');
+    expect(state.waiting).toBe(2);
+    expect(state.serverHasEverything).toBe(false);
+  });
+
+  it('reports a failure with its attempt count, and only a wait that is still ahead', () => {
+    const outbox = markFailed(outboxForNewDraft(), 'the server did not answer', 1_000_000, 0);
+    const draft = draftWith({ outbox });
+
+    const waiting = deviceState(draft, { online: true, syncing: false, now: 1_000_100 });
+    expect(waiting.phase).toBe('error');
+    expect(waiting.attempts).toBe(1);
+    expect(waiting.lastError).toBe('the server did not answer');
+    expect(waiting.retryAt).toBe(outbox.nextAttemptAt);
+    expect(retryText(waiting)).toMatch(/^next try at /);
+
+    // Once the wait is over there is no instant to name: the next attempt happens on the
+    // next trigger, so a screen that printed a past time would be reading a stale one.
+    const due = deviceState(draft, { online: true, syncing: false, now: outbox.nextAttemptAt });
+    expect(due.retryAt).toBeNull();
+    expect(retryText(due)).toBeNull();
+  });
+
+  it('calls a device with no connection offline rather than failed', () => {
+    const outbox = markFailed(outboxForNewDraft(), 'the server did not answer', 1_000_000, 0);
+    const state = deviceState(draftWith({ outbox }), { online: false, syncing: false, now: 1_000_100 });
+    // The network is the reason, so that is what the pill says: the failure underneath
+    // is not a verdict about the answers, and it is still reported as an attempt count.
+    expect(state.phase).toBe('offline');
+    expect(state.attempts).toBe(1);
+    expect(state.lastError).toBe('the server did not answer');
+    expect(state.headline).toContain('saved on this device');
+  });
+
+  it('is finished once the status leaves in progress, whatever the queue holds', () => {
+    let outbox = outboxForNewDraft();
+    outbox = enqueueSubmit(outbox, { answers: { score: 5 }, base: {} });
+    const state = deviceState(draftWith({ status: 'submitted', outbox }), {
+      online: true,
+      syncing: false,
+      now: 1_000_000,
+    });
+    expect(state.phase).toBe('done');
+    expect(state.serverHasEverything).toBe(true);
+    expect(state.headline).toBe('Submitted');
+  });
+});
+
+describe('the storage the browser will admit to', () => {
+  it('says nothing when the browser will not answer, rather than guessing at zero', () => {
+    const unknown = storageHealth(null);
+    expect(unknown.verdict).toBe('unknown');
+    expect(unknown.warning).toBeNull();
+    expect(unknown.fraction).toBeNull();
+    expect(unknown.supported).toBe(false);
+  });
+
+  it('treats an answer with no quota as unknown, and never divides by it', () => {
+    const noQuota = storageHealth({ usage: 10 });
+    expect(noQuota.verdict).toBe('unknown');
+    expect(noQuota.fraction).toBeNull();
+    const zeroQuota = storageHealth({ usage: 10, quota: 0 });
+    expect(zeroQuota.verdict).toBe('unknown');
+    expect(zeroQuota.fraction).toBeNull();
+  });
+
+  it('stays quiet while there is room, and speaks up before there is not', () => {
+    expect(storageHealth({ usage: 40, quota: 100 }).verdict).toBe('ok');
+    expect(storageHealth({ usage: 40, quota: 100 }).warning).toBeNull();
+
+    const low = storageHealth({ usage: 82, quota: 100 });
+    expect(low.verdict).toBe('low');
+    expect(low.fraction).toBeCloseTo(0.82);
+    expect(low.warning).toContain('running low on storage space');
+
+    const full = storageHealth({ usage: 96, quota: 100 });
+    expect(full.verdict).toBe('full');
+    expect(full.warning).toContain('nearly out of storage space');
+    // Both warnings say the same thing about the answers, because at either level the
+    // device is still saving them: a warning is not a reason to stop collecting.
+    expect(full.warning).toContain('may stop being saved');
+  });
+});
+
+describe('whether a file that failed should be tried again', () => {
+  it('reads a status as the server’s verdict and its absence as the network’s', () => {
+    expect(attachmentOutcome({ status: 422 })).toBe('verdict');
+    expect(attachmentOutcome({ status: 403 })).toBe('verdict');
+    // A dropped connection and an unanswered request are the same fact to the device.
+    expect(attachmentOutcome(new TypeError('Failed to fetch'))).toBe('retry');
+    expect(attachmentOutcome(null)).toBe('retry');
+  });
+});
+
+describe('a copy of what is on this device', () => {
+  it('names itself after the survey it came from, safely enough to be a filename', () => {
+    const backup = buildBackup(draftWith({ clientId: '9f1c2b3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d' }), {
+      title: 'School Ranking 2026: a survey',
+      version: 3,
+    });
+    expect(fileNameFor(backup)).toBe('inicio-school-ranking-2026-a-survey-9f1c2b3d.json');
+    expect(fileNameFor(buildBackup(draftWith({}), { title: null }))).toBe('inicio-answers-c1.json');
+    expect(backup.version).toBe(1);
+  });
+
+  it('refuses a file that is not a copy, in a sentence rather than a code', () => {
+    const notJson = parseBackup('this is not JSON');
+    expect(notJson.ok).toBe(false);
+    if (!notJson.ok) expect(notJson.reason).toContain('could not be read');
+
+    const wrongShape = parseBackup(JSON.stringify({ hello: 'world' }));
+    expect(wrongShape.ok).toBe(false);
+    if (!wrongShape.ok) expect(wrongShape.reason).toContain('not a copy of saved answers');
+
+    // A copy whose inner draft names a different link from the file around it is corrupt,
+    // and is refused as such rather than half-read.
+    const backup = buildBackup(draftWith());
+    const tampered = validateBackup({ ...backup, token: 'other-link' });
+    expect(tampered.ok).toBe(false);
+  });
+
+  it('refuses a copy written by a newer app instead of reading it halfway', () => {
+    const result = validateBackup({ ...buildBackup(draftWith()), version: 99 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toContain('newer version');
+  });
+
+  it('refuses a copy belonging to another survey', async () => {
+    const store = memoryStore();
+    const result = await restoreBackup(store, JSON.stringify(buildBackup(draftWith({ token: 'other-link' }))), TOKEN);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toContain('different survey link');
+    expect(await store.getDraft(TOKEN)).toBeNull();
+  });
+
+  it('restores into a device that has nothing, queue and all, and carries on sending', async () => {
+    // The device the answers were on, with a submission that never got out.
+    const old = memoryStore();
+    await ensureDraft(old, TOKEN);
+    await recordAnswers(old, TOKEN, { score: 7 }, ['score']);
+    await requestSubmit(old, TOKEN, { score: 7 }, ['score']);
+    const was = (await old.getDraft(TOKEN))!;
+    const file = JSON.stringify(buildBackup(was, { title: 'A survey', version: 2 }), null, 2);
+
+    // The replacement phone: a fresh store, the same link open, the copy chosen.
+    const fresh = memoryStore();
+    const result = await restoreBackup(fresh, file, TOKEN);
+    expect(result.ok).toBe(true);
+    const now = (await fresh.getDraft(TOKEN))!;
+    expect(now).toEqual(was);
+    // The queue came with it, so the work continues rather than starting again: one
+    // submit for the response the device had already created, and the same client id.
+    expect(now.outbox.submit).not.toBeNull();
+    const calls: string[] = [];
+    await runSync(
+      fresh,
+      TOKEN,
+      transport({
+        start: async (_t, clientId) => {
+          calls.push(`start:${clientId}`);
+          return { responseId: 'srv-1', status: 'in_progress' };
+        },
+        submit: async () => {
+          calls.push('submit');
+          return { status: 'submitted' };
+        },
+      }),
+      ctx(),
+    );
+    expect(calls).toEqual([`start:${was.clientId}`, 'submit']);
+    expect((await fresh.getDraft(TOKEN))!.status).toBe('submitted');
+  });
+
+  it('never replaces newer answers with an older copy', async () => {
+    const store = memoryStore();
+    const current = draftWith({ answers: { score: 99 }, updatedAt: '2026-10-14T10:00:00.000Z' });
+    await store.putDraft(current);
+    const older = buildBackup(draftWith({ answers: { score: 1 }, updatedAt: '2026-10-14T09:00:00.000Z' }));
+
+    const result = await restoreBackup(store, JSON.stringify(older), TOKEN);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.reason).toContain('already holds answers newer');
+    expect((await store.getDraft(TOKEN))!.answers).toEqual({ score: 99 });
   });
 });
