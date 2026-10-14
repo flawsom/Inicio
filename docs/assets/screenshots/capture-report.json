@@ -1,6 +1,6 @@
 {
-  "base": "http://127.0.0.1:3000",
-  "at": "2026-10-14T14:37:46.707Z",
+  "base": "https://inicio.unifies.codes",
+  "at": "2026-10-14T15:10:51.651Z",
   "checks": [
     {
       "name": "the landing read its figures from the API in this request",
@@ -35,12 +35,12 @@
     {
       "name": "the primary call to action reached /login",
       "ok": true,
-      "detail": "http://127.0.0.1:3000/login"
+      "detail": "https://inicio.unifies.codes/login"
     },
     {
       "name": "the call to action works on a phone viewport",
       "ok": true,
-      "detail": "http://127.0.0.1:3000/login"
+      "detail": "https://inicio.unifies.codes/login"
     },
     {
       "name": "nothing 4xx'd except the signed-out 401",
@@ -49,24 +49,20 @@
     }
   ],
   "consoleErrors": [
-    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
-    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+    "Failed to load resource: the server responded with a status of 401 ()"
   ],
   "bad": [
-    "401 http://127.0.0.1:3000/api/v1/auth/me",
-    "401 http://127.0.0.1:3000/api/v1/auth/me",
-    "[phone] 401 http://127.0.0.1:3000/api/v1/auth/me",
-    "[phone] 401 http://127.0.0.1:3000/api/v1/auth/me",
-    "[phone] 401 http://127.0.0.1:3000/api/v1/auth/me",
-    "[phone] 401 http://127.0.0.1:3000/api/v1/auth/me"
+    "401 https://inicio.unifies.codes/api/v1/auth/me",
+    "[phone] 401 https://inicio.unifies.codes/api/v1/auth/me",
+    "[phone] 401 https://inicio.unifies.codes/api/v1/auth/me"
   ],
   "sizes": {
     "landing-hero.jpg": "122 kB",
-    "landing-flight.jpg": "61 kB",
-    "landing-corridor.jpg": "31 kB",
-    "landing-templates.jpg": "99 kB",
-    "login-desktop.jpg": "153 kB",
+    "landing-flight.jpg": "58 kB",
+    "landing-corridor.jpg": "30 kB",
+    "landing-templates.jpg": "96 kB",
+    "login-desktop.jpg": "150 kB",
     "landing-mobile.jpg": "136 kB",
-    "login-mobile.jpg": "137 kB"
+    "login-mobile.jpg": "146 kB"
   }
 }

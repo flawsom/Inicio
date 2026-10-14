@@ -1713,10 +1713,13 @@ and the token are not. Only the collection routes touch the `link` namespace. A 
 that fails lets the requests through and says so in one log line.
 
 **What this does not fix.** CAPTCHA and disposable-domain screening on the public entry points (Phase 0 item 8),
-per-API-key ceilings (FR-8.2), and bot detection on anonymous forms. And the migration is not applied in
-production: the deployment is serving the build that predates `0011`, so once this build is deployed the limiter
-fails open (the designed behaviour, with a log line) until `pnpm db:migrate` runs there, and `pnpm drift`
-reports the checkout one migration ahead in the meantime.
+per-API-key ceilings (FR-8.2), and bot detection on anonymous forms. And the migration is still not applied in
+production, which is the ordering the README calls the one rule that matters, run the wrong way round: the build
+that reads `0011` is deployed (`/health` reports its version and twelve rapid public reads answer `200` with
+`x-ratelimit-remaining` unmoved), the table is not there, and `pnpm drift` reports the deployment at 10
+migrations against this checkout's 11. The limiter therefore fails **open** there, which is the designed
+behaviour for an unreachable counter and is no worse than the per-process ceiling it replaced, and it closes
+with `pnpm db:migrate` over the deployment's own owner connection followed by `pnpm drift`.
 
 ## D48 — The marketing page is one flight through the product, and its choreography is arithmetic
 

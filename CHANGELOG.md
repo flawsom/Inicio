@@ -358,10 +358,19 @@ asserts both the status code and that `reason` is a sentence.
   assumed were wrong and are now checked in the script: the no-WebGL path is reached on this machine's
   Chromium unless the flags are `--use-gl=angle --use-angle=swiftshader --disable-gpu-sandbox`, and
   `querySelector('canvas')` finds the **cursor trail's** 2D context now that a trail is mounted on every
-  route, so a scene that was drawing perfectly reported as not drawing until the canvas was named. The
-  captures are of **this build** and not of the deployment: production still serves the page the flight
-  replaces, and `docs/assets/screenshots/capture-report.json` records the address each image came from so
-  that difference is visible in the repository rather than implied by a caption.
+  route, so a scene that was drawing perfectly reported as not drawing until the canvas was named. Once this
+  build reached the deployment the whole run was repeated **against production** and passed every check the
+  same way, so the captures in the README are photographs of the live site rather than of a local server, and
+  `docs/assets/screenshots/capture-report.json` records the address they came from.
+- **The limiter's migration is still outstanding on the deployment, and that is a state rather than a
+  footnote.** This build is live at `https://inicio.unifies.codes` (`/health` reports its version, the flight
+  draws, twelve rapid public reads answer `200` with `x-ratelimit-remaining: 120` unchanged) and `pnpm drift`
+  reports the deployment at 10 migrations while this checkout is at 11: `0011_rate_limit_counter.sql` has not
+  been applied there, so the durable counter this release added is failing **open** exactly as designed and
+  the ceiling is still the per-process one it replaced. It is the ordering the README states as the one rule
+  that matters, run the other way round, and it closes with
+  `MIGRATION_DATABASE_URL='postgres://…' pnpm --filter @inicio/api db:migrate` against the deployment's own
+  owner connection followed by `pnpm drift`, which is the check that says so.
 - **Component tests for the web surfaces.** The landing page runs in jsdom (its figures come from the
   API, it stays complete when the scene returns nothing, it shows no figure rather than an old one
   when the API does not answer, and its call to action reaches `/login`), and so does the realtime
