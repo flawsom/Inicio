@@ -1,0 +1,9 @@
+# The worker's whole dependency set.
+#
+# Both are pinned rather than ranged: this service exists to write two binary
+# formats whose writers have changed behaviour between releases, and a `.sav` that
+# opens differently depending on when the image was built is exactly the kind of
+# quiet difference this project refuses elsewhere. Raise these together and re-run
+# the API export test when you do.
+pyreadstat==1.3.2
+pandas==2.2.3

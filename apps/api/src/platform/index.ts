@@ -11,6 +11,7 @@ import { platformPublicRoutes } from './public.js';
 import { platformKeyRoutes } from './keys.js';
 import { platformWebhookRoutes } from './webhooks/routes.js';
 import { platformFlagRoutes } from './flags.js';
+import { platformAttachmentRoutes } from './attachments.js';
 
 /**
  * The platform API, mounted at /api/v1.
@@ -38,6 +39,9 @@ export const platformRoutes: FastifyPluginAsync = async (app) => {
   await app.register(platformKeyRoutes);
   await app.register(platformWebhookRoutes);
   await app.register(platformFlagRoutes);
+  // The files people attach to answers: metadata plus a signed, short-lived read
+  // URL, so the bytes never travel through this function (see attachments.ts).
+  await app.register(platformAttachmentRoutes);
   // The one unauthenticated route. It reports how the software is doing and
   // nothing about who is using it (see public.ts).
   await app.register(platformPublicRoutes);

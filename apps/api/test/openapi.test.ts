@@ -48,6 +48,7 @@ const SOURCES: Array<{ file: string; prefix: string }> = [
   { file: 'apps/api/src/platform/webhooks/routes.ts', prefix: '/api/v1' },
   { file: 'apps/api/src/platform/flags.ts', prefix: '/api/v1' },
   { file: 'apps/api/src/platform/public.ts', prefix: '/api/v1' },
+  { file: 'apps/api/src/platform/attachments.ts', prefix: '/api/v1' },
 ];
 
 /**
@@ -102,6 +103,11 @@ const PUBLIC_SURFACE = [
   'post /api/v1/auth/invite/redeem',
   'get /api/v1/collect/{token}',
   'post /api/v1/collect/{token}/responses',
+  // A file is authorised by the link's own token, the way an answer is: a
+  // respondent has no session to present, so these two are public by design and
+  // are named here as such rather than discovered in review.
+  'post /api/v1/collect/{token}/responses/{responseId}/attachments',
+  'post /api/v1/collect/{token}/responses/{responseId}/attachments/{attachmentId}/complete',
   'get /api/v1/collect/{token}/responses/{responseId}',
   'patch /api/v1/collect/{token}/responses/{responseId}',
   'post /api/v1/collect/{token}/responses/{responseId}/submit',

@@ -50,14 +50,16 @@ info:
 
     | Status | `error` values |
     |---|---|
-    | `400` | `invalid_request`, `unknown_format`, `acceptance_required` |
+    | `400` | `invalid_request`, `unknown_format`, `acceptance_required`, `not_an_upload_question` |
     | `401` | `unauthenticated`, `invalid_api_key`, `invalid_otp` (`expired`, `mismatch`, `attempts_exceeded`) |
     | `403` | `forbidden`, `read_only_role`, `terms_required`, `key_not_permitted`, `insufficient_scope`, `key_org_mismatch` |
-    | `404` | `not_found`, `link_not_found`, `unknown_template` — a non-member gets `404`, not `403`, because whether an organisation exists is not a member's business to probe |
-    | `409` | `already_submitted`, `client_id_conflict`, `not_published`, `version_immutable`, `version_archived`, `last_owner`, `terms_version_changed` |
+    | `404` | `not_found`, `link_not_found`, `unknown_template`, `unknown_question`, `attachment_not_found` — a non-member gets `404`, not `403`, because whether an organisation exists is not a member's business to probe |
+    | `409` | `already_submitted`, `client_id_conflict`, `not_published`, `version_immutable`, `version_archived`, `last_owner`, `terms_version_changed`, `upload_missing` (an authorised file whose bytes never arrived), `attachment_not_uploaded` (a file that is not ready to download) |
     | `410` | `link_expired`, `link_already_used`, `link_exhausted`, `link_inactive` |
-    | `422` | `incomplete` (required or invalid answers block submission), `invalid_definition` (a bad publish) |
-    | `501` | `format_not_available` (`.sav`/`.dta`), returned **with a reason** rather than a file that is quietly wrong |
+    | `422` | `incomplete` (required or invalid answers block submission), `invalid_definition` (a bad publish), `type_not_allowed` / `type_mismatch` / `attachment_infected` / `attachment_rejected` (a file question), `attachment_not_ready` (an answer naming a file the server never accepted) |
+    | `501` | `format_not_available` (`.sav`/`.dta`), returned **with a reason** rather than a file that is quietly wrong; `storage_not_configured` when the deployment has no object store |
+    | `413` | `too_large` — a file above the survey's ceiling, judged by the store's own HEAD rather than by the client's declaration |
+    | `502` | `storage_unavailable` — the object store did not answer, so nothing is recorded as accepted |
 
     The terms gate applies to a person, not to a key: an account that has not accepted
     the current documents can call the authentication, legal and acceptance routes and
@@ -84,6 +86,7 @@ tags:
   - name: Exports
   - name: Integrations
   - name: Quality
+  - name: Attachments
   - name: Public
 
 security:
@@ -1413,6 +1416,116 @@ paths:
         '422': { $ref: '#/components/responses/Error' }
 
   # ---------------------------------------------------------------------------
+  # Attachments. The bytes never pass through this API: the server authorises one
+  # object and signs a URL for it, the browser uploads straight to the store, and
+  # the server then reads back what actually arrived. So a signed URL uploads one
+  # object, of one type, of the size it was authorised for - and nothing becomes an
+  # answer until `complete` has looked at it.
+  # ---------------------------------------------------------------------------
+  /api/v1/collect/{token}/responses/{responseId}/attachments:
+    post:
+      tags: [Collection]
+      operationId: authoriseAttachment
+      summary: Authorise one file, and sign a URL that uploads that file and nothing else
+      description: |
+        The order is the point. The question is looked up in the *published* version
+        the link points at, so a question that is not on this instrument cannot be
+        answered with a file; the type is checked against that question's own
+        allowlist, so a photo question cannot be answered with a document; the size
+        is checked against the ceiling; and only then is a store request signed, with
+        the content type bound into the signature.
+
+        The row written here is `pending` on both axes - the row exists, the bytes do
+        not - so nothing is attached to an answer until `complete` has looked at what
+        arrived. A response id belonging to another form, or another organisation, is
+        `404`: a credential is not issued for a response this link cannot see.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CollectToken'
+        - $ref: '#/components/parameters/ResponseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                questionId: { type: string, description: The question's `name`, which is how answers are keyed. }
+                filename: { type: string }
+                mime: { type: string, example: image/jpeg }
+                sizeBytes: { type: integer, description: The client's declaration. Checked here, and checked again against what the store reports. }
+              required: [questionId, filename, mime, sizeBytes]
+      responses:
+        '201':
+          description: Authorised. `PUT` the bytes to `uploadUrl` with `headers`, then call `complete`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentAuthorisation' }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '410': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '501': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+
+  /api/v1/collect/{token}/responses/{responseId}/attachments/{attachmentId}/complete:
+    post:
+      tags: [Collection]
+      operationId: completeAttachment
+      summary: Look at what actually arrived, scan it, and only then call it an answer
+      description: |
+        This is where the client's declarations stop mattering: the store is asked
+        what it holds, and *that* is the size that is recorded - a device that
+        declared two kilobytes and sent ten megabytes is discovered here. The type
+        bound into the signature is checked against what came back, the bytes are
+        hashed, and the scan step runs on the bytes themselves.
+
+        The outcomes are the feature. `409 upload_missing` means the bytes never
+        arrived. `413 too_large` and `422 type_mismatch` mean what arrived was not
+        what was authorised, and the object is deleted. `422 attachment_infected`
+        means a scanner named the file, which is deleted *before* the row records why.
+
+        A file that was never scanned is reported `skipped` and an unreachable
+        scanner `error`, never `clean`, because a file nobody looked at must never be
+        indistinguishable from one that was checked. Every rejection is written and
+        committed before it is reported, so the record of why a file was refused
+        cannot be rolled back. Repeating a successful call returns the same result
+        with `alreadyComplete: true` rather than writing a second time.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CollectToken'
+        - $ref: '#/components/parameters/ResponseId'
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The object was looked at and accepted. An answer may now name it.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Attachment' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409':
+          description: '`upload_missing` - the file did not finish arriving. Nothing is recorded as accepted.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentRefusal' }
+        '413':
+          description: '`too_large` - larger than this survey accepts. The object has been deleted.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentRefusal' }
+        '422':
+          description: '`type_mismatch`, `attachment_infected` or `attachment_rejected`. The object is deleted and the question is still unanswered.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentRefusal' }
+        '502': { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------------------
   # Responses, analytics and exports. These are the operations an API key exists
   # for: a QC pipeline pulls the queue, a warehouse pulls responses, a nightly job
   # pulls an export — each with the narrowest scope that does the work.
@@ -1844,6 +1957,44 @@ paths:
                       retrying: { type: integer }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------------------
+  # Attachments, author side. The other half of the collection flow above: an author
+  # reads back what a respondent sent, through a URL this API signs for that one
+  # object, so a downloaded video is never a response body from a function.
+  # ---------------------------------------------------------------------------
+  /api/v1/orgs/{orgId}/attachments/{attachmentId}:
+    get:
+      tags: [Attachments]
+      operationId: readAttachment
+      summary: Metadata and a short-lived read URL for one attachment
+      description: |
+        Session-only: `requireActor` without a scope refuses an API key outright
+        (`403 key_not_permitted`), because no scope in this product's vocabulary
+        covers reading the files people attached to their answers.
+
+        Two things this route refuses to do. It will not serve a row that is not
+        `uploaded` (`409 attachment_not_uploaded`), and it will not serve an infected
+        one (`409 attachment_infected`): a file a scanner named stays out of reach
+        whatever else is true about it. The `scanStatus` travels with the file, so a
+        reader who knows it was never scanned can decide what to do about that.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The row, with a URL that expires.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentRead' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '501': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
 
   # ---------------------------------------------------------------------------
   # Quality. The whole machine surface of this feature is scoped, which is what a
@@ -2473,3 +2624,65 @@ components:
               items: { type: string }
             templateQuestions: { type: integer }
             templateGroups: { type: integer }
+
+    ScanStatus:
+      type: string
+      description: |
+        The verdict on the bytes. `clean` means a scanner said so; `skipped` means no
+        scanner was configured, so nobody looked; `error` means one was configured and
+        did not answer. Those are deliberately distinct, because a file nobody looked
+        at must never be indistinguishable from one that was checked.
+      enum: [pending, clean, infected, skipped, error]
+
+    AttachmentAuthorisation:
+      type: object
+      description: One object, authorised. The URL uploads that object, of that type, and nothing else.
+      properties:
+        attachmentId: { type: string, format: uuid }
+        uploadUrl: { type: string, format: uri, description: 'Signed for `PUT`, with the returned `content-type` header. The content type is bound into the signature.' }
+        expiresInSeconds: { type: integer }
+        headers: { type: object, additionalProperties: { type: string } }
+        maxBytes: { type: integer, description: The ceiling the declaration was checked against, so the device can show it rather than guess. }
+      required: [attachmentId, uploadUrl, expiresInSeconds, headers, maxBytes]
+
+    Attachment:
+      type: object
+      description: A file the server has looked at. The size and hash are the store's measurements, not the client's declarations.
+      properties:
+        attachmentId: { type: string, format: uuid }
+        questionId: { type: string, description: The question `name` an answer must use to refer to this file. }
+        filename: { type: string }
+        status: { type: string, enum: [pending, uploaded, deleted] }
+        scanStatus: { $ref: '#/components/schemas/ScanStatus' }
+        scanDetail: { type: [string, 'null'] }
+        sizeBytes: { type: integer }
+        sha256: { type: [string, 'null'] }
+        alreadyComplete:
+          type: boolean
+          description: Present and `true` when a repeat call returned the earlier result instead of writing again.
+      required: [attachmentId, questionId, filename, status, scanStatus]
+
+    AttachmentRead:
+      type: object
+      description: The author's view of one attachment, with a read URL that expires.
+      properties:
+        attachmentId: { type: string, format: uuid }
+        responseId: { type: string, format: uuid }
+        questionId: { type: string }
+        filename: { type: string }
+        mime: { type: string }
+        sizeBytes: { type: integer }
+        sha256: { type: [string, 'null'] }
+        scanStatus: { $ref: '#/components/schemas/ScanStatus' }
+        uploadedAt: { type: string, format: date-time }
+        downloadUrl: { type: string, format: uri }
+        expiresInSeconds: { type: integer }
+      required: [attachmentId, responseId, questionId, filename, mime, sizeBytes, scanStatus, uploadedAt, downloadUrl, expiresInSeconds]
+
+    AttachmentRefusal:
+      type: object
+      description: A file that was refused. The object has already been deleted, and the question is still unanswered.
+      properties:
+        error: { type: string }
+        detail: { type: string }
+      required: [error, detail]

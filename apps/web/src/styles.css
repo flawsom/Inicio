@@ -1315,3 +1315,49 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
   .studio-body { padding: var(--sp-3); }
   th, td { padding: 10px 10px; }
 }
+
+/* ----------------------------------------------------------------- the builder */
+
+/*
+ * The builder sits under the JSON because that is what it edits: a list of the
+ * questions in the order a respondent meets them, and the logic of whichever one is
+ * selected. It reuses the surrounding panel's type and spacing rather than inventing
+ * a second visual language for the same screen.
+ */
+.studio-builder { display: grid; gap: var(--sp-3); margin-top: var(--sp-4); }
+
+.studio-builder-list {
+  display: grid;
+  gap: var(--sp-2, 6px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-builder-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2, 6px);
+  padding: 4px 8px;
+  /* A control boundary, so it takes the token the contrast test holds to 3:1. */
+  border: 1px solid var(--line-control, currentColor);
+  border-radius: 10px;
+}
+
+/* Which question the logic fields below belong to has to be visible without reading them. */
+.studio-builder-row.selected { border-color: var(--live, currentColor); }
+
+.studio-builder-grip { cursor: grab; user-select: none; }
+
+.studio-builder-label {
+  flex: 1;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.studio-builder-logic { display: grid; gap: var(--sp-2, 6px); }
+.studio-builder-logic input { width: 100%; }

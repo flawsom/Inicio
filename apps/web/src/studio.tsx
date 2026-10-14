@@ -5,6 +5,9 @@ import {
   type AdapterNote,
   type FormDefinition,
   type OutSheet,
+  type Question,
+  type QuestionRules,
+  type QuestionType,
   type ValidationReport,
 } from '@inicio/engine';
 import { ApiError, api, download, type Definition, type VersionSummary } from './api';
@@ -34,6 +37,17 @@ import { RespondentForm } from './respondent';
  * edited, the sheets come from that definition, and the preview answers live in this
  * component and are never sent anywhere — the submit button is present and disabled,
  * because a preview that could write a response is not a preview.
+ *
+ * The **builder** below the JSON is not a fourth definition. It is a list and a
+ * handful of fields over the *same* text: every edit it makes is serialised back into
+ * the JSON panel, so the panels below repaint for the same reason they repaint when
+ * you type. That is the only property that matters here — a builder holding its own
+ * copy of the form is a builder that can disagree with the thing it is editing.
+ *
+ * It also refuses to be clever. An edit that makes the model inconsistent (a rule
+ * naming a question you just removed, a select with no choices yet) is *kept*, and
+ * the analyser under the JSON reports it: silently repairing an author's mistake
+ * hides the mistake, which is the failure mode this whole console is built against.
  */
 
 /* ------------------------------------------------------------------- the guard */
@@ -122,6 +136,340 @@ function SheetTable({ sheet }: { sheet: OutSheet }): JSX.Element {
         </tbody>
       </table>
       {rows.length === 0 && <p className="muted small">Only a header row so far.</p>}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------- the builder */
+
+/**
+ * The types the builder offers, in the order a form is usually written.
+ *
+ * Not every type is here on purpose: a `rank`, a `geoshape` or an `appearance` is a
+ * thing an author reaches for in the JSON, and offering a control for it would
+ * suggest a guidance this list cannot give. Everything absent is still editable in
+ * the JSON, which remains the source of truth.
+ */
+export const BUILDER_TYPES: readonly QuestionType[] = [
+  'text',
+  'textarea',
+  'integer',
+  'decimal',
+  'date',
+  'yesno',
+  'select_one',
+  'select_multiple',
+  'geopoint',
+  'image',
+  'audio',
+  'video',
+  'file',
+  'note',
+  'calculate',
+];
+
+/** Empty means "no rule", not a rule that matches an empty string. */
+function blank(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  return value.trim() === '' ? null : value;
+}
+
+/** A name no other question holds: it is the export column, so a collision is an error. */
+function uniqueName(form: FormDefinition, base: string): string {
+  const taken = new Set(form.questions.map((question) => question.name));
+  if (!taken.has(base)) return base;
+  let index = 2;
+  while (taken.has(`${base}_${index}`)) index += 1;
+  return `${base}_${index}`;
+}
+
+function uniqueId(form: FormDefinition): string {
+  const taken = new Set(form.questions.map((question) => question.id));
+  let index = form.questions.length + 1;
+  while (taken.has(`q_${index}`)) index += 1;
+  return `q_${index}`;
+}
+
+/** The label in the form's own language, falling back the way the respondent's form does. */
+export function questionLabel(question: Question, language: string): string {
+  return question.label?.[language] ?? Object.values(question.label ?? {})[0] ?? question.name;
+}
+
+/**
+ * Add a question of `type`, after `afterId` when one is named and at the end otherwise.
+ *
+ * The name is derived from the type rather than numbered blindly, because the name is
+ * the export column and an author who adds a question wants a column they can read.
+ */
+export function addQuestion(form: FormDefinition, type: QuestionType, afterId?: string | null): FormDefinition {
+  const base = type === 'note' || type === 'calculate' ? type : 'question';
+  const question: Question = {
+    id: uniqueId(form),
+    name: uniqueName(form, base),
+    type,
+    label: { [form.defaultLanguage]: type === 'note' ? 'A note' : 'Untitled question' },
+    required: false,
+  };
+  const at = afterId ? form.questions.findIndex((question) => question.id === afterId) : -1;
+  const questions = [...form.questions];
+  questions.splice(at === -1 ? questions.length : at + 1, 0, question);
+  return { ...form, questions };
+}
+
+export function removeQuestion(form: FormDefinition, questionId: string): FormDefinition {
+  return { ...form, questions: form.questions.filter((question) => question.id !== questionId) };
+}
+
+/** Swap with the neighbour `delta` places away. A move off either end changes nothing. */
+export function moveQuestion(form: FormDefinition, questionId: string, delta: number): FormDefinition {
+  const from = form.questions.findIndex((question) => question.id === questionId);
+  const to = from + delta;
+  if (from === -1 || to < 0 || to >= form.questions.length) return form;
+  const questions = [...form.questions];
+  const [moved] = questions.splice(from, 1);
+  if (!moved) return form;
+  questions.splice(to, 0, moved);
+  return { ...form, questions };
+}
+
+/** The drag gesture: take the question that was dragged and drop it where this one is. */
+export function reorderQuestion(form: FormDefinition, fromId: string, toId: string): FormDefinition {
+  const from = form.questions.findIndex((question) => question.id === fromId);
+  const to = form.questions.findIndex((question) => question.id === toId);
+  if (from === -1 || to === -1 || from === to) return form;
+  const questions = [...form.questions];
+  const [moved] = questions.splice(from, 1);
+  if (!moved) return form;
+  questions.splice(to, 0, moved);
+  return { ...form, questions };
+}
+
+/** One question's logic, as the engine's own fields name it. */
+export interface QuestionLogicPatch {
+  visibleIf?: string | null;
+  choiceFilter?: string | null;
+  constraint?: string | null;
+  constraintMessage?: string | null;
+}
+
+/**
+ * Write one question's logic.
+ *
+ * Every value here is a string the expression engine parses; this function never
+ * checks one. Two properties are deliberate: a field omitted from the patch keeps
+ * whatever it had, so typing in one input cannot clear another; and a field cleared
+ * to an empty string becomes `null` and then disappears, so "no rule" is stored as
+ * no rule rather than as an expression that evaluates to nothing.
+ */
+export function setQuestionLogic(form: FormDefinition, questionId: string, patch: QuestionLogicPatch): FormDefinition {
+  const language = form.defaultLanguage;
+  return {
+    ...form,
+    questions: form.questions.map((question) => {
+      if (question.id !== questionId) return question;
+
+      const existing = question.rules ?? {};
+      const visibleIf = patch.visibleIf === undefined ? blank(existing.visibleIf) : blank(patch.visibleIf);
+      const choiceFilter = patch.choiceFilter === undefined ? blank(existing.choiceFilter) : blank(patch.choiceFilter);
+      const rules: QuestionRules = {};
+      if (visibleIf) rules.visibleIf = visibleIf;
+      if (choiceFilter) rules.choiceFilter = choiceFilter;
+      // Fields this editor does not offer are carried, not dropped.
+      if (existing.enableIf) rules.enableIf = existing.enableIf;
+      if (existing.calculate) rules.calculate = existing.calculate;
+
+      const constraint = patch.constraint === undefined ? blank(question.validation?.constraint) : blank(patch.constraint);
+      const message = { ...(question.validation?.message ?? {}) };
+      if (patch.constraintMessage !== undefined) {
+        const text = blank(patch.constraintMessage);
+        if (text) message[language] = text;
+        else delete message[language];
+      }
+      const hasMessage = Object.keys(message).length > 0;
+      const validation = constraint || hasMessage ? { constraint, ...(hasMessage ? { message } : {}) } : null;
+
+      const next: Question = { ...question, validation };
+      if (Object.keys(rules).length > 0) next.rules = rules;
+      else delete next.rules;
+      return next;
+    }),
+  };
+}
+
+/** The choice questions whose options can be filtered, so the editor offers that field only there. */
+function canFilterChoices(type: QuestionType): boolean {
+  return type === 'select_one' || type === 'select_multiple' || type === 'rank';
+}
+
+/**
+ * The builder surface: the questions as an ordered list, and one question's logic.
+ *
+ * Reordering is a drag where a pointer exists and two buttons everywhere else. A
+ * drag-only control is unusable by keyboard, and a control that silently does nothing
+ * is the thing this file keeps refusing to ship (see the geolocation button in
+ * `respondent.tsx`), so both gestures write through the same functions.
+ */
+function BuilderPanel({
+  form,
+  onEdit,
+}: {
+  form: FormDefinition;
+  /** Hands the next definition back to the JSON, which is the only place it is stored. */
+  onEdit: (next: FormDefinition) => void;
+}): JSX.Element {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [adding, setAdding] = useState<QuestionType>('text');
+  const language = form.defaultLanguage;
+  const selected = form.questions.find((question) => question.id === selectedId) ?? null;
+
+  const add = (): void => {
+    const next = addQuestion(form, adding, selectedId);
+    const created = next.questions.find((question) => !form.questions.some((before) => before.id === question.id));
+    onEdit(next);
+    if (created) setSelectedId(created.id);
+  };
+
+  return (
+    <div className="studio-builder">
+      <div className="row wrap">
+        <span className="eyebrow">Builder</span>
+        <label className="small muted">
+          New question of type{' '}
+          <select
+            value={adding}
+            aria-label="New question type"
+            onChange={(event) => setAdding(event.target.value as QuestionType)}
+          >
+            {BUILDER_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="button" className="ghost small" onClick={add}>
+          Add question
+        </button>
+      </div>
+
+      {form.questions.length === 0 ? (
+        <p className="muted small">
+          No questions yet. Adding one puts it in the JSON, the workbook and the preview at the same moment,
+          because all three read the same definition.
+        </p>
+      ) : (
+        <ul className="studio-builder-list">
+          {form.questions.map((question, index) => (
+            <li
+              key={question.id}
+              className={question.id === selectedId ? 'studio-builder-row selected' : 'studio-builder-row'}
+              aria-current={question.id === selectedId}
+              draggable
+              onDragStart={() => setDraggingId(question.id)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                if (draggingId !== null && draggingId !== question.id) onEdit(reorderQuestion(form, draggingId, question.id));
+                setDraggingId(null);
+              }}
+            >
+              <span className="studio-builder-grip muted small" aria-hidden="true">
+                ⠿
+              </span>
+              <button
+                type="button"
+                className="studio-builder-label"
+                aria-pressed={question.id === selectedId}
+                onClick={() => setSelectedId(question.id)}
+              >
+                {questionLabel(question, language)}
+                <span className="muted small"> · {question.type}</span>
+              </button>
+              <button
+                type="button"
+                className="ghost small"
+                aria-label={`Move ${question.name} up`}
+                disabled={index === 0}
+                onClick={() => onEdit(moveQuestion(form, question.id, -1))}
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                className="ghost small"
+                aria-label={`Move ${question.name} down`}
+                disabled={index === form.questions.length - 1}
+                onClick={() => onEdit(moveQuestion(form, question.id, 1))}
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                className="ghost small"
+                aria-label={`Remove ${question.name}`}
+                onClick={() => {
+                  onEdit(removeQuestion(form, question.id));
+                  if (selectedId === question.id) setSelectedId(null);
+                }}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {selected && (
+        <div className="studio-builder-logic">
+          <p className="small">
+            <strong>{questionLabel(selected, language)}</strong> <span className="muted">· {selected.name}</span>
+          </p>
+          <label className="small">
+            Show this question when <code>visibleIf</code>
+            <input
+              value={selected.rules?.visibleIf ?? ''}
+              spellCheck={false}
+              placeholder="${consent} = 'yes'"
+              onChange={(event) => onEdit(setQuestionLogic(form, selected.id, { visibleIf: event.target.value }))}
+            />
+          </label>
+          {canFilterChoices(selected.type) && (
+            <label className="small">
+              Filter its choices <code>choiceFilter</code>
+              <input
+                value={selected.rules?.choiceFilter ?? ''}
+                spellCheck={false}
+                placeholder="district = ${district}"
+                onChange={(event) => onEdit(setQuestionLogic(form, selected.id, { choiceFilter: event.target.value }))}
+              />
+            </label>
+          )}
+          <label className="small">
+            Only accept a value when <code>constraint</code>
+            <input
+              value={selected.validation?.constraint ?? ''}
+              spellCheck={false}
+              placeholder=". >= 0 and . <= 10"
+              onChange={(event) => onEdit(setQuestionLogic(form, selected.id, { constraint: event.target.value }))}
+            />
+          </label>
+          <label className="small">
+            Message when it fails
+            <input
+              value={selected.validation?.message?.[language] ?? ''}
+              spellCheck={false}
+              placeholder="Between 0 and 10"
+              onChange={(event) => onEdit(setQuestionLogic(form, selected.id, { constraintMessage: event.target.value }))}
+            />
+          </label>
+          <p className="muted small">
+            These are the strings the expression engine evaluates, and nothing here is checked by a second
+            parser. The analyser above reports what is wrong with them, and the preview shows what they do —
+            including an edit that named a question you have since removed.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -299,6 +647,17 @@ export function DefinitionStudio({
                 </p>
               ))}
             </div>
+          )}
+          {definition && (
+            <BuilderPanel
+              form={definition as unknown as FormDefinition}
+              onEdit={(next) => {
+                // A builder edit is a keystroke on the JSON: one state change, and
+                // every panel repaints because every panel reads this text.
+                dirty.current = true;
+                setText(JSON.stringify(next, null, 2));
+              }}
+            />
           )}
         </div>
       </section>

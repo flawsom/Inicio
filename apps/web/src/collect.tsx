@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ApiError, api, type Definition } from './api';
+import {
+  ApiError,
+  api,
+  authoriseAttachment,
+  completeAttachment,
+  uploadAttachment,
+  type AttachmentCapability,
+  type Definition,
+} from './api';
 import { RespondentForm } from './respondent';
 import { pendingCount, resolveResume, syncLabel, timeOf } from './offline/core';
 import { openStore, type OfflineStore } from './offline/store';
@@ -82,6 +90,54 @@ function storageKey(token: string): string {
   return `inicio:collect:${token}`;
 }
 
+/** What an upload is doing, in the respondent's language rather than the wire's. */
+const UPLOAD_PHASE_LABELS: Record<'authorising' | 'uploading' | 'checking', string> = {
+  authorising: 'getting permission to send it',
+  uploading: 'sending it',
+  checking: 'checking that it arrived',
+};
+
+/**
+ * Why an attachment did not become an answer.
+ *
+ * Every server refusal is a different fact, and a respondent told "please try
+ * again" when it was the *kind* of file that was refused will simply fail again
+ * with the same file. So each sentence names what actually happened: too big,
+ * wrong kind, refused by the scan, never arrived. A failure carrying no code is
+ * not the server's answer at all — the bytes never got there — and that is the
+ * one case where trying again, unchanged, is the right thing to do.
+ */
+function attachFailure(err: unknown, maxBytes: number): string {
+  if (err instanceof ApiError) {
+    switch (err.code) {
+      case 'too_large':
+        return `That file is larger than this survey accepts. The limit is ${Math.round(maxBytes / (1024 * 1024))} MB.`;
+      case 'type_not_allowed':
+      case 'type_mismatch':
+        return (
+          err.message ?? 'That kind of file cannot be attached to this question. Please choose another one.'
+        );
+      case 'attachment_infected':
+        return err.message ?? 'That file was refused by the security scan and deleted. Please attach another one.';
+      case 'attachment_rejected':
+        return err.message ?? 'That file was not accepted, so this question is still unanswered. Please attach another one.';
+      case 'upload_missing':
+        return 'The file did not finish arriving. Please attach it again.';
+      case 'storage_unavailable':
+        return err.message ?? 'The place this survey keeps files did not answer. Please try again in a moment.';
+      case 'storage_not_configured':
+        return err.message ?? 'This survey is not collecting files at the moment, so this question is left unanswered.';
+      case 'already_submitted':
+        return 'This response has already been submitted, so nothing more can be attached to it.';
+      case 'too_many_requests':
+        return 'Too many files have been sent from this device just now. Please wait a moment and attach it again.';
+      default:
+        return err.message ?? 'That file could not be attached. Please try another one.';
+    }
+  }
+  return 'The file did not reach the server. Check your connection and attach it again.';
+}
+
 export function Collect({ token }: { token: string }): JSX.Element {
   const [definition, setDefinition] = useState<Definition | null>(null);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
@@ -94,6 +150,14 @@ export function Collect({ token }: { token: string }): JSX.Element {
   const [syncing, setSyncing] = useState(false);
   const [outcome, setOutcome] = useState<SyncOutcome | null>(null);
   const [busy, setBusy] = useState(false);
+  // What the deployment said about itself when the link was opened: whether it
+  // takes files at all, the ceiling, and whether the bytes will be scanned.
+  const [attachments, setAttachments] = useState<AttachmentCapability | null>(null);
+  const [uploadPhase, setUploadPhase] = useState<{
+    question: string;
+    phase: 'authorising' | 'uploading' | 'checking';
+  } | null>(null);
+  const [attachmentError, setAttachmentError] = useState<{ question: string; message: string } | null>(null);
 
   const storeRef = useRef<OfflineStore | null>(null);
   const syncRef = useRef<CollectorSync | null>(null);
@@ -191,6 +255,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
         const loaded = await api.collectForm(token);
         if (cancelled) return;
         setDefinition(loaded.form.definition);
+        setAttachments(loaded.attachments ?? null);
         setOnline(true);
         await adoptDefinition(store, token, {
           title: loaded.form.title,
@@ -277,6 +342,68 @@ export function Collect({ token }: { token: string }): JSX.Element {
     scheduleFlush(1200);
   };
 
+  /**
+   * Send one file, in the order the API insists on: authorise it, put the bytes
+   * straight into the store, then let the server look at what arrived.
+   *
+   * The answer does not exist until the third step answers: what is stored is the
+   * `attachmentId` the server has *accepted* — HEADed, hashed and scanned — because
+   * a reference to a file nobody verified must never be saved as an answer. The
+   * question is identified by its **name**, which is the key answers are stored
+   * under and the key the API matches the authorisation against.
+   */
+  const attachFile = useCallback(
+    async (questionName: string, file: File): Promise<void> => {
+      const responseId = draftRef.current?.responseId;
+      setAttachmentError(null);
+
+      if (!responseId) {
+        setAttachmentError({
+          question: questionName,
+          message: 'A file needs a connection: this device has not started this response on the server yet.',
+        });
+        return;
+      }
+
+      const maxBytes = attachments?.maxBytes ?? 0;
+      if (maxBytes > 0 && file.size > maxBytes) {
+        setAttachmentError({
+          question: questionName,
+          message: `That file is ${Math.round(file.size / 1024)} kB, and this survey accepts up to ${Math.round(
+            maxBytes / (1024 * 1024),
+          )} MB.`,
+        });
+        return;
+      }
+
+      setUploadPhase({ question: questionName, phase: 'authorising' });
+      try {
+        const authorisation = await authoriseAttachment(token, responseId, {
+          questionId: questionName,
+          filename: file.name,
+          mime: file.type || 'application/octet-stream',
+          sizeBytes: file.size,
+        });
+        setUploadPhase({ question: questionName, phase: 'uploading' });
+        await uploadAttachment(authorisation, file);
+        setUploadPhase({ question: questionName, phase: 'checking' });
+        const receipt = await completeAttachment(token, responseId, authorisation.attachmentId);
+        setOnline(true);
+        // Recorded through the same path every other answer takes, so the file's
+        // reference is written to the draft and queued like an answer, not beside one.
+        update(questionName, receipt.attachmentId);
+      } catch (err) {
+        // A refusal from the server is an answer; a failure with no code means the
+        // bytes never reached the store, which is a connectivity fact, not a verdict.
+        if (!(err instanceof ApiError)) setOnline(false);
+        setAttachmentError({ question: questionName, message: attachFailure(err, maxBytes) });
+      } finally {
+        setUploadPhase(null);
+      }
+    },
+    [attachments, token, update],
+  );
+
   const submit = async (): Promise<void> => {
     const store = storeRef.current;
     if (!store || status !== 'in_progress') return;
@@ -293,6 +420,15 @@ export function Collect({ token }: { token: string }): JSX.Element {
         window.localStorage.removeItem(storageKey(token));
       }
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'attachment_not_ready') {
+        // The server refused the submission because an answer names a file it never
+        // accepted. That is not a generic failure: the refusal names the question, and
+        // the only thing that fixes it is attaching that file again.
+        setError(
+          `${err.message ?? 'A file this response names was never accepted.'} Attach the file again on the question it belongs to, then submit.`,
+        );
+        return;
+      }
       setError(err instanceof ApiError ? err.message : 'your answers could not be submitted just now: they are still on this device');
     } finally {
       setBusy(false);
@@ -329,12 +465,17 @@ export function Collect({ token }: { token: string }): JSX.Element {
   const waiting = draft ? pendingCount(draft.outbox) : 0;
   const savedAt = timeOf(draft?.updatedAt ?? null);
   const syncedAt = timeOf(draft?.syncedAt ?? null);
+  // One notice box, in priority order: a file that was refused is the most useful
+  // thing to say, then whatever went wrong submitting.
+  const noticeText = attachmentError ? `“${attachmentError.question}” — ${attachmentError.message}` : error;
 
   return (
     <RespondentForm
       definition={definition}
       answers={answers}
       onChange={update}
+      attachments={attachments ?? undefined}
+      onAttachFile={attachFile}
       onFlush={() => void flush()}
       problems={problems}
       subtitle={
@@ -348,6 +489,11 @@ export function Collect({ token }: { token: string }): JSX.Element {
           <span className={online ? 'pill ok' : 'pill warn'} role="status" aria-live="polite">
             {draft ? syncLabel(draft, online, syncing) : 'Loading…'}
           </span>
+          {uploadPhase && (
+            <span className="muted small" role="status" aria-live="polite">
+              {`Attaching a file to “${uploadPhase.question}”: ${UPLOAD_PHASE_LABELS[uploadPhase.phase]}…`}
+            </span>
+          )}
           {(waiting > 0 || outcome?.phase === 'error') && (
             <button type="button" className="ghost" onClick={() => void flush()} disabled={!online}>
               {online ? 'Send now' : 'Waiting for a connection'}
@@ -355,7 +501,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
           )}
         </>
       }
-      notice={error ? <div className="card error">{error}</div> : null}
+      notice={noticeText ? <div className="card error">{noticeText}</div> : null}
       submit={{ label: busy ? 'Submitting…' : 'Submit', busy, onClick: () => void submit() }}
       footer={
         <>

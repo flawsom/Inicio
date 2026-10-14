@@ -18,6 +18,7 @@ import { requireAcceptedTerms } from './terms.js';
 import { assertActorOrg, requireActor } from './actors.js';
 import { TEMPLATES, findTemplate } from './templates.js';
 import { emitWebhook } from './webhooks/dispatch.js';
+import { ExportWorkerError, pyreadstatWorkerUrl, writeStatisticalFile } from './pyreadstat.js';
 
 /**
  * Forms, versions, responses, exports and distribution links.
@@ -37,6 +38,15 @@ import { emitWebhook } from './webhooks/dispatch.js';
 
 const slugify = (value: string): string =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'form';
+
+/**
+ * The two formats the engine does not produce, because it cannot: `.sav` and
+ * `.dta` are written by the pyreadstat worker. They are recognised here so the
+ * refusal can be specific and the file can be requested under the right name.
+ */
+const STAT_FORMATS = new Set(['sav', 'dta']);
+const isStatFormat = (format: string): format is 'sav' | 'dta' => STAT_FORMATS.has(format);
+const STAT_CONTENT_TYPES = { sav: 'application/x-spss-sav', dta: 'application/x-stata-dta' } as const;
 
 const looseDefinition = z.object({
   title: z.string().min(1),
@@ -652,13 +662,18 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
       if (!['csv', 'xlsx', 'json', 'sav', 'dta'].includes(format)) {
         return reply.code(400).send({ error: 'unknown_format', format });
       }
-      if (format === 'sav' || format === 'dta') {
-        // Refused, not faked: a file that only fails once a researcher imports it
-        // into SPSS is worse than an honest refusal.
+      if (isStatFormat(format) && !pyreadstatWorkerUrl()) {
+        // Refused, not faked — and the refusal remains the answer when the worker
+        // is simply not deployed, because a `.sav` this process cannot produce is
+        // one it must not pretend to produce. Setting PYREADSTAT_WORKER_URL is what
+        // turns this sentence into a file; nothing else does.
         return reply.code(501).send({
           error: 'format_not_available',
           format,
-          reason: 'SPSS .sav and Stata .dta need the pyreadstat export worker; export csv, xlsx or json instead',
+          reason:
+            'SPSS .sav and Stata .dta are written by the pyreadstat export worker (services/pyreadstat), ' +
+            'and this deployment has not been given a URL for it (PYREADSTAT_WORKER_URL); ' +
+            'export csv, xlsx or json instead',
         });
       }
 
@@ -697,7 +712,9 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
         }));
 
         const bundle = buildExportBundle(published.definition, responses, {
-          formats: [format as ExportFormat],
+          // `sav`/`dta` are not engine formats: the dataset is built here and the
+          // file itself is written by the worker, so no bytes are produced locally.
+          formats: isStatFormat(format) ? [] : [format as ExportFormat],
           multiSelect: req.query.multiSelect === 'slots' ? 'slots' : 'dichotomous',
           includeInProgress: req.query.includeInProgress !== 'false',
           language: req.query.language ?? undefined,
@@ -709,6 +726,43 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
         });
         return { bundle, slug: form.slug };
       });
+
+      // One file, written by the worker rather than by this process: the dataset
+      // travels as JSON and the bytes come back, so nothing here guesses at a
+      // binary format it cannot verify. An unreachable worker is a 502 — and never
+      // an empty file, which is the failure mode this split exists to prevent.
+      if (isStatFormat(format)) {
+        try {
+          const file = await writeStatisticalFile(format, payload.bundle.dataset, payload.bundle.dataset.meta.title);
+          return reply
+            .code(200)
+            .header('content-type', STAT_CONTENT_TYPES[format])
+            .header('content-disposition', `attachment; filename="${payload.slug}.${format}"`)
+            // What the writer had to change to satisfy SPSS or Stata, in the same
+            // place the XLSForm export reports what the adapter could not carry.
+            .header('x-export-notes', String(file.notes.length))
+            // ASCII only: a header is latin-1, and a note quoting a label with an
+            // accented character in it would otherwise throw on the way out.
+            .header('x-export-notes-detail', file.notes.join(' | ').replace(/[^\x20-\x7e]/g, '?').slice(0, 900))
+            .header('cache-control', 'private, no-store')
+            .send(file.bytes);
+        } catch (err) {
+          if (err instanceof ExportWorkerError) {
+            // Sent rather than thrown: `app.ts` collapses every 5xx body to
+            // `internal_error`, and this refusal is a deployment fact an operator can
+            // act on - the same reason the unconfigured 501 above carries its own code
+            // and names the variable to set. Nothing in this sentence is internal.
+            return reply.code(502).send({
+              error: 'export_worker_unavailable',
+              format,
+              reason:
+                'The statistical export worker (PYREADSTAT_WORKER_URL) did not answer, so no file was ' +
+                'produced. Export csv, xlsx or json instead, or try again in a moment.',
+            });
+          }
+          throw err;
+        }
+      }
 
       const { files } = payload.bundle;
       const single = files.length === 1 ? files[0] : undefined;

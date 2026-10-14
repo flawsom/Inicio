@@ -1,6 +1,6 @@
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { evaluateForm, filterChoices, type FormDefinition, type Question } from '@inicio/engine';
-import type { Definition } from './api';
+import type { AttachmentCapability, Definition } from './api';
 
 /**
  * The respondent's form, rendered in one place for both audiences.
@@ -27,6 +27,28 @@ import type { Definition } from './api';
 
 const UPLOAD_TYPES = new Set(['image', 'audio', 'video', 'file']);
 const GEO_TYPES = new Set(['geopoint', 'geotrace', 'geoshape']);
+
+/** What a question's file control is doing right now, kept per question name. */
+interface AttachmentProgress {
+  name: string;
+  busy: boolean;
+  /** The server's own words when something was refused, never a guess at them. */
+  error?: string;
+}
+
+/**
+ * A ceiling a person can read.
+ *
+ * `Math.round(bytes / 1 MB)` turns anything under half a megabyte into "0 MB",
+ * which is a limit that reads as a bug rather than as a limit.
+ */
+function readableLimit(bytes: number): string {
+  if (bytes >= 1024 * 1024) {
+    const whole = bytes / (1024 * 1024);
+    return `${Number.isInteger(whole) ? whole : whole.toFixed(1)} MB`;
+  }
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
 
 export interface RespondentProblems {
   missing: string[];
@@ -59,6 +81,21 @@ export interface RespondentFormProps {
   notice?: ReactNode;
   /** Inside the submit row, beside the button. */
   footer?: ReactNode;
+  /**
+   * What this deployment can do with files, taken from the link itself rather than
+   * assumed. Absent means nobody has told this component anything, and it says so
+   * instead of offering a control that would fail on use.
+   */
+  attachments?: AttachmentCapability;
+  /**
+   * Send one file for one question. The question is named, never id'd: answers are
+   * stored under the question's name, so that is the key this passes back.
+   *
+   * The sequence behind it - authorise, upload straight to the store, complete -
+   * belongs to the collection page, which is why a preview can render this control
+   * without being able to write anything.
+   */
+  onAttachFile?: (questionName: string, file: File) => Promise<void>;
 }
 
 export function RespondentForm({
@@ -72,9 +109,14 @@ export function RespondentForm({
   submit,
   notice,
   footer,
+  attachments,
+  onAttachFile,
 }: RespondentFormProps): JSX.Element {
   const form = definition as unknown as FormDefinition;
   const evaluation = useMemo(() => evaluateForm(form, answers), [form, answers]);
+  // Per question, because two file questions on one screen are two transfers, and a
+  // single flag would make one of them claim the other's progress.
+  const [uploads, setUploads] = useState<Record<string, AttachmentProgress>>({});
 
   const label = (question: Question): string =>
     question.label?.[definition.defaultLanguage] ?? Object.values(question.label ?? {})[0] ?? question.name;
@@ -90,17 +132,111 @@ export function RespondentForm({
     }
 
     if (UPLOAD_TYPES.has(question.type)) {
-      // There is no file storage in this build, and that is deliberate (see D9 in
-      // DECISIONS.md). A disabled control with no caption reads as a bug; a disabled
-      // control that says what it is not is the honest version — and it is exactly
-      // what the public page promises a respondent will see.
+      // A file is the one answer this component cannot write itself: it is
+      // authorised, uploaded straight to the store and verified by the server, and
+      // that sequence belongs to the collection page. What belongs here is the truth
+      // about whether the control can work at all — the same property that makes the
+      // geolocation button say "Location unavailable" rather than ignore a click.
+      const capability = attachments;
+      const upload = uploads[question.name];
+
+      if (!capability || capability.enabled !== true || !onAttachFile) {
+        // Three different reasons, and none of them is allowed to read as a working
+        // control that does nothing: the console's preview, which has no response to
+        // attach a file to; a deployment whose policy will not take a file it cannot
+        // check and has nothing to check it with; and a deployment with no bucket at
+        // all. The pre-existing wording is kept for that last one, because it is what
+        // the public page promises a respondent sees and a test holds it to the text.
+        // It must not be shown for the middle one: there the storage is configured and
+        // sound, so telling a respondent there is none would be a plain falsehood.
+        return (
+          <>
+            <input type="file" disabled />
+            {capability?.enabled === true ? (
+              <p className="muted small">
+                Not uploaded from the preview: a file is chosen and sent on the collection page this form is
+                published to, and there is no response here for one to belong to.
+              </p>
+            ) : capability?.unscanned === 'refused' ? (
+              <p className="muted small">
+                Not collected here: this deployment only accepts a file it can check for viruses, and there is no
+                checker available, so the question is shown and left unanswered rather than offering an upload that
+                would be refused.
+              </p>
+            ) : (
+              <p className="muted small">
+                Not collected yet: this deployment has no file storage, so the question is shown and left
+                unanswered rather than skipped without saying so.
+              </p>
+            )}
+          </>
+        );
+      }
+
+      const accepted = capability.mime[question.type as keyof AttachmentCapability['mime']] ?? [];
+
+      const startUpload = async (file: File): Promise<void> => {
+        // Refused before it is sent, because a request that is certain to be refused
+        // spends the respondent's connection and tells them nothing.
+        if (file.size > capability.maxBytes) {
+          setUploads((previous) => ({
+            ...previous,
+            [question.name]: {
+              name: file.name,
+              busy: false,
+              error: `That file is ${readableLimit(file.size)}, over the ${readableLimit(capability.maxBytes)} this survey accepts.`,
+            },
+          }));
+          return;
+        }
+        setUploads((previous) => ({ ...previous, [question.name]: { name: file.name, busy: true } }));
+        try {
+          await onAttachFile(question.name, file);
+          setUploads((previous) => ({ ...previous, [question.name]: { name: file.name, busy: false } }));
+        } catch (error) {
+          setUploads((previous) => ({
+            ...previous,
+            [question.name]: {
+              name: file.name,
+              busy: false,
+              error:
+                error instanceof Error && error.message
+                  ? error.message
+                  : 'That file could not be sent. Please try again.',
+            },
+          }));
+        }
+      };
+
       return (
         <>
-          <input type="file" disabled />
-          <p className="muted small">
-            Not collected yet: this deployment has no file storage, so the question is shown and left unanswered
-            rather than skipped without saying so.
-          </p>
+          <input
+            type="file"
+            accept={accepted.length > 0 ? accepted.join(',') : undefined}
+            disabled={disabled || upload?.busy === true}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              // `void`, because the control reports its own outcome: an unhandled
+              // rejection here would be a promise nobody is listening to.
+              if (file) void startUpload(file);
+            }}
+            onBlur={onFlush}
+          />
+          {upload ? (
+            <p className={upload.error ? 'error small' : 'muted small'}>
+              {upload.error ??
+                (upload.busy ? `Sending ${upload.name}…` : `Attached: ${upload.name}`)}
+            </p>
+          ) : typeof value === 'string' && value !== '' ? (
+            <p className="muted small">A file is already attached to this answer.</p>
+          ) : (
+            <p className="muted small">
+              {`Up to ${readableLimit(capability.maxBytes)}. `}
+              {capability.scan === 'on'
+                ? 'The file is checked before the answer is accepted, and an answer whose file was refused is not submitted.'
+                : 'This deployment does not run a scan, so nothing looks at what arrives.'}
+            </p>
+          )}
         </>
       );
     }

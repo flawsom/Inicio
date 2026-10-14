@@ -283,6 +283,57 @@ export interface FlagQueue {
   summary: { byStatus: Record<string, number>; byKind: Record<string, number>; open: number };
 }
 
+/**
+ * Attachments: a file a respondent sends, and the three calls that move it.
+ *
+ * Two things about this path are unlike the rest of the client. The bytes never
+ * pass through the API, so the one call that carries them goes to object storage
+ * against a URL the API signed, with no cookie and nothing else attached. And a
+ * refusal here is worded for the person holding the phone — "that file is larger
+ * than this survey accepts" — so it is read as a sentence rather than as a code.
+ */
+export interface AttachmentCapability {
+  /** The deployment's answer about itself: with no bucket configured this is false. */
+  enabled: boolean;
+  maxBytes: number;
+  /** Whether the bytes will be looked at before they count as an answer. */
+  scan: 'on' | 'off';
+  /**
+   * Whether a file whose scan did not happen can still be an answer. `refused` is
+   * the `require` policy, where an unscanned file is not collected at all — which is
+   * why `enabled` can be false while storage itself is perfectly well configured.
+   */
+  unscanned: 'accepted' | 'refused';
+  /** The accepted types per question type, from the server's own allowlists. */
+  mime: { image: string[]; audio: string[]; video: string[]; file: string[] };
+}
+
+/** One authorised file: a URL that uploads that file, of that type, and nothing else. */
+export interface AttachmentAuthorisation {
+  attachmentId: string;
+  uploadUrl: string;
+  expiresInSeconds: number;
+  /** The headers the signature covers, which the PUT must send exactly. */
+  headers: Record<string, string>;
+  maxBytes: number;
+}
+
+/** What the server found in the store, rather than what the device said it sent. */
+export interface AttachmentReceipt {
+  attachmentId: string;
+  /** The question's **name**: the key an answer is stored under. */
+  questionId: string;
+  filename: string;
+  status: 'uploaded';
+  scanStatus: string;
+  scanDetail?: string;
+  /** The size the store reported, which is the one that counts. */
+  sizeBytes: number;
+  sha256?: string;
+  /** True when the file had already been completed and this call changed nothing. */
+  alreadyComplete?: boolean;
+}
+
 export const api = {
   mailStatus: () => request<PublicMailStatus>('GET', '/auth/mail-status'),
   requestOtp: (email: string) =>
@@ -396,10 +447,12 @@ export const api = {
    * it to tell a real conflict from a no-op.
    */
   collectForm: (token: string) =>
-    request<{ form: { id: string; title: string; version: number; definition: Definition }; link: { kind: string } }>(
-      'GET',
-      `/collect/${token}`,
-    ),
+    request<{
+      form: { id: string; title: string; version: number; definition: Definition };
+      link: { kind: string };
+      /** What this deployment can do with files, or that it cannot yet. */
+      attachments: AttachmentCapability;
+    }>('GET', `/collect/${token}`),
   resumeResponse: (token: string, responseId: string) =>
     request<{ responseId: string; status: string; answers: Record<string, unknown> }>(
       'GET',
@@ -519,4 +572,81 @@ export async function download(path: string, fallbackName: string): Promise<void
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Authorise one file, and come back with a URL that can upload that file alone.
+ *
+ * `questionId` is the question's **name**, not its id: a name is what an answer is
+ * keyed by, and the server matches this against it.
+ */
+export async function authoriseAttachment(
+  token: string,
+  responseId: string,
+  input: { questionId: string; filename: string; mime: string; sizeBytes: number },
+): Promise<AttachmentAuthorisation> {
+  return attachmentRequest<AttachmentAuthorisation>(
+    'POST',
+    `/collect/${encodeURIComponent(token)}/responses/${encodeURIComponent(responseId)}/attachments`,
+    input,
+  );
+}
+
+/**
+ * Send the bytes, and nothing else.
+ *
+ * This is the one call in this file that does not go to `/api/v1`: the file travels
+ * from this browser straight to object storage. `credentials: 'omit'` is deliberate
+ * even though the store is normally another origin — a self-hosted bucket can share
+ * one, and the signature over the path, the query and the content type is the whole
+ * of the authority, so a cookie here would only widen what a leaked URL can do.
+ */
+export async function uploadAttachment(authorisation: AttachmentAuthorisation, file: Blob): Promise<void> {
+  const res = await fetch(authorisation.uploadUrl, {
+    method: 'PUT',
+    headers: authorisation.headers,
+    body: file,
+    credentials: 'omit',
+  });
+  if (!res.ok) {
+    // A store refuses in XML; the code inside it is the only useful part.
+    const body = await res.text().catch(() => '');
+    const code = /<Code>([^<]+)<\/Code>/.exec(body)?.[1];
+    throw new ApiError(res.status, code ?? 'upload_failed', `The file could not be uploaded (${res.status}).`);
+  }
+}
+
+/** Look at what arrived, and only then call it an answer. */
+export async function completeAttachment(
+  token: string,
+  responseId: string,
+  attachmentId: string,
+): Promise<AttachmentReceipt> {
+  return attachmentRequest<AttachmentReceipt>(
+    'POST',
+    `/collect/${encodeURIComponent(token)}/responses/${encodeURIComponent(responseId)}/attachments/${encodeURIComponent(attachmentId)}/complete`,
+  );
+}
+
+/**
+ * `request`, plus the words these two routes use for a refusal.
+ *
+ * The shared helper knows `message`; an attachment refusal arrives as `message`
+ * from the route that authorises an upload and as `detail` from the route that
+ * completes one. Reading only one of them is how a file control ends up telling a
+ * respondent the word "error" instead of the server's own sentence.
+ */
+async function attachmentRequest<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${ROOT}${path}`, {
+    method,
+    credentials: 'include',
+    ...(body === undefined ? {} : { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
+  });
+  const text = await res.text();
+  const parsed: unknown = text ? JSON.parse(text) : null;
+  if (!res.ok) {
+    const detail = (parsed ?? {}) as { error?: string; message?: string; detail?: string };
+    throw new ApiError(res.status, detail.error ?? 'error', detail.message ?? detail.detail, parsed);
+  }
+  return parsed as T;
 }
