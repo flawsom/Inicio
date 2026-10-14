@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 780" width="1280" height="780" role="img" aria-label="The Inicio console: the definition studio, showing the form's JSON, the XLSForm workbook it exports, and a live preview of the form a respondent opens">
   <defs>
     <linearGradient id="cbg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#06080f"/><stop offset="1" stop-color="#0c1322"/>
+      <stop offset="0" stop-color="#101216"/><stop offset="1" stop-color="#1f242b"/>
     </linearGradient>
     <radialGradient id="cglow" cx="0.85" cy="0.05" r="0.6">
-      <stop offset="0" stop-color="#38bdf8" stop-opacity="0.16"/><stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+      <stop offset="0" stop-color="#ea580c" stop-opacity="0.16"/><stop offset="1" stop-color="#ea580c" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="cglow2" cx="0.06" cy="0.96" r="0.55">
-      <stop offset="0" stop-color="#7b4dff" stop-opacity="0.14"/><stop offset="1" stop-color="#7b4dff" stop-opacity="0"/>
+      <stop offset="0" stop-color="#c2410c" stop-opacity="0.14"/><stop offset="1" stop-color="#c2410c" stop-opacity="0"/>
     </radialGradient>
     <linearGradient id="csheen" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ffffff" stop-opacity="0.06"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
@@ -28,201 +28,201 @@
     <!-- top bar -->
     <rect x="1" y="1" width="1278" height="62" rx="21" fill="#ffffff" fill-opacity="0.03"/>
     <rect x="1" y="56" width="1278" height="1" fill="#ffffff" fill-opacity="0.08"/>
-    <rect x="24" y="18" width="28" height="28" rx="8" fill="#0f172a" stroke="#ffffff" stroke-opacity="0.14"/>
-    <rect x="33" y="26" width="10" height="3" rx="1.5" fill="#e2e8f0"/>
-    <rect x="33" y="32" width="10" height="3" rx="1.5" fill="#e2e8f0"/>
-    <rect x="33" y="38" width="6" height="3" rx="1.5" fill="#38bdf8"/>
-    <text x="64" y="38" font-size="16" font-weight="700" fill="#e8eef9">Inicio</text>
+    <rect x="24" y="18" width="28" height="28" rx="8" fill="#22262d" stroke="#ffffff" stroke-opacity="0.14"/>
+    <rect x="33" y="26" width="10" height="3" rx="1.5" fill="#e5e3e0"/>
+    <rect x="33" y="32" width="10" height="3" rx="1.5" fill="#e5e3e0"/>
+    <rect x="33" y="38" width="6" height="3" rx="1.5" fill="#ea580c"/>
+    <text x="64" y="38" font-size="16" font-weight="700" fill="#f4f2ef">Inicio</text>
     <rect x="132" y="20" width="150" height="26" rx="13" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.12"/>
-    <text x="146" y="38" font-size="13" fill="#b6c4d8">Inicio · owner</text>
-    <rect x="1042" y="20" width="212" height="26" rx="13" fill="#34d399" fill-opacity="0.10" stroke="#34d399" stroke-opacity="0.30"/>
-    <text x="1058" y="38" font-size="12.5" fill="#6ee7b7">published v2 · collecting</text>
+    <text x="146" y="38" font-size="13" fill="#d2d0cc">Inicio · owner</text>
+    <rect x="1042" y="20" width="212" height="26" rx="13" fill="#86efac" fill-opacity="0.10" stroke="#86efac" stroke-opacity="0.30"/>
+    <text x="1058" y="38" font-size="12.5" fill="#bbf7d0">published v2 · collecting</text>
 
     <!-- sidebar -->
     <rect x="1" y="63" width="286" height="716" fill="#ffffff" fill-opacity="0.02"/>
     <rect x="286" y="63" width="1" height="716" fill="#ffffff" fill-opacity="0.08"/>
-    <text x="28" y="100" font-size="11" font-weight="700" letter-spacing="1.4" fill="#6b7c95">FORMS</text>
-    <rect x="18" y="114" width="252" height="42" rx="12" fill="#38bdf8" fill-opacity="0.10" stroke="#38bdf8" stroke-opacity="0.28"/>
-    <text x="36" y="140" font-size="14" font-weight="600" fill="#e8eef9">School Ranking Survey 2026</text>
-    <text x="36" y="182" font-size="13.5" fill="#93a1b8">Driver Pulse</text>
-    <text x="36" y="216" font-size="13.5" fill="#93a1b8">Household Panel</text>
-    <text x="36" y="250" font-size="13.5" fill="#93a1b8">Clinic Readiness</text>
+    <text x="28" y="100" font-size="11" font-weight="700" letter-spacing="1.4" fill="#9ca3af">FORMS</text>
+    <rect x="18" y="114" width="252" height="42" rx="12" fill="#ea580c" fill-opacity="0.10" stroke="#ea580c" stroke-opacity="0.28"/>
+    <text x="36" y="140" font-size="14" font-weight="600" fill="#f4f2ef">School Ranking Survey 2026</text>
+    <text x="36" y="182" font-size="13.5" fill="#a8a5a0">Driver Pulse</text>
+    <text x="36" y="216" font-size="13.5" fill="#a8a5a0">Household Panel</text>
+    <text x="36" y="250" font-size="13.5" fill="#a8a5a0">Clinic Readiness</text>
     <rect x="18" y="690" width="252" height="1" fill="#ffffff" fill-opacity="0.08"/>
-    <text x="36" y="720" font-size="12.5" fill="#6b7c95">People and invitations</text>
-    <text x="36" y="748" font-size="12.5" fill="#6b7c95">Templates</text>
+    <text x="36" y="720" font-size="12.5" fill="#9ca3af">People and invitations</text>
+    <text x="36" y="748" font-size="12.5" fill="#9ca3af">Templates</text>
 
     <!-- main header -->
-    <text x="311" y="110" font-size="24" font-weight="700" fill="#eef4fd">School Ranking Survey 2026</text>
-    <text x="311" y="136" font-size="13" fill="#8394ad">12 questions · draft v3 from published v2 · analysed as you type</text>
+    <text x="311" y="110" font-size="24" font-weight="700" fill="#faf8f6">School Ranking Survey 2026</text>
+    <text x="311" y="136" font-size="13" fill="#8f8c88">12 questions · draft v3 from published v2 · analysed as you type</text>
     <rect x="1128" y="92" width="112" height="30" rx="10" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.14"/>
-    <text x="1146" y="112" font-size="12.5" font-weight="600" fill="#dbe6f5">← Forms</text>
+    <text x="1146" y="112" font-size="12.5" font-weight="600" fill="#ebe7e2">← Forms</text>
     <rect x="311" y="152" width="929" height="1" fill="#ffffff" fill-opacity="0.08"/>
 
     <!-- tabs -->
     <rect x="311" y="166" width="486" height="34" rx="10" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.12"/>
     <rect x="315" y="170" width="106" height="26" rx="8" fill="#ffffff" fill-opacity="0.10"/>
-    <text x="333" y="188" font-size="12.5" font-weight="600" fill="#e8eef9">Builder</text>
-    <text x="437" y="188" font-size="12.5" fill="#93a1b8">Responses &amp; exports</text>
-    <text x="600" y="188" font-size="12.5" fill="#93a1b8">Quality</text>
-    <text x="682" y="188" font-size="12.5" fill="#93a1b8">Distribute</text>
+    <text x="333" y="188" font-size="12.5" font-weight="600" fill="#f4f2ef">Builder</text>
+    <text x="437" y="188" font-size="12.5" fill="#a8a5a0">Responses &amp; exports</text>
+    <text x="600" y="188" font-size="12.5" fill="#a8a5a0">Quality</text>
+    <text x="682" y="188" font-size="12.5" fill="#a8a5a0">Distribute</text>
 
     <!-- ============================================ panel 1 · the definition -->
-    <rect x="311" y="200" width="298" height="554" rx="16" fill="#0a0e18" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.12" filter="url(#cshadow)"/>
+    <rect x="311" y="200" width="298" height="554" rx="16" fill="#14161b" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.12" filter="url(#cshadow)"/>
     <path d="M311 216 a16 16 0 0 1 16 -16 h266 a16 16 0 0 1 16 16 v62 h-298 z" fill="url(#csheen)"/>
-    <circle cx="333" cy="232" r="3.5" fill="#38bdf8"/>
-    <text x="345" y="236" font-size="11" font-weight="700" letter-spacing="1.2" fill="#6b7c95">1 · DEFINITION</text>
-    <text x="327" y="266" font-size="18" font-weight="700" fill="#e8eef9">JSON</text>
-    <text x="327" y="290" font-size="11.5" fill="#93a1b8">The definition as the API stores it, and</text>
-    <text x="327" y="306" font-size="11.5" fill="#93a1b8">what the XLSForm importer produces.</text>
+    <circle cx="333" cy="232" r="3.5" fill="#ea580c"/>
+    <text x="345" y="236" font-size="11" font-weight="700" letter-spacing="1.2" fill="#9ca3af">1 · DEFINITION</text>
+    <text x="327" y="266" font-size="18" font-weight="700" fill="#f4f2ef">JSON</text>
+    <text x="327" y="290" font-size="11.5" fill="#a8a5a0">The definition as the API stores it, and</text>
+    <text x="327" y="306" font-size="11.5" fill="#a8a5a0">what the XLSForm importer produces.</text>
     <rect x="327" y="322" width="266" height="1" fill="#ffffff" fill-opacity="0.08"/>
 
     <!-- the source itself -->
-    <rect x="327" y="334" width="266" height="282" rx="10" fill="#04060c" stroke="#ffffff" stroke-opacity="0.10"/>
+    <rect x="327" y="334" width="266" height="282" rx="10" fill="#0b0d0f" stroke="#ffffff" stroke-opacity="0.10"/>
     <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">
-      <text x="341" y="356" fill="#7dd3fc">{</text>
-      <text x="341" y="372" fill="#93a1b8">  "title":</text>
-      <text x="410" y="372" fill="#c4b5fd">"School Ranking 2026",</text>
-      <text x="341" y="388" fill="#93a1b8">  "defaultLanguage":</text>
-      <text x="482" y="388" fill="#c4b5fd">"en",</text>
-      <text x="341" y="404" fill="#93a1b8">  "questions": [</text>
-      <text x="341" y="420" fill="#7dd3fc">    {</text>
-      <text x="341" y="436" fill="#93a1b8">      "name":</text>
-      <text x="446" y="436" fill="#c4b5fd">"school_name",</text>
-      <text x="341" y="452" fill="#93a1b8">      "type":</text>
-      <text x="446" y="452" fill="#c4b5fd">"text",</text>
-      <text x="341" y="468" fill="#93a1b8">      "label":</text>
-      <text x="446" y="468" fill="#6ee7b7">{&quot;en&quot;:&quot;School name&quot;}</text>
-      <text x="341" y="484" fill="#7dd3fc">    },</text>
-      <text x="341" y="500" fill="#7dd3fc">    {</text>
-      <text x="341" y="516" fill="#93a1b8">      "name":</text>
-      <text x="446" y="516" fill="#c4b5fd">"school_type",</text>
-      <text x="341" y="532" fill="#93a1b8">      "type":</text>
-      <text x="446" y="532" fill="#c4b5fd">"select_one schools",</text>
-      <text x="341" y="548" fill="#93a1b8">      "required":</text>
-      <text x="464" y="548" fill="#6ee7b7">true</text>
-      <text x="341" y="564" fill="#7dd3fc">    },</text>
-      <text x="341" y="580" fill="#7dd3fc">  ]</text>
-      <text x="341" y="596" fill="#7dd3fc">}</text>
+      <text x="341" y="356" fill="#fdba74">{</text>
+      <text x="341" y="372" fill="#a8a5a0">  "title":</text>
+      <text x="410" y="372" fill="#fed7aa">"School Ranking 2026",</text>
+      <text x="341" y="388" fill="#a8a5a0">  "defaultLanguage":</text>
+      <text x="482" y="388" fill="#fed7aa">"en",</text>
+      <text x="341" y="404" fill="#a8a5a0">  "questions": [</text>
+      <text x="341" y="420" fill="#fdba74">    {</text>
+      <text x="341" y="436" fill="#a8a5a0">      "name":</text>
+      <text x="446" y="436" fill="#fed7aa">"school_name",</text>
+      <text x="341" y="452" fill="#a8a5a0">      "type":</text>
+      <text x="446" y="452" fill="#fed7aa">"text",</text>
+      <text x="341" y="468" fill="#a8a5a0">      "label":</text>
+      <text x="446" y="468" fill="#bbf7d0">{&quot;en&quot;:&quot;School name&quot;}</text>
+      <text x="341" y="484" fill="#fdba74">    },</text>
+      <text x="341" y="500" fill="#fdba74">    {</text>
+      <text x="341" y="516" fill="#a8a5a0">      "name":</text>
+      <text x="446" y="516" fill="#fed7aa">"school_type",</text>
+      <text x="341" y="532" fill="#a8a5a0">      "type":</text>
+      <text x="446" y="532" fill="#fed7aa">"select_one schools",</text>
+      <text x="341" y="548" fill="#a8a5a0">      "required":</text>
+      <text x="464" y="548" fill="#bbf7d0">true</text>
+      <text x="341" y="564" fill="#fdba74">    },</text>
+      <text x="341" y="580" fill="#fdba74">  ]</text>
+      <text x="341" y="596" fill="#fdba74">}</text>
     </g>
 
     <!-- liveness, as a dot and a sentence -->
-    <circle cx="331" cy="636" r="3.5" fill="#34d399"/>
-    <text x="343" y="640" font-size="11.5" fill="#a9b8cd">12 question(s) · valid JSON</text>
+    <circle cx="331" cy="636" r="3.5" fill="#86efac"/>
+    <text x="343" y="640" font-size="11.5" fill="#bdbab5">12 question(s) · valid JSON</text>
     <rect x="327" y="652" width="118" height="32" rx="9" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.14"/>
-    <text x="345" y="673" font-size="12" font-weight="600" fill="#dbe6f5">Save draft</text>
-    <rect x="455" y="652" width="138" height="32" rx="9" fill="#38bdf8" fill-opacity="0.16" stroke="#38bdf8" stroke-opacity="0.45"/>
-    <text x="471" y="673" font-size="12" font-weight="600" fill="#7dd3fc">Download .xlsx</text>
-    <rect x="327" y="694" width="266" height="46" rx="10" fill="#34d399" fill-opacity="0.08" stroke="#34d399" stroke-opacity="0.28"/>
-    <text x="343" y="714" font-size="11.5" fill="#d7e3f2">No publish-blocking problems.</text>
-    <text x="343" y="730" font-size="11" fill="#6b7c95">1 warning · "school_name" has no hint</text>
+    <text x="345" y="673" font-size="12" font-weight="600" fill="#ebe7e2">Save draft</text>
+    <rect x="455" y="652" width="138" height="32" rx="9" fill="#ea580c" fill-opacity="0.16" stroke="#ea580c" stroke-opacity="0.45"/>
+    <text x="471" y="673" font-size="12" font-weight="600" fill="#fdba74">Download .xlsx</text>
+    <rect x="327" y="694" width="266" height="46" rx="10" fill="#86efac" fill-opacity="0.08" stroke="#86efac" stroke-opacity="0.28"/>
+    <text x="343" y="714" font-size="11.5" fill="#e7e3de">No publish-blocking problems.</text>
+    <text x="343" y="730" font-size="11" fill="#9ca3af">1 warning · "school_name" has no hint</text>
 
     <!-- ============================================== panel 2 · the workbook -->
-    <rect x="633" y="200" width="298" height="554" rx="16" fill="#0a0e18" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.12" filter="url(#cshadow)"/>
+    <rect x="633" y="200" width="298" height="554" rx="16" fill="#14161b" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.12" filter="url(#cshadow)"/>
     <path d="M633 216 a16 16 0 0 1 16 -16 h266 a16 16 0 0 1 16 16 v62 h-298 z" fill="url(#csheen)"/>
-    <circle cx="655" cy="232" r="3.5" fill="#a78bfa"/>
-    <text x="667" y="236" font-size="11" font-weight="700" letter-spacing="1.2" fill="#6b7c95">2 · XLSFORM</text>
-    <text x="649" y="266" font-size="18" font-weight="700" fill="#e8eef9">The workbook</text>
-    <text x="649" y="290" font-size="11.5" fill="#93a1b8">The rows Download .xlsx writes — one</text>
-    <text x="649" y="306" font-size="11.5" fill="#93a1b8">function, zipped into the file.</text>
+    <circle cx="655" cy="232" r="3.5" fill="#fdba74"/>
+    <text x="667" y="236" font-size="11" font-weight="700" letter-spacing="1.2" fill="#9ca3af">2 · XLSFORM</text>
+    <text x="649" y="266" font-size="18" font-weight="700" fill="#f4f2ef">The workbook</text>
+    <text x="649" y="290" font-size="11.5" fill="#a8a5a0">The rows Download .xlsx writes — one</text>
+    <text x="649" y="306" font-size="11.5" fill="#a8a5a0">function, zipped into the file.</text>
     <rect x="649" y="322" width="266" height="1" fill="#ffffff" fill-opacity="0.08"/>
 
     <!-- sheet tabs -->
     <rect x="649" y="334" width="266" height="32" rx="9" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.12"/>
     <rect x="652" y="337" width="88" height="26" rx="7" fill="#ffffff" fill-opacity="0.10"/>
-    <text x="660" y="355" font-size="11" font-weight="600" fill="#e8eef9">survey <tspan font-weight="400" fill="#93a1b8">24 rows</tspan></text>
-    <text x="741" y="355" font-size="11" fill="#93a1b8">choices <tspan>46 rows</tspan></text>
-    <text x="831" y="355" font-size="11" fill="#93a1b8">settings <tspan>4 rows</tspan></text>
+    <text x="660" y="355" font-size="11" font-weight="600" fill="#f4f2ef">survey <tspan font-weight="400" fill="#a8a5a0">24 rows</tspan></text>
+    <text x="741" y="355" font-size="11" fill="#a8a5a0">choices <tspan>46 rows</tspan></text>
+    <text x="831" y="355" font-size="11" fill="#a8a5a0">settings <tspan>4 rows</tspan></text>
 
     <!-- the survey sheet, as the file holds it -->
     <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
-      <text x="653" y="384" font-size="11" font-weight="700" letter-spacing="1" fill="#6b7c95">TYPE</text>
-      <text x="749" y="384" font-size="11" font-weight="700" letter-spacing="1" fill="#6b7c95">NAME</text>
-      <text x="821" y="384" font-size="11" font-weight="700" letter-spacing="1" fill="#6b7c95">LABEL</text>
-      <text x="901" y="384" font-size="11" font-weight="700" letter-spacing="1" fill="#6b7c95">REQ</text>
+      <text x="653" y="384" font-size="11" font-weight="700" letter-spacing="1" fill="#9ca3af">TYPE</text>
+      <text x="749" y="384" font-size="11" font-weight="700" letter-spacing="1" fill="#9ca3af">NAME</text>
+      <text x="821" y="384" font-size="11" font-weight="700" letter-spacing="1" fill="#9ca3af">LABEL</text>
+      <text x="901" y="384" font-size="11" font-weight="700" letter-spacing="1" fill="#9ca3af">REQ</text>
     </g>
     <rect x="649" y="392" width="266" height="1" fill="#ffffff" fill-opacity="0.08"/>
     <g font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
       <rect x="649" y="392" width="266" height="28" rx="6" fill="#ffffff" fill-opacity="0.02"/>
-      <text x="653" y="411" fill="#7dd3fc">begin_group</text>
-      <text x="749" y="411" fill="#b6c4d8">admin</text>
-      <text x="821" y="411" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e8eef9">Administration</text>
-      <text x="901" y="411" fill="#6b7c95">—</text>
-      <text x="653" y="436" fill="#7dd3fc">select_one</text>
-      <text x="653" y="452" fill="#7dd3fc">schools</text>
-      <text x="749" y="436" fill="#b6c4d8">school_type</text>
-      <text x="821" y="436" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e8eef9">School type</text>
-      <text x="901" y="436" fill="#6ee7b7">yes</text>
+      <text x="653" y="411" fill="#fdba74">begin_group</text>
+      <text x="749" y="411" fill="#d2d0cc">admin</text>
+      <text x="821" y="411" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#f4f2ef">Administration</text>
+      <text x="901" y="411" fill="#9ca3af">—</text>
+      <text x="653" y="436" fill="#fdba74">select_one</text>
+      <text x="653" y="452" fill="#fdba74">schools</text>
+      <text x="749" y="436" fill="#d2d0cc">school_type</text>
+      <text x="821" y="436" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#f4f2ef">School type</text>
+      <text x="901" y="436" fill="#bbf7d0">yes</text>
       <rect x="649" y="456" width="266" height="28" rx="6" fill="#ffffff" fill-opacity="0.02"/>
-      <text x="653" y="475" fill="#7dd3fc">text</text>
-      <text x="749" y="475" fill="#b6c4d8">school_name</text>
-      <text x="821" y="475" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e8eef9">School name</text>
-      <text x="901" y="475" fill="#6ee7b7">yes</text>
-      <text x="653" y="500" fill="#7dd3fc">integer</text>
-      <text x="749" y="500" fill="#b6c4d8">teacher_</text>
-      <text x="749" y="516" fill="#b6c4d8">quality</text>
-      <text x="821" y="500" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e8eef9">Teacher</text>
-      <text x="821" y="516" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e8eef9">quality</text>
-      <text x="901" y="500" fill="#6ee7b7">yes</text>
+      <text x="653" y="475" fill="#fdba74">text</text>
+      <text x="749" y="475" fill="#d2d0cc">school_name</text>
+      <text x="821" y="475" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#f4f2ef">School name</text>
+      <text x="901" y="475" fill="#bbf7d0">yes</text>
+      <text x="653" y="500" fill="#fdba74">integer</text>
+      <text x="749" y="500" fill="#d2d0cc">teacher_</text>
+      <text x="749" y="516" fill="#d2d0cc">quality</text>
+      <text x="821" y="500" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#f4f2ef">Teacher</text>
+      <text x="821" y="516" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#f4f2ef">quality</text>
+      <text x="901" y="500" fill="#bbf7d0">yes</text>
       <rect x="649" y="520" width="266" height="36" rx="6" fill="#ffffff" fill-opacity="0.02"/>
-      <text x="653" y="536" fill="#7dd3fc">calculate</text>
-      <text x="749" y="536" fill="#b6c4d8">score</text>
-      <text x="821" y="536" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e8eef9">Composite</text>
-      <text x="821" y="552" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#e8eef9">score</text>
-      <text x="901" y="536" fill="#6b7c95">—</text>
-      <text x="653" y="575" fill="#7dd3fc">end_group</text>
-      <text x="749" y="575" fill="#6b7c95">—</text>
+      <text x="653" y="536" fill="#fdba74">calculate</text>
+      <text x="749" y="536" fill="#d2d0cc">score</text>
+      <text x="821" y="536" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#f4f2ef">Composite</text>
+      <text x="821" y="552" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#f4f2ef">score</text>
+      <text x="901" y="536" fill="#9ca3af">—</text>
+      <text x="653" y="575" fill="#fdba74">end_group</text>
+      <text x="749" y="575" fill="#9ca3af">—</text>
     </g>
     <rect x="649" y="584" width="266" height="1" fill="#ffffff" fill-opacity="0.08"/>
-    <text x="653" y="606" font-size="11" fill="#6b7c95">18 columns in the file · the panel scrolls</text>
+    <text x="653" y="606" font-size="11" fill="#9ca3af">18 columns in the file · the panel scrolls</text>
 
     <!-- what the adapter had to say -->
     <rect x="649" y="620" width="266" height="120" rx="10" fill="#ffffff" fill-opacity="0.03" stroke="#ffffff" stroke-opacity="0.10"/>
-    <text x="663" y="642" font-size="11" font-weight="700" letter-spacing="1" fill="#6b7c95">ADAPTER NOTES</text>
-    <text x="663" y="664" font-size="11" fill="#a9b8cd">normalised · inline choices for</text>
-    <text x="663" y="680" font-size="11" fill="#a9b8cd">"school_grade" written to the choices</text>
-    <text x="663" y="696" font-size="11" fill="#a9b8cd">sheet as "school_grade_choices"</text>
-    <text x="663" y="720" font-size="11" fill="#6b7c95">preserved · 2 column(s) re-emitted:</text>
-    <text x="663" y="734" font-size="11" fill="#6b7c95">guidance_hint, parameters</text>
+    <text x="663" y="642" font-size="11" font-weight="700" letter-spacing="1" fill="#9ca3af">ADAPTER NOTES</text>
+    <text x="663" y="664" font-size="11" fill="#bdbab5">normalised · inline choices for</text>
+    <text x="663" y="680" font-size="11" fill="#bdbab5">"school_grade" written to the choices</text>
+    <text x="663" y="696" font-size="11" fill="#bdbab5">sheet as "school_grade_choices"</text>
+    <text x="663" y="720" font-size="11" fill="#9ca3af">preserved · 2 column(s) re-emitted:</text>
+    <text x="663" y="734" font-size="11" fill="#9ca3af">guidance_hint, parameters</text>
 
     <!-- ================================================= panel 3 · the form -->
-    <rect x="955" y="200" width="298" height="554" rx="16" fill="#0a0e18" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.12" filter="url(#cshadow)"/>
+    <rect x="955" y="200" width="298" height="554" rx="16" fill="#14161b" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.12" filter="url(#cshadow)"/>
     <path d="M955 216 a16 16 0 0 1 16 -16 h266 a16 16 0 0 1 16 16 v62 h-298 z" fill="url(#csheen)"/>
-    <circle cx="977" cy="232" r="3.5" fill="#34d399"/>
-    <text x="989" y="236" font-size="11" font-weight="700" letter-spacing="1.2" fill="#6b7c95">3 · PREVIEW</text>
-    <text x="971" y="266" font-size="18" font-weight="700" fill="#e8eef9">What the respondent opens</text>
-    <text x="971" y="290" font-size="11.5" fill="#93a1b8">The same component and the same engine</text>
-    <text x="971" y="306" font-size="11.5" fill="#93a1b8">as the collection page, evaluated live.</text>
+    <circle cx="977" cy="232" r="3.5" fill="#86efac"/>
+    <text x="989" y="236" font-size="11" font-weight="700" letter-spacing="1.2" fill="#9ca3af">3 · PREVIEW</text>
+    <text x="971" y="266" font-size="18" font-weight="700" fill="#f4f2ef">What the respondent opens</text>
+    <text x="971" y="290" font-size="11.5" fill="#a8a5a0">The same component and the same engine</text>
+    <text x="971" y="306" font-size="11.5" fill="#a8a5a0">as the collection page, evaluated live.</text>
     <rect x="971" y="322" width="266" height="1" fill="#ffffff" fill-opacity="0.08"/>
     <rect x="971" y="334" width="64" height="22" rx="11" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
-    <text x="983" y="349" font-size="11" fill="#b6c4d8">preview</text>
-    <text x="1045" y="349" font-size="11" fill="#6b7c95">Nothing here is sent or stored.</text>
+    <text x="983" y="349" font-size="11" fill="#d2d0cc">preview</text>
+    <text x="1045" y="349" font-size="11" fill="#9ca3af">Nothing here is sent or stored.</text>
 
     <!-- the respondent's own markup, in a frame -->
-    <rect x="971" y="370" width="266" height="372" rx="12" fill="#05070d" stroke="#ffffff" stroke-opacity="0.12" filter="url(#csoft)"/>
-    <text x="987" y="398" font-size="11" font-weight="700" letter-spacing="1.4" fill="#6b7c95">SURVEY</text>
+    <rect x="971" y="370" width="266" height="372" rx="12" fill="#0d0f13" stroke="#ffffff" stroke-opacity="0.12" filter="url(#csoft)"/>
+    <text x="987" y="398" font-size="11" font-weight="700" letter-spacing="1.4" fill="#9ca3af">SURVEY</text>
     <rect x="1157" y="384" width="66" height="20" rx="10" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14"/>
-    <text x="1167" y="398" font-size="11" fill="#b6c4d8">preview</text>
-    <text x="987" y="424" font-size="17" font-weight="700" fill="#e8eef9">School Ranking 2026</text>
-    <text x="987" y="442" font-size="11" fill="#93a1b8">The form as it opens from a link.</text>
+    <text x="1167" y="398" font-size="11" fill="#d2d0cc">preview</text>
+    <text x="987" y="424" font-size="17" font-weight="700" fill="#f4f2ef">School Ranking 2026</text>
+    <text x="987" y="442" font-size="11" fill="#a8a5a0">The form as it opens from a link.</text>
     <rect x="987" y="456" width="236" height="1" fill="#ffffff" fill-opacity="0.08"/>
 
-    <text x="987" y="482" font-size="13" font-weight="700" fill="#e8eef9">Administration</text>
+    <text x="987" y="482" font-size="13" font-weight="700" fill="#f4f2ef">Administration</text>
 
-    <text x="987" y="506" font-size="11.5" font-weight="600" fill="#e8eef9">School name<tspan fill="#ff6b70"> *</tspan></text>
+    <text x="987" y="506" font-size="11.5" font-weight="600" fill="#f4f2ef">School name<tspan fill="#f87171"> *</tspan></text>
     <rect x="987" y="516" width="236" height="30" rx="8" fill="#ffffff" fill-opacity="0.04" stroke="#ffffff" stroke-opacity="0.22"/>
-    <text x="997" y="536" font-size="11.5" fill="#e8eef9">Govt High School</text>
+    <text x="997" y="536" font-size="11.5" fill="#f4f2ef">Govt High School</text>
 
-    <text x="987" y="568" font-size="11.5" font-weight="600" fill="#e8eef9">School type</text>
+    <text x="987" y="568" font-size="11.5" font-weight="600" fill="#f4f2ef">School type</text>
     <rect x="987" y="578" width="236" height="30" rx="8" fill="#ffffff" fill-opacity="0.04" stroke="#ffffff" stroke-opacity="0.22"/>
-    <text x="997" y="598" font-size="11.5" fill="#93a1b8">- choose -</text>
-    <path d="M1203 591 l5 6 l5 -6" fill="none" stroke="#93a1b8" stroke-width="1.4" stroke-linecap="round"/>
+    <text x="997" y="598" font-size="11.5" fill="#a8a5a0">- choose -</text>
+    <path d="M1203 591 l5 6 l5 -6" fill="none" stroke="#a8a5a0" stroke-width="1.4" stroke-linecap="round"/>
 
-    <text x="987" y="630" font-size="11.5" font-weight="600" fill="#e8eef9">Teacher quality (1-5)</text>
+    <text x="987" y="630" font-size="11.5" font-weight="600" fill="#f4f2ef">Teacher quality (1-5)</text>
     <rect x="987" y="640" width="236" height="30" rx="8" fill="#ffffff" fill-opacity="0.04" stroke="#ffffff" stroke-opacity="0.22"/>
-    <text x="997" y="660" font-size="11.5" fill="#e8eef9">3</text>
+    <text x="997" y="660" font-size="11.5" fill="#f4f2ef">3</text>
 
     <rect x="987" y="682" width="236" height="30" rx="9" fill="#ffffff" fill-opacity="0.05" stroke="#ffffff" stroke-opacity="0.14" opacity="0.55"/>
-    <text x="1003" y="702" font-size="11.5" font-weight="600" fill="#dbe6f5" opacity="0.55">Submit</text>
-    <text x="1053" y="702" font-size="11" fill="#6b7c95">disabled in the preview</text>
+    <text x="1003" y="702" font-size="11.5" font-weight="600" fill="#ebe7e2" opacity="0.55">Submit</text>
+    <text x="1053" y="702" font-size="11" fill="#9ca3af">disabled in the preview</text>
   </g>
 </svg>

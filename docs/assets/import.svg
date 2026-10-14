@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1020 580" width="1020" height="580" role="img" aria-label="Importing an XLSForm workbook: the workbook is compiled into a draft, everything it could not carry is reported, and a published version is never touched">
   <defs>
     <linearGradient id="ibg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#06080f"/><stop offset="1" stop-color="#0c1322"/>
+      <stop offset="0" stop-color="#101216"/><stop offset="1" stop-color="#1f242b"/>
     </linearGradient>
     <radialGradient id="iglow" cx="0.15" cy="0.08" r="0.75">
-      <stop offset="0" stop-color="#34d399" stop-opacity="0.18"/><stop offset="1" stop-color="#34d399" stop-opacity="0"/>
+      <stop offset="0" stop-color="#86efac" stop-opacity="0.18"/><stop offset="1" stop-color="#86efac" stop-opacity="0"/>
     </radialGradient>
   </defs>
   <rect width="1020" height="580" rx="22" fill="url(#ibg)"/>
@@ -12,28 +12,28 @@
   <rect x="0.75" y="0.75" width="1018.5" height="578.5" rx="21.5" fill="none" stroke="#ffffff" stroke-opacity="0.10"/>
   <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
 
-    <text x="48" y="66" font-size="22" font-weight="700" fill="#eef4fd">Import a workbook</text>
-    <text x="48" y="92" font-size="13" fill="#8394ad">XLSForm is a first-class adapter, not the model. The compiler reports what it could not carry.</text>
+    <text x="48" y="66" font-size="22" font-weight="700" fill="#faf8f6">Import a workbook</text>
+    <text x="48" y="92" font-size="13" fill="#8f8c88">XLSForm is a first-class adapter, not the model. The compiler reports what it could not carry.</text>
 
-    <rect x="48" y="122" width="470" height="150" rx="16" fill="#ffffff" fill-opacity="0.03" stroke="#34d399" stroke-opacity="0.35" stroke-dasharray="6 6"/>
-    <text x="78" y="176" font-size="14" font-weight="600" fill="#dbe6f5">school-ranking-2026.xlsx</text>
-    <text x="78" y="200" font-size="12.5" fill="#6b7c95">18 KB · sheets: survey, choices, settings</text>
-    <rect x="78" y="220" width="150" height="34" rx="10" fill="#34d399" fill-opacity="0.14" stroke="#34d399" stroke-opacity="0.4"/>
-    <text x="100" y="242" font-size="12.5" font-weight="600" fill="#6ee7b7">Compile to draft</text>
+    <rect x="48" y="122" width="470" height="150" rx="16" fill="#ffffff" fill-opacity="0.03" stroke="#86efac" stroke-opacity="0.35" stroke-dasharray="6 6"/>
+    <text x="78" y="176" font-size="14" font-weight="600" fill="#ebe7e2">school-ranking-2026.xlsx</text>
+    <text x="78" y="200" font-size="12.5" fill="#9ca3af">18 KB · sheets: survey, choices, settings</text>
+    <rect x="78" y="220" width="150" height="34" rx="10" fill="#86efac" fill-opacity="0.14" stroke="#86efac" stroke-opacity="0.4"/>
+    <text x="100" y="242" font-size="12.5" font-weight="600" fill="#bbf7d0">Compile to draft</text>
 
-    <text x="48" y="316" font-size="12" font-weight="700" letter-spacing="1.2" fill="#6b7c95">WHAT THE IMPORTER REPORTS</text>
+    <text x="48" y="316" font-size="12" font-weight="700" letter-spacing="1.2" fill="#9ca3af">WHAT THE IMPORTER REPORTS</text>
     <g>
       <rect x="48" y="332" width="470" height="42" rx="12" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.10"/>
-      <circle cx="70" cy="353" r="5" fill="#34d399"/>
-      <text x="88" y="358" font-size="12.5" fill="#c3d0e2">13 questions, 3 groups, 2 choice lists compiled</text>
+      <circle cx="70" cy="353" r="5" fill="#86efac"/>
+      <text x="88" y="358" font-size="12.5" fill="#d8d4ce">13 questions, 3 groups, 2 choice lists compiled</text>
 
       <rect x="48" y="382" width="470" height="42" rx="12" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.10"/>
-      <circle cx="70" cy="403" r="5" fill="#38bdf8"/>
-      <text x="88" y="408" font-size="12.5" fill="#c3d0e2">4 rules compiled: relevance, constraint, calculation, filter</text>
+      <circle cx="70" cy="403" r="5" fill="#ea580c"/>
+      <text x="88" y="408" font-size="12.5" fill="#d8d4ce">4 rules compiled: relevance, constraint, calculation, filter</text>
 
       <rect x="48" y="432" width="470" height="42" rx="12" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.10"/>
-      <circle cx="70" cy="453" r="5" fill="#a78bfa"/>
-      <text x="88" y="458" font-size="12.5" fill="#c3d0e2">3 platform-only columns preserved verbatim for export</text>
+      <circle cx="70" cy="453" r="5" fill="#fdba74"/>
+      <text x="88" y="458" font-size="12.5" fill="#d8d4ce">3 platform-only columns preserved verbatim for export</text>
 
       <rect x="48" y="482" width="470" height="42" rx="12" fill="#fbbf24" fill-opacity="0.08" stroke="#fbbf24" stroke-opacity="0.30"/>
       <circle cx="70" cy="503" r="5" fill="#fbbf24"/>
@@ -42,19 +42,19 @@
 
     <!-- right column -->
     <rect x="552" y="122" width="420" height="214" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.10"/>
-    <text x="576" y="156" font-size="12" font-weight="700" letter-spacing="1.2" fill="#6b7c95">ROUND-TRIP GUARANTEE</text>
-    <text x="576" y="188" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#7dd3fc">import(export(import(x))) ≡ import(x)</text>
-    <text x="576" y="220" font-size="12.5" fill="#a9b8cd">The round trip is a fixpoint and it is a test, not a promise.</text>
-    <text x="576" y="244" font-size="12.5" fill="#a9b8cd">Anything the canonical model cannot represent is re-emitted</text>
-    <text x="576" y="264" font-size="12.5" fill="#a9b8cd">on the way out instead of being quietly dropped.</text>
-    <text x="576" y="300" font-size="12.5" fill="#6ee7b7">Verified by packages/engine/test/xlsform.test.ts</text>
+    <text x="576" y="156" font-size="12" font-weight="700" letter-spacing="1.2" fill="#9ca3af">ROUND-TRIP GUARANTEE</text>
+    <text x="576" y="188" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="13" fill="#fdba74">import(export(import(x))) ≡ import(x)</text>
+    <text x="576" y="220" font-size="12.5" fill="#bdbab5">The round trip is a fixpoint and it is a test, not a promise.</text>
+    <text x="576" y="244" font-size="12.5" fill="#bdbab5">Anything the canonical model cannot represent is re-emitted</text>
+    <text x="576" y="264" font-size="12.5" fill="#bdbab5">on the way out instead of being quietly dropped.</text>
+    <text x="576" y="300" font-size="12.5" fill="#bbf7d0">Verified by packages/engine/test/xlsform.test.ts</text>
 
     <rect x="552" y="356" width="420" height="168" rx="16" fill="#ffffff" fill-opacity="0.035" stroke="#ffffff" stroke-opacity="0.10"/>
-    <text x="576" y="390" font-size="12" font-weight="700" letter-spacing="1.2" fill="#6b7c95">WHERE IT LANDS</text>
-    <text x="576" y="422" font-size="13" fill="#dbe6f5">A published version is never rewritten.</text>
-    <text x="576" y="448" font-size="12.5" fill="#a9b8cd">Importing into a published form creates a new draft, and</text>
-    <text x="576" y="468" font-size="12.5" fill="#a9b8cd">the console selects the version that was actually written —</text>
-    <text x="576" y="488" font-size="12.5" fill="#a9b8cd">so a successful import never looks like nothing happened.</text>
-    <text x="576" y="514" font-size="12" fill="#6ee7b7">The published version and its responses stay intact.</text>
+    <text x="576" y="390" font-size="12" font-weight="700" letter-spacing="1.2" fill="#9ca3af">WHERE IT LANDS</text>
+    <text x="576" y="422" font-size="13" fill="#ebe7e2">A published version is never rewritten.</text>
+    <text x="576" y="448" font-size="12.5" fill="#bdbab5">Importing into a published form creates a new draft, and</text>
+    <text x="576" y="468" font-size="12.5" fill="#bdbab5">the console selects the version that was actually written —</text>
+    <text x="576" y="488" font-size="12.5" fill="#bdbab5">so a successful import never looks like nothing happened.</text>
+    <text x="576" y="514" font-size="12" fill="#bbf7d0">The published version and its responses stay intact.</text>
   </g>
 </svg>

@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 30" width="1600" height="30" role="presentation">
   <defs>
     <linearGradient id="r" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#38bdf8" stop-opacity="0"/>
-      <stop offset="0.2" stop-color="#38bdf8" stop-opacity="0.55"/>
-      <stop offset="0.5" stop-color="#a78bfa" stop-opacity="0.85"/>
-      <stop offset="0.8" stop-color="#38bdf8" stop-opacity="0.55"/>
-      <stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+      <stop offset="0" stop-color="#ea580c" stop-opacity="0"/>
+      <stop offset="0.2" stop-color="#ea580c" stop-opacity="0.55"/>
+      <stop offset="0.5" stop-color="#fdba74" stop-opacity="0.85"/>
+      <stop offset="0.8" stop-color="#ea580c" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ea580c" stop-opacity="0"/>
     </linearGradient>
   </defs>
   <rect x="0" y="14" width="1600" height="1.5" fill="url(#r)"/>
-  <circle cx="800" cy="14.75" r="4" fill="#a78bfa" fill-opacity="0.9"/>
-  <circle cx="800" cy="14.75" r="8.5" fill="none" stroke="#a78bfa" stroke-opacity="0.35"/>
+  <circle cx="800" cy="14.75" r="4" fill="#fdba74" fill-opacity="0.9"/>
+  <circle cx="800" cy="14.75" r="8.5" fill="none" stroke="#fdba74" stroke-opacity="0.35"/>
 </svg>

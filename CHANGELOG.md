@@ -11,6 +11,20 @@ what changed and why.
 
 ### Added
 
+- **The app icons are generated from the palette, and every committed colour is checked.** A stylesheet is
+  edited; a PNG is not, which is why the tab icon and the home-screen icon were the last things still
+  wearing the palette before this one — measured at **92 % blue-dominant pixels** against a product that had
+  been orange for two palette changes. `scripts/make-icons.mjs` (`pnpm icons`) now draws them: the same
+  rounded tile with three bars the product's own header draws, in `--surface`, `--on-primary`'s white and
+  `--primary`, supersampled at 4× per axis and encoded with `node:zlib`, so the output is byte-stable on any
+  machine and needs no image library. `apps/web/test/brand-assets.test.ts` then reads what is committed: the
+  three PNGs are **decoded pixel by pixel** and held to the palette's own ground, required to carry the
+  primary, required to contain **zero** blue-dominant pixels and required to contain none of the three
+  colours the previous icon was drawn from; the README's nine drawings are held to the same palette by value
+  and to no saturated blue-violet accent; and every badge colour on the repository page is checked, with
+  every label ground required to be the one surface tone. The check was verified by breaking it — a single
+  `#38bdf8` put back into a drawing fails the suite with the file and the colour named, which is the only
+  evidence that a guard is a guard.
 - **The four emails are a designed surface, not a template with a heading on it.** The sign-in code, the
   welcome a new member gets when an invitation is redeemed, the notice that a sign-in finished and the
   submission receipt are now one card, built by `apps/api/src/mail/templates.ts`: a table layout that holds
@@ -276,6 +290,22 @@ what changed and why.
 
 ### Changed
 
+- **The drawings and the badges caught up with the product, and the numbers stopped disagreeing.** Nine of
+  the ten SVGs the README shows were still rendered in the previous palette — navy grounds, a light blue
+  accent, a violet second hue and cool blue-grey type — because changing a stylesheet does not change a
+  drawing, so the documentation went on showing a product that no longer existed. They are rewritten **by
+  role** rather than by find-and-replace: the grounds keep their order from darkest to raised panel, the two
+  accents stay two colours (the primary orange and the peach, the same pairing the interface uses for a fill
+  and for type on the dark material), the muted type moves to the product's own muted-on-surface value, and
+  the status colours move to the tokens the interface paints. Verified by rasterising every one of them in
+  Chromium and reading the pixels back: **zero** saturated blue-violet pixels across all nine, against 2.4 %
+  to 17.1 % before. The repository page's own badges move with them — the light blue and the violet become
+  the deep end of the brand's warm ramp, which is what carries white text at 4.5:1, and every badge's label
+  ground becomes `#191c21`; the Node, pnpm, TypeScript, React, Fastify and PostgreSQL badges keep their
+  vendors' colours, because repainting those would be a claim about somebody else's brand. The counts were
+  stale in the same pass and in three different ways: the suite said 332 in one document and 333 in another
+  (345 now), and the contrast suite was described as **31** pairs in two places and **25** in a third when
+  it measures **26**.
 - **One palette and two materials, everywhere in the product, not only on the marketing page.** The
   workspace was the last surface still built in the theme the brand replaced: near-black ground, pearl type,
   one blue, one violet and a cyan reserved for "live". A person who clicked through from an orange page on
@@ -377,6 +407,25 @@ what changed and why.
 
 ### Fixed
 
+- **The deployment's database is a different database, and the migration gap is a configuration gap.** The
+  published summary reports nine migrations while this workspace's production connection has ten, and the two
+  are not the same Postgres endpoint: `18.6 (c021049)` against `18.6 (653b019)`, two different compute start
+  times, and `api_key`, `webhook`, `webhook_delivery`, `response_flag` and their four functions present on
+  one side and absent on the other. So `0010` **is** applied — to the database the workspace's own API,
+  console and harnesses run against, where a session-minted walk of every view at five viewports now passes,
+  including the Quality and Integrations screens that migration is what makes usable. What is behind is the
+  endpoint the deployment dials, and its connection string exists only in the hosting project's environment:
+  a workspace with no credential for it cannot migrate it, and inventing a host would be worse than saying
+  so. Both readings are in the README's deployment section, with the command that closes it — and with the
+  acknowledgement that until it runs, the API-key, webhook and quality-flag surfaces are deployed in that
+  deployment but not usable there.
+- **The API suite could not run in this workspace at all, and ran anyway.** `test/setup.ts` refuses to run
+  when the environment names a database that is not on this machine — a guard that exists so a test run
+  cannot drop a schema one database over from real data, and which is doing its job when `APP_DATABASE_URL`
+  names a deployment. The correct response is not to weaken it but to point the *three* variables at the
+  local cluster for that run, which is what this pass did: 17 files, **150 tests**, green against the
+  sandbox's own PostgreSQL 16.2, including the suites migration `0010` is what makes possible. The same run
+  covered the rest: engine 55, web 140, lint and typecheck clean.
 - **Offline drafts never persisted in a real browser, and the fallback hid it.** Both IndexedDB object
   stores are declared with `keyPath: 'token'`, and `putDraft`/`putCachedForm` also handed the key in as an
   argument. That is a `DataError` the browser raises **synchronously**, before the promise those methods

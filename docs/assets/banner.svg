@@ -1,30 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 420" width="1600" height="420" role="img" aria-label="Inicio — multi-tenant survey and data-collection platform">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#05070d"/>
-      <stop offset="0.55" stop-color="#0b1120"/>
-      <stop offset="1" stop-color="#0a1020"/>
+      <stop offset="0" stop-color="#0d0f13"/>
+      <stop offset="0.55" stop-color="#191c21"/>
+      <stop offset="1" stop-color="#17191e"/>
     </linearGradient>
     <radialGradient id="glow1" cx="0.18" cy="0.12" r="0.75">
-      <stop offset="0" stop-color="#38bdf8" stop-opacity="0.30"/>
-      <stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+      <stop offset="0" stop-color="#ea580c" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#ea580c" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="glow2" cx="0.92" cy="0.9" r="0.7">
-      <stop offset="0" stop-color="#a78bfa" stop-opacity="0.26"/>
-      <stop offset="1" stop-color="#a78bfa" stop-opacity="0"/>
+      <stop offset="0" stop-color="#fdba74" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#fdba74" stop-opacity="0"/>
     </radialGradient>
     <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#38bdf8"/>
-      <stop offset="1" stop-color="#22d3ee"/>
+      <stop offset="0" stop-color="#ea580c"/>
+      <stop offset="1" stop-color="#ea580c"/>
     </linearGradient>
     <linearGradient id="wordmark" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#f8fafc"/>
-      <stop offset="1" stop-color="#bcd2ea"/>
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f5d9c0"/>
     </linearGradient>
     <linearGradient id="edge" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#38bdf8" stop-opacity="0"/>
-      <stop offset="0.5" stop-color="#38bdf8" stop-opacity="0.9"/>
-      <stop offset="1" stop-color="#a78bfa" stop-opacity="0"/>
+      <stop offset="0" stop-color="#ea580c" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#ea580c" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#fdba74" stop-opacity="0"/>
     </linearGradient>
     <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
       <path d="M40 0H0V40" fill="none" stroke="#ffffff" stroke-opacity="0.045"/>
@@ -39,26 +39,26 @@
   <rect x="360" y="0" width="880" height="2" fill="url(#edge)"/>
 
   <!-- mark -->
-  <rect x="96" y="120" width="92" height="92" rx="24" fill="#0f172a" stroke="#ffffff" stroke-opacity="0.12"/>
-  <rect x="122" y="146" width="40" height="9" rx="4.5" fill="#e2e8f0"/>
-  <rect x="122" y="164" width="40" height="9" rx="4.5" fill="#e2e8f0"/>
+  <rect x="96" y="120" width="92" height="92" rx="24" fill="#22262d" stroke="#ffffff" stroke-opacity="0.12"/>
+  <rect x="122" y="146" width="40" height="9" rx="4.5" fill="#e5e3e0"/>
+  <rect x="122" y="164" width="40" height="9" rx="4.5" fill="#e5e3e0"/>
   <rect x="122" y="182" width="24" height="9" rx="4.5" fill="url(#mark)"/>
 
   <text x="216" y="152" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="76" font-weight="700" letter-spacing="-2" fill="url(#wordmark)">Inicio</text>
-  <text x="216" y="192" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="21" fill="#93a1b8">Multi-tenant survey &amp; data-collection platform</text>
+  <text x="216" y="192" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="21" fill="#a8a5a0">Multi-tenant survey &amp; data-collection platform</text>
 
-  <text x="96" y="252" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="600" fill="#dbe6f5">Real logic. Offline collection. Analysis-ready data.</text>
-  <text x="96" y="290" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" fill="#8394ad">Build forms with a real expression engine, collect them anywhere — including with no signal —</text>
-  <text x="96" y="316" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" fill="#8394ad">and export a codebook, value labels and a missing-code table alongside the data.</text>
+  <text x="96" y="252" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="600" fill="#ebe7e2">Real logic. Offline collection. Analysis-ready data.</text>
+  <text x="96" y="290" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" fill="#8f8c88">Build forms with a real expression engine, collect them anywhere — including with no signal —</text>
+  <text x="96" y="316" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" fill="#8f8c88">and export a codebook, value labels and a missing-code table alongside the data.</text>
 
   <!-- chips -->
   <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="600">
-    <rect x="96" y="346" width="210" height="38" rx="19" fill="#38bdf8" fill-opacity="0.12" stroke="#38bdf8" stroke-opacity="0.35"/>
-    <text x="126" y="370" fill="#7dd3fc">Expression engine</text>
-    <rect x="320" y="346" width="196" height="38" rx="19" fill="#34d399" fill-opacity="0.12" stroke="#34d399" stroke-opacity="0.35"/>
-    <text x="350" y="370" fill="#6ee7b7">Offline-first PWA</text>
-    <rect x="530" y="346" width="238" height="38" rx="19" fill="#a78bfa" fill-opacity="0.12" stroke="#a78bfa" stroke-opacity="0.35"/>
-    <text x="560" y="370" fill="#c4b5fd">Row-level security</text>
+    <rect x="96" y="346" width="210" height="38" rx="19" fill="#ea580c" fill-opacity="0.12" stroke="#ea580c" stroke-opacity="0.35"/>
+    <text x="126" y="370" fill="#fdba74">Expression engine</text>
+    <rect x="320" y="346" width="196" height="38" rx="19" fill="#86efac" fill-opacity="0.12" stroke="#86efac" stroke-opacity="0.35"/>
+    <text x="350" y="370" fill="#bbf7d0">Offline-first PWA</text>
+    <rect x="530" y="346" width="238" height="38" rx="19" fill="#fdba74" fill-opacity="0.12" stroke="#fdba74" stroke-opacity="0.35"/>
+    <text x="560" y="370" fill="#fed7aa">Row-level security</text>
     <rect x="782" y="346" width="214" height="38" rx="19" fill="#fbbf24" fill-opacity="0.12" stroke="#fbbf24" stroke-opacity="0.35"/>
     <text x="812" y="370" fill="#fcd34d">XLSForm round-trip</text>
   </g>
@@ -66,21 +66,21 @@
   <!-- glass panel: a rendering of the collection renderer -->
   <g transform="translate(1080 96)">
     <rect width="424" height="228" rx="20" fill="#ffffff" fill-opacity="0.045" stroke="#ffffff" stroke-opacity="0.14"/>
-    <rect x="24" y="24" width="150" height="11" rx="5.5" fill="#e2e8f0" fill-opacity="0.85"/>
-    <rect x="24" y="44" width="90" height="8" rx="4" fill="#8394ad" fill-opacity="0.7"/>
+    <rect x="24" y="24" width="150" height="11" rx="5.5" fill="#e5e3e0" fill-opacity="0.85"/>
+    <rect x="24" y="44" width="90" height="8" rx="4" fill="#8f8c88" fill-opacity="0.7"/>
 
-    <rect x="24" y="72" width="376" height="34" rx="10" fill="#0b1120" stroke="#ffffff" stroke-opacity="0.12"/>
-    <circle cx="44" cy="89" r="7" fill="#34d399" fill-opacity="0.95"/>
+    <rect x="24" y="72" width="376" height="34" rx="10" fill="#191c21" stroke="#ffffff" stroke-opacity="0.12"/>
+    <circle cx="44" cy="89" r="7" fill="#86efac" fill-opacity="0.95"/>
     <rect x="60" y="84" width="96" height="10" rx="5" fill="#cbd5e1" fill-opacity="0.8"/>
 
-    <rect x="24" y="120" width="376" height="34" rx="10" fill="#0b1120" stroke="#ffffff" stroke-opacity="0.12"/>
-    <text x="40" y="142" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" fill="#7dd3fc">. &gt;= 0 and . &lt;= 10</text>
-    <rect x="330" y="128" width="54" height="18" rx="9" fill="#38bdf8" fill-opacity="0.16" stroke="#38bdf8" stroke-opacity="0.4"/>
-    <text x="341" y="141" font-family="ui-sans-serif, -apple-system, sans-serif" font-size="11" font-weight="600" fill="#7dd3fc">valid</text>
+    <rect x="24" y="120" width="376" height="34" rx="10" fill="#191c21" stroke="#ffffff" stroke-opacity="0.12"/>
+    <text x="40" y="142" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" fill="#fdba74">. &gt;= 0 and . &lt;= 10</text>
+    <rect x="330" y="128" width="54" height="18" rx="9" fill="#ea580c" fill-opacity="0.16" stroke="#ea580c" stroke-opacity="0.4"/>
+    <text x="341" y="141" font-family="ui-sans-serif, -apple-system, sans-serif" font-size="11" font-weight="600" fill="#fdba74">valid</text>
 
-    <rect x="24" y="168" width="376" height="36" rx="10" fill="#0b1120" stroke="#ffffff" stroke-opacity="0.12"/>
-    <circle cx="44" cy="186" r="7" fill="#38bdf8"/>
+    <rect x="24" y="168" width="376" height="36" rx="10" fill="#191c21" stroke="#ffffff" stroke-opacity="0.12"/>
+    <circle cx="44" cy="186" r="7" fill="#ea580c"/>
     <rect x="60" y="181" width="70" height="10" rx="5" fill="#cbd5e1" fill-opacity="0.8"/>
-    <text x="150" y="191" font-family="ui-sans-serif, -apple-system, sans-serif" font-size="12" fill="#6ee7b7">saved on this device</text>
+    <text x="150" y="191" font-family="ui-sans-serif, -apple-system, sans-serif" font-size="12" fill="#bbf7d0">saved on this device</text>
   </g>
 </svg>

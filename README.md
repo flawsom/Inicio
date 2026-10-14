@@ -15,39 +15,39 @@ there is no signal** — and exporting data that is ready for analysis rather th
 <br />
 
 <!-- status -->
-[![Version](https://img.shields.io/badge/version-0.1.0-38bdf8?style=flat-square&labelColor=0f172a)](CHANGELOG.md)
-[![License](https://img.shields.io/badge/license-Apache--2.0-34d399?style=flat-square&labelColor=0f172a)](LICENSE)
-[![Build](https://img.shields.io/badge/build-clean-34d399?style=flat-square&labelColor=0f172a)](#-testing)
-[![CI](https://img.shields.io/badge/CI-lint_·_types_·_tests_·_budgets-34d399?style=flat-square&labelColor=0f172a)](#enforced-on-every-push)
-[![Tests](https://img.shields.io/badge/tests-332%20passing-34d399?style=flat-square&labelColor=0f172a)](#-testing)
-[![Typecheck](https://img.shields.io/badge/typecheck-0%20errors-38bdf8?style=flat-square&labelColor=0f172a)](#-testing)
-[![Lint](https://img.shields.io/badge/lint-0%20errors-a78bfa?style=flat-square&labelColor=0f172a)](#-testing)
-[![Production](https://img.shields.io/badge/production-live-22c55e?style=flat-square&labelColor=0f172a&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app/health)
+[![Version](https://img.shields.io/badge/version-0.1.0-c2410c?style=flat-square&labelColor=191c21)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/license-Apache--2.0-15803d?style=flat-square&labelColor=191c21)](LICENSE)
+[![Build](https://img.shields.io/badge/build-clean-15803d?style=flat-square&labelColor=191c21)](#-testing)
+[![CI](https://img.shields.io/badge/CI-lint_·_types_·_tests_·_budgets-15803d?style=flat-square&labelColor=191c21)](#enforced-on-every-push)
+[![Tests](https://img.shields.io/badge/tests-345%20passing-15803d?style=flat-square&labelColor=191c21)](#-testing)
+[![Typecheck](https://img.shields.io/badge/typecheck-0%20errors-c2410c?style=flat-square&labelColor=191c21)](#-testing)
+[![Lint](https://img.shields.io/badge/lint-0%20errors-9a3412?style=flat-square&labelColor=191c21)](#-testing)
+[![Production](https://img.shields.io/badge/production-live-15803d?style=flat-square&labelColor=191c21&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app/health)
 
 <!-- github -->
-[![Stars](https://img.shields.io/github/stars/flawsom/Inicio?style=flat-square&labelColor=0f172a&color=fbbf24&logo=github)](https://github.com/flawsom/Inicio/stargazers)
-[![Forks](https://img.shields.io/github/forks/flawsom/Inicio?style=flat-square&labelColor=0f172a&color=a78bfa&logo=github)](https://github.com/flawsom/Inicio/forks)
-[![Issues](https://img.shields.io/github/issues/flawsom/Inicio?style=flat-square&labelColor=0f172a&color=ef4444&logo=github)](https://github.com/flawsom/Inicio/issues)
-[![Pull requests](https://img.shields.io/github/issues-pr/flawsom/Inicio?style=flat-square&labelColor=0f172a&color=38bdf8&logo=github)](https://github.com/flawsom/Inicio/pulls)
-[![Last commit](https://img.shields.io/github/last-commit/flawsom/Inicio?style=flat-square&labelColor=0f172a&color=94a3b8&logo=github)](https://github.com/flawsom/Inicio/commits/main)
-[![Downloads](https://img.shields.io/github/downloads/flawsom/Inicio/total?style=flat-square&labelColor=0f172a&color=34d399&logo=github)](https://github.com/flawsom/Inicio/releases)
-[![Contributors](https://img.shields.io/github/contributors/flawsom/Inicio?style=flat-square&labelColor=0f172a&color=94a3b8&logo=github)](https://github.com/flawsom/Inicio/graphs/contributors)
+[![Stars](https://img.shields.io/github/stars/flawsom/Inicio?style=flat-square&labelColor=191c21&color=b45309&logo=github)](https://github.com/flawsom/Inicio/stargazers)
+[![Forks](https://img.shields.io/github/forks/flawsom/Inicio?style=flat-square&labelColor=191c21&color=9a3412&logo=github)](https://github.com/flawsom/Inicio/forks)
+[![Issues](https://img.shields.io/github/issues/flawsom/Inicio?style=flat-square&labelColor=191c21&color=b91c1c&logo=github)](https://github.com/flawsom/Inicio/issues)
+[![Pull requests](https://img.shields.io/github/issues-pr/flawsom/Inicio?style=flat-square&labelColor=191c21&color=c2410c&logo=github)](https://github.com/flawsom/Inicio/pulls)
+[![Last commit](https://img.shields.io/github/last-commit/flawsom/Inicio?style=flat-square&labelColor=191c21&color=6b7280&logo=github)](https://github.com/flawsom/Inicio/commits/main)
+[![Downloads](https://img.shields.io/github/downloads/flawsom/Inicio/total?style=flat-square&labelColor=191c21&color=15803d&logo=github)](https://github.com/flawsom/Inicio/releases)
+[![Contributors](https://img.shields.io/github/contributors/flawsom/Inicio?style=flat-square&labelColor=191c21&color=6b7280&logo=github)](https://github.com/flawsom/Inicio/graphs/contributors)
 
 <!-- stack -->
-[![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?style=flat-square&labelColor=0f172a&logo=node.js&logoColor=white)](#-quick-start)
-[![pnpm](https://img.shields.io/badge/pnpm-9.15-f69220?style=flat-square&labelColor=0f172a&logo=pnpm&logoColor=white)](#-quick-start)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178c6?style=flat-square&labelColor=0f172a&logo=typescript&logoColor=white)](#-tech-stack)
-[![React](https://img.shields.io/badge/React-18-61dafb?style=flat-square&labelColor=0f172a&logo=react&logoColor=white)](#-tech-stack)
-[![Fastify](https://img.shields.io/badge/Fastify-5-000000?style=flat-square&labelColor=0f172a&logo=fastify&logoColor=white)](#-tech-stack)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169e1?style=flat-square&labelColor=0f172a&logo=postgresql&logoColor=white)](#-architecture)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522-339933?style=flat-square&labelColor=191c21&logo=node.js&logoColor=white)](#-quick-start)
+[![pnpm](https://img.shields.io/badge/pnpm-9.15-f69220?style=flat-square&labelColor=191c21&logo=pnpm&logoColor=white)](#-quick-start)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178c6?style=flat-square&labelColor=191c21&logo=typescript&logoColor=white)](#-tech-stack)
+[![React](https://img.shields.io/badge/React-18-61dafb?style=flat-square&labelColor=191c21&logo=react&logoColor=white)](#-tech-stack)
+[![Fastify](https://img.shields.io/badge/Fastify-5-000000?style=flat-square&labelColor=191c21&logo=fastify&logoColor=white)](#-tech-stack)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169e1?style=flat-square&labelColor=191c21&logo=postgresql&logoColor=white)](#-architecture)
 
 <br />
 
 <!-- calls to action -->
-[![Live demo](https://img.shields.io/badge/▶_OPEN_THE_LIVE_APP-38bdf8?style=for-the-badge&labelColor=0b1120&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app)
-[![Documentation](https://img.shields.io/badge/📚_DOCUMENTATION-a78bfa?style=for-the-badge&labelColor=0b1120)](docs/)
-[![Installation](https://img.shields.io/badge/⚡_INSTALL_IN_5_MINUTES-34d399?style=for-the-badge&labelColor=0b1120)](#-quick-start)
-[![Repository](https://img.shields.io/badge/⭐_GITHUB_REPOSITORY-0f172a?style=for-the-badge&labelColor=0b1120&logo=github&logoColor=white)](https://github.com/flawsom/Inicio)
+[![Live demo](https://img.shields.io/badge/▶_OPEN_THE_LIVE_APP-c2410c?style=for-the-badge&labelColor=191c21&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app)
+[![Documentation](https://img.shields.io/badge/📚_DOCUMENTATION-9a3412?style=for-the-badge&labelColor=191c21)](docs/)
+[![Installation](https://img.shields.io/badge/⚡_INSTALL_IN_5_MINUTES-15803d?style=for-the-badge&labelColor=191c21)](#-quick-start)
+[![Repository](https://img.shields.io/badge/⭐_GITHUB_REPOSITORY-191c21?style=for-the-badge&labelColor=191c21&logo=github&logoColor=white)](https://github.com/flawsom/Inicio)
 
 </div>
 
@@ -365,13 +365,14 @@ standing, rather than showing the definition they used to have.
 | 🔔 **Webhooks that survive a bad receiver** | Enqueued in the publishing transaction, signed over a timestamp and the body, retried with backoff, and self-disabling with a stated reason after five consecutive failures — plus a **Send test** button that reports what the receiver actually answered. |
 | 🧾 **A quality queue, not a score** | Speeding, straight-lining, duplicates and findings raised by hand, each row showing the evidence behind it and recording who decided what, when and why. |
 | 🌌 **A public surface with nothing invented on it** | Every figure on the landing page is read in that request from `GET /api/v1/public/summary`, and the scene is decoration: it is `aria-hidden`, it stops when the tab is hidden or the stage has scrolled past, and the page is complete with no WebGL at all. |
-| 🎨 **A brand palette with the contrast measured, not hoped for** | One palette, in both stylesheets: an orange primary (`#ea580c`) on a white ground, one near-black surface (`#191c21`) for the stage, the footer and the front door, and a peach accent that appears **only** on that surface, where it is 10:1 rather than the 1.9:1 it would be on white. The primary is two tokens for the same reason — `#ea580c` as a fill, a darker `#c2410c` as type — because the brand value is 3.6:1 as a glyph on white and text needs 4.5:1. All **31 pairs** are computed from the stylesheets in `apps/web/test/contrast.test.ts`, which also holds the two stylesheets to each other's values and asserts that the surface re-binds every colour role. |
+| 🎨 **A brand palette with the contrast measured, not hoped for** | One palette, in both stylesheets: an orange primary (`#ea580c`) on a white ground, one near-black surface (`#191c21`) for the stage, the footer and the front door, and a peach accent that appears **only** on that surface, where it is 10:1 rather than the 1.9:1 it would be on white. The primary is two tokens for the same reason — `#ea580c` as a fill, a darker `#c2410c` as type — because the brand value is 3.6:1 as a glyph on white and text needs 4.5:1. All **26 pairs** are computed from the stylesheets in `apps/web/test/contrast.test.ts`, which also holds the two stylesheets to each other's values and asserts that the surface re-binds every colour role. |
+| 🖼️ **The brand in the things a stylesheet cannot reach** | The palette is not only CSS, and the artifacts that are not CSS are the ones that go stale: the README's drawings were still rendered in the previous navy-and-blue palette, the badges on this page were drawn in it, and the app icons — the one asset seen in every browser tab and on every home screen — were generated once before the palette existed and measured **92 % blue-dominant pixels** two palette changes later. The drawings and badges are now checked by value and the icons by decoding their pixels, in `apps/web/test/brand-assets.test.ts`; the icons are generated from the palette's own values by `pnpm icons` (`scripts/make-icons.mjs`) rather than edited, because a PNG is not something anybody re-reads. |
 | 🪞 **One product, two materials** | Every screen is made of the same two materials, and which one is a fact about the screen rather than about a visitor's operating system: paper is the workspace, the respondent's form and the reading sections of the landing page, and the surface is the first paint, the sign-in sheet, the consent and legal documents, the landing page's stage and the studio's source panel. The dark material is one class (`.surface`) that re-binds the palette for its subtree, so a card, a field or a heading added inside it arrives in the right material without a rule of its own. Over it all sits an ambient light field drawn from the same node-and-filament structure as the landing page's scene, with the same type scale, the same radius language and the same entrance. Every figure on a console screen is live, and the whole shell is complete with no canvas and under `prefers-reduced-motion`. |
 | 🏫 **A real template** | The 2026 school ranking survey — the project this platform grew out of — ships as template #1, not as the product. |
 | 📶 **Honest connection state** | "No connection. Your answers are saved on this device and will be sent automatically", plus a **Send now** button and the timestamp the server has everything up to. |
 | 🐳 **A self-hosted profile** | Compose brings up PostgreSQL 16, Valkey, MinIO, ClamAV and Mailpit, with Caddy in front. |
 | 🧪 **Two live harnesses** | 35 end-to-end consumer checks and 28 offline-sync checks drive a real database through the same origin the browser uses. Each harness prints its own pass/fail line and reports the count it actually ran. |
-| 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 333 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
+| 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 345 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
 | ⚖️ **Budgets, not intentions** | The build fails if the critical path grows past 80 kB gzipped, if any chunk passes 150 kB, if the WebGL scene *or the XLSForm writer* leaks out of its lazy chunk, if a measured colour pair drops under 4.5:1, or if `axe-core` finds a violation on the public page or the consent gate. |
 
 </details>
@@ -380,7 +381,7 @@ standing, rather than showing the definition they used to have.
 
 ## 📸 Screenshots
 
-<div align="center"><sub><b>Captured, not drawn.</b> The images in this first table are photographs of the running product — headless Chromium against <a href="https://inicio-prjct.vercel.app">the live deployment</a> at 1440×1000 (desktop) and 390×844 (phone), with nothing staged: the figures on the page are the ones <code>GET /api/v1/public/summary</code> returned in that request, and the light field is the real WebGL scene. The further screens are vector renderings of the same interface, committed as SVG so they stay sharp at any zoom and cost a few kilobytes; they exist because the documentation pipeline has no signed-in session to photograph, not because the screens are imagined.<br /><br />They are taken by <code>scripts/screenshots.mjs</code>, which asserts four things a picture cannot show — the page read its figures from the API in that request, the WebGL scene drew a frame, the call to action reaches <code>/login</code> on desktop and on a phone, and nothing 4xx'd except the signed-out <code>401</code> — and then writes both the images and <code>docs/assets/screenshots/capture-report.json</code>. That check is what found the missing tab icon: a browser's own request for <code>/favicon.ico</code> never appears as a page response.</sub></div>
+<div align="center"><sub><b>Captured, not drawn.</b> The images in this first table are photographs of the running product — headless Chromium against <a href="https://inicio-prjct.vercel.app">the live deployment</a> at 1440×1000 (desktop) and 390×844 (phone), with nothing staged: the figures on the page are the ones <code>GET /api/v1/public/summary</code> returned in that request, and the light field is the real WebGL scene. The further screens are vector renderings of the same interface, committed as SVG so they stay sharp at any zoom and cost a few kilobytes; they exist because the documentation pipeline has no signed-in session to photograph, not because the screens are imagined. Every one of them is drawn in the product's own palette, and that is asserted rather than assumed: `apps/web/test/brand-assets.test.ts` reads the drawings and fails on a colour from the palette this replaced — which is how nine of them were found still painted in the previous navy and blue, long after the stylesheets had changed.<br /><br />They are taken by <code>scripts/screenshots.mjs</code>, which asserts four things a picture cannot show — the page read its figures from the API in that request, the WebGL scene drew a frame, the call to action reaches <code>/login</code> on desktop and on a phone, and nothing 4xx'd except the signed-out <code>401</code> — and then writes both the images and <code>docs/assets/screenshots/capture-report.json</code>. That check is what found the missing tab icon: a browser's own request for <code>/favicon.ico</code> never appears as a page response.</sub></div>
 
 <br />
 
@@ -532,8 +533,8 @@ instead of rewriting the version that is already collecting.
 
 <div align="center">
 
-[![Open the live deployment](https://img.shields.io/badge/▶_TRY_IT_LIVE-inicio--prjct.vercel.app-38bdf8?style=for-the-badge&labelColor=0b1120&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app)
-[![Health check](https://img.shields.io/badge/🩺_/health-JSON_read_with_a_real_db_time-34d399?style=for-the-badge&labelColor=0b1120)](https://inicio-prjct.vercel.app/health)
+[![Open the live deployment](https://img.shields.io/badge/▶_TRY_IT_LIVE-inicio--prjct.vercel.app-c2410c?style=for-the-badge&labelColor=191c21&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app)
+[![Health check](https://img.shields.io/badge/🩺_/health-JSON_read_with_a_real_db_time-15803d?style=for-the-badge&labelColor=191c21)](https://inicio-prjct.vercel.app/health)
 
 </div>
 
@@ -722,20 +723,20 @@ Three consequences worth stating plainly:
 
 **🎨 Frontend**
 <br />
-![React](https://img.shields.io/badge/React_18-61dafb?style=flat-square&labelColor=0f172a&logo=react&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite_6-646cff?style=flat-square&labelColor=0f172a&logo=vite&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript_5.6-3178c6?style=flat-square&labelColor=0f172a&logo=typescript&logoColor=white)
-![Service worker](https://img.shields.io/badge/PWA_service_worker-a78bfa?style=flat-square&labelColor=0f172a)
-![IndexedDB](https://img.shields.io/badge/IndexedDB_offline_store-38bdf8?style=flat-square&labelColor=0f172a)
+![React](https://img.shields.io/badge/React_18-61dafb?style=flat-square&labelColor=191c21&logo=react&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite_6-646cff?style=flat-square&labelColor=191c21&logo=vite&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript_5.6-3178c6?style=flat-square&labelColor=191c21&logo=typescript&logoColor=white)
+![Service worker](https://img.shields.io/badge/PWA_service_worker-9a3412?style=flat-square&labelColor=191c21)
+![IndexedDB](https://img.shields.io/badge/IndexedDB_offline_store-c2410c?style=flat-square&labelColor=191c21)
 <br /><sub>No UI framework and no data-fetching library: one `fetch` wrapper, hand-written CSS with custom properties, and a service worker that refuses to cache API responses.</sub>
 
 **⚙️ Backend**
 <br />
-![Fastify](https://img.shields.io/badge/Fastify_5-000000?style=flat-square&labelColor=0f172a&logo=fastify&logoColor=white)
-![Node](https://img.shields.io/badge/Node_22-339933?style=flat-square&labelColor=0f172a&logo=node.js&logoColor=white)
-![Zod](https://img.shields.io/badge/Zod_3-3e67b1?style=flat-square&labelColor=0f172a&logo=zod&logoColor=white)
-![nodemailer](https://img.shields.io/badge/nodemailer-22b573?style=flat-square&labelColor=0f172a)
-![argon2id](https://img.shields.io/badge/argon2id_hash--wasm-94a3b8?style=flat-square&labelColor=0f172a)
+![Fastify](https://img.shields.io/badge/Fastify_5-000000?style=flat-square&labelColor=191c21&logo=fastify&logoColor=white)
+![Node](https://img.shields.io/badge/Node_22-339933?style=flat-square&labelColor=191c21&logo=node.js&logoColor=white)
+![Zod](https://img.shields.io/badge/Zod_3-3e67b1?style=flat-square&labelColor=191c21&logo=zod&logoColor=white)
+![nodemailer](https://img.shields.io/badge/nodemailer-22b573?style=flat-square&labelColor=191c21)
+![argon2id](https://img.shields.io/badge/argon2id_hash--wasm-6b7280?style=flat-square&labelColor=191c21)
 <br /><sub>TypeScript ESM throughout. WASM hashing rather than a native addon, so the same build runs on any serverless runtime without a compiler.</sub>
 
 </td>
@@ -743,32 +744,32 @@ Three consequences worth stating plainly:
 
 **🗄️ Database**
 <br />
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL_16-4169e1?style=flat-square&labelColor=0f172a&logo=postgresql&logoColor=white)
-![Row level security](https://img.shields.io/badge/row_level_security-enforced-34d399?style=flat-square&labelColor=0f172a)
-![Migrations](https://img.shields.io/badge/migrations-0001_to_0010-94a3b8?style=flat-square&labelColor=0f172a)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL_16-4169e1?style=flat-square&labelColor=191c21&logo=postgresql&logoColor=white)
+![Row level security](https://img.shields.io/badge/row_level_security-enforced-15803d?style=flat-square&labelColor=191c21)
+![Migrations](https://img.shields.io/badge/migrations-0001_to_0010-6b7280?style=flat-square&labelColor=191c21)
 <br /><sub>Ten forward-only SQL migrations. No ORM: typed repository functions, parameterised queries, and RLS underneath all of them.</sub>
 
 **☁️ Cloud & delivery**
 <br />
-![Vercel](https://img.shields.io/badge/Vercel-000000?style=flat-square&labelColor=0f172a&logo=vercel&logoColor=white)
-![Neon](https://img.shields.io/badge/Neon_Postgres-00e599?style=flat-square&labelColor=0f172a&logo=neon&logoColor=white)
-![Netlify](https://img.shields.io/badge/Netlify-00c7b7?style=flat-square&labelColor=0f172a&logo=netlify&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker_Compose-2496ed?style=flat-square&labelColor=0f172a&logo=docker&logoColor=white)
-![Caddy](https://img.shields.io/badge/Caddy-1f9c5a?style=flat-square&labelColor=0f172a&logo=caddy&logoColor=white)
+![Vercel](https://img.shields.io/badge/Vercel-000000?style=flat-square&labelColor=191c21&logo=vercel&logoColor=white)
+![Neon](https://img.shields.io/badge/Neon_Postgres-00e599?style=flat-square&labelColor=191c21&logo=neon&logoColor=white)
+![Netlify](https://img.shields.io/badge/Netlify-00c7b7?style=flat-square&labelColor=191c21&logo=netlify&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker_Compose-2496ed?style=flat-square&labelColor=191c21&logo=docker&logoColor=white)
+![Caddy](https://img.shields.io/badge/Caddy-1f9c5a?style=flat-square&labelColor=191c21&logo=caddy&logoColor=white)
 
 **🔌 APIs & services**
 <br />
-![REST](https://img.shields.io/badge/REST_/api%2Fv1-38bdf8?style=flat-square&labelColor=0f172a)
-![OpenAPI](https://img.shields.io/badge/OpenAPI_spec-6ba539?style=flat-square&labelColor=0f172a&logo=openapiinitiative&logoColor=white)
-![XLSForm](https://img.shields.io/badge/XLSForm-217346?style=flat-square&labelColor=0f172a&logo=microsoftexcel&logoColor=white)
-![SMTP](https://img.shields.io/badge/SMTP_and_Resend-34d399?style=flat-square&labelColor=0f172a)
+![REST](https://img.shields.io/badge/REST_/api%2Fv1-c2410c?style=flat-square&labelColor=191c21)
+![OpenAPI](https://img.shields.io/badge/OpenAPI_spec-6ba539?style=flat-square&labelColor=191c21&logo=openapiinitiative&logoColor=white)
+![XLSForm](https://img.shields.io/badge/XLSForm-217346?style=flat-square&labelColor=191c21&logo=microsoftexcel&logoColor=white)
+![SMTP](https://img.shields.io/badge/SMTP_and_Resend-15803d?style=flat-square&labelColor=191c21)
 
 **🧪 Testing & tooling**
 <br />
-![Vitest](https://img.shields.io/badge/Vitest_3-6da13f?style=flat-square&labelColor=0f172a&logo=vitest&logoColor=white)
-![ESLint](https://img.shields.io/badge/ESLint_9_flat-4b32c3?style=flat-square&labelColor=0f172a&logo=eslint&logoColor=white)
-![tsx](https://img.shields.io/badge/tsx-3178c6?style=flat-square&labelColor=0f172a)
-![pnpm](https://img.shields.io/badge/pnpm_workspaces-f69220?style=flat-square&labelColor=0f172a&logo=pnpm&logoColor=white)
+![Vitest](https://img.shields.io/badge/Vitest_3-6da13f?style=flat-square&labelColor=191c21&logo=vitest&logoColor=white)
+![ESLint](https://img.shields.io/badge/ESLint_9_flat-4b32c3?style=flat-square&labelColor=191c21&logo=eslint&logoColor=white)
+![tsx](https://img.shields.io/badge/tsx-3178c6?style=flat-square&labelColor=191c21)
+![pnpm](https://img.shields.io/badge/pnpm_workspaces-f69220?style=flat-square&labelColor=191c21&logo=pnpm&logoColor=white)
 
 </td>
 </tr>
@@ -900,7 +901,7 @@ Open **http://localhost:3000**, request a one-time code, read it in Mailpit, and
 ```bash
 pnpm lint        # ESLint 9, flat config
 pnpm typecheck   # tsc across four workspace packages
-pnpm test        # 332 tests
+pnpm test        # 345 tests
 pnpm coverage     # v8 coverage, per package
 pnpm build       # engine -> api -> web
 pnpm budgets     # the built bundle, gzipped, against its ceilings
@@ -986,7 +987,7 @@ Inicio
 │   │   │   ├── events.ts            the push channel: one server-sent event stream per form
 │   │   │   ├── public.ts            the one unauthenticated route: live facts, no tenant data
 │   │   │   └── guards.ts            authentication and role guards
-│   │   ├── src/db/migrations        0001 -> 0009, forward-only SQL
+│   │   ├── src/db/migrations        0001 -> 0010, forward-only SQL
 │   │   ├── src/auth, src/legal      the Phase 1 school surface, kept working (/auth/*)
 │   │   ├── src/db/pool.ts           role check: refuses a superuser or BYPASSRLS connection
 │   │   ├── src/mail                 SMTP and HTTPS relay abstraction
@@ -1651,19 +1652,20 @@ than pretending the score is 100. What can be verified today is verifiable: the 
 ```bash
 pnpm lint         # ESLint 9, flat config — 0 errors
 pnpm typecheck    # tsc across engine, api, web and the serverless entry
-pnpm test         # 332 tests
+pnpm test         # 345 tests
 pnpm coverage     # v8 coverage, per package
 pnpm build        # engine -> api -> web
 pnpm budgets      # the built bundle, gzipped, against its ceilings
+pnpm icons        # regenerate the app icons from the palette — committed output, not edited
 ```
 
-### What the 332 tests actually cover
+### What the 345 tests actually cover
 
 | Suite | Tests | Focus |
 |---|---:|---|
 | `packages/engine` | **55** | Expression parsing and evaluation, validation, XLSForm round-trip fixpoint, XLSX read/write, dataset and codebook assembly, every export writer, and **the workbook the studio shows**: `xlsFormSheets` asserted row by row against the file `exportXlsForm` zips, so the viewer and the download cannot drift |
 | `apps/api` | **150** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers, and **the push channel over a real socket**: `ready` first, silence while nothing changes, then one coalesced event naming the aggregate that moved, with a 404 and no stream for a form the caller cannot see, plus the public summary: read live, and asserted key by key to carry no tenant data, **and the integration surface**: a key whose secret is shown once and stored as a hash, its scope enforced at the route that declares it and *named* when it is missing, a key refused across organisations even though its creator belongs to both, revocation effective on the very next request, an endpoint that disables itself after five consecutive failures, a delivery signature checked against an independent HMAC in the test, a duplicate scan that refuses to record the same finding twice, and **the read scopes**: a key granted `forms:read` reaches the forms list *narrowed to its own organisation*, is `403 key_org_mismatch` on another organisation's form even though its creator belongs to both, and is told it is missing `responses:export` when it tries to export with only `responses:read`, **and the emails**: the sign-in code is in the body and never in the subject, no template fetches anything (no image, no pixel, no web font, no `url()`), every colour pair it uses is measured at 4.5:1 in both schemes, a hostile organisation name cannot close an attribute or reach the hidden preheader, the text alternative is prose rather than tags with the tags removed, and the header a transport composes is the one the environment named |
-| `apps/web` | **128** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer), **and the cards that arrive after the mount** (the template articles the API renders are handed to the reveal observer instead of keeping the hidden state, which is how three invisible cards reached production) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request), **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure), **31 measured contrast pairs** taken from the stylesheets themselves — both of the workspace's materials, both of the landing page's, the primary-as-type pair, the label on the primary action, and every control boundary — plus the assertions that hold the two stylesheets to one set of brand values and that the surface material re-binds **every** colour role it borrows (the defect that once put near-black headings on a near-black ground) — **`axe-core` audits** of the two public surfaces, **the quality queue** (the evidence behind each finding is on the row, a decision carries the reason typed with it and re-reads the list it just changed, dismissing is asserted to be a different outcome from resolving, and a second scan is reported as finding nothing new rather than as doing nothing) and **the integration screen** (the scope catalogue's `enforced` flag genuinely disables a scope no route declares, a key secret is shown once in a read-only field that carries a panel saying so, an `http://` endpoint cannot be added at all, and "send test" reports the receiver's real `500` rather than "sent"), **raising a finding by hand** from a response row (the raise waits for a reason, and "already in the queue" is asserted to read differently from "recorded"), **the definition studio** (the JSON panel is the server's own definition; its rows move the XLSForm sheets and the preview with no request at all, because all three read one object; the sheets are the workbook the download writes; the preview hides a question whose relevance rule says so, renders the two inline choices, sends nothing and stores nothing when it is typed into, and produces *field-for-field identical markup* to the component the collection page renders), **the shell guard** that keeps the ambient layer and a form field from ever sharing a class name again, and **the public page's own boundaries**: every anchor it renders resolves to this deployment and no source host is named anywhere in it, no em dash or en dash reaches a reader, and the honesty bullets are measured as the brand's dot rather than as a rule that reads like one |
+| `apps/web` | **140** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer), **and the cards that arrive after the mount** (the template articles the API renders are handed to the reveal observer instead of keeping the hidden state, which is how three invisible cards reached production) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request), **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure), **26 measured contrast pairs** taken from the stylesheets themselves — both of the workspace's materials, both of the landing page's, the primary-as-type pair, the label on the primary action, and every control boundary — plus the assertions that hold the two stylesheets to one set of brand values and that the surface material re-binds **every** colour role it borrows (the defect that once put near-black headings on a near-black ground) — **`axe-core` audits** of the two public surfaces, **the quality queue** (the evidence behind each finding is on the row, a decision carries the reason typed with it and re-reads the list it just changed, dismissing is asserted to be a different outcome from resolving, and a second scan is reported as finding nothing new rather than as doing nothing) and **the integration screen** (the scope catalogue's `enforced` flag genuinely disables a scope no route declares, a key secret is shown once in a read-only field that carries a panel saying so, an `http://` endpoint cannot be added at all, and "send test" reports the receiver's real `500` rather than "sent"), **raising a finding by hand** from a response row (the raise waits for a reason, and "already in the queue" is asserted to read differently from "recorded"), **the definition studio** (the JSON panel is the server's own definition; its rows move the XLSForm sheets and the preview with no request at all, because all three read one object; the sheets are the workbook the download writes; the preview hides a question whose relevance rule says so, renders the two inline choices, sends nothing and stores nothing when it is typed into, and produces *field-for-field identical markup* to the component the collection page renders), **the shell guard** that keeps the ambient layer and a form field from ever sharing a class name again, and **the public page's own boundaries**: every anchor it renders resolves to this deployment and no source host is named anywhere in it, no em dash or en dash reaches a reader, and the honesty bullets are measured as the brand's dot rather than as a rule that reads like one — **plus the brand in the artifacts a stylesheet cannot reach**: the README's nine drawings held to the palette by value and to no pre-brand colour or saturated blue-violet accent, every badge colour on this page (their label grounds all the one surface tone, their vendor colours left alone where they belong), and the three app icons **decoded pixel by pixel** and required to be the palette's own ground, to carry the primary, to be free of blue-dominant pixels and to contain none of the three colours the previous icon was drawn from — the guard that would have caught an icon still wearing the palette it was made in |
 
 ### Enforced on every push
 
@@ -1680,7 +1682,8 @@ with the API and web logs printed when a step fails.
 | Landing JS / CSS | over **8 kB** / **6 kB** gzipped |
 | Any single chunk | over **150 kB** gzipped |
 | The renderer split | a critical chunk contains `WebGLRenderer` or `createInstrument` — what a stray static import of the scene would do |
-| Colour | any of the 25 measured pairs drops below 4.5:1 for text, or 3:1 for a control boundary or the live dot |
+| Colour | any of the 26 measured pairs drops below 4.5:1 for text, or 3:1 for a control boundary or the live dot |
+| The brand's artifacts | a drawing, a badge or an app icon carries a value from the palette this replaced, or an icon serves a blue-dominant pixel |
 | Accessibility | `axe-core` reports any violation on the landing page or the terms gate |
 
 ### Coverage
@@ -1765,26 +1768,49 @@ vercel --prod
 
 ### What the live deployment is right now, measured
 
-`https://inicio-prjct.vercel.app` is this repository, deployed from `main`, and every line below was
-read from the running service rather than from a dashboard:
+`https://inicio.unifies.codes` and `https://inicio-prjct.vercel.app` are this repository, deployed from
+`main`, and every line below was read from the running service rather than from a dashboard:
 
 | Read | Answer | What it means |
 |---|---|---|
 | `GET /health` | `200 {"status":"ok","dbTime":…}` | The function reaches the database and runs a real query |
-| `GET /api/v1/public/summary` | `"migrationsApplied": 9, "latestMigration": "0009_collection_sync.sql"` | **The production database is one migration behind the code.** `0010_api_keys_webhooks_flags.sql` has not been applied there |
+| `GET /api/v1/public/summary` | `"migrationsApplied": 9, "latestMigration": "0009_collection_sync.sql"` | **The database this deployment talks to is one migration behind the code** — and, as the next table shows, it is not the database this workspace migrates |
 | `/assets/studio-*.js` | contains *"What the respondent opens"*, *"The workbook"*, *"Nothing typed here is sent or stored"* | The three-panel studio **is** deployed and reachable |
 | `/sw.js`, `/manifest.webmanifest` | `application/javascript`, `application/manifest+json` | The static-asset trap below is genuinely fixed in production, not just locally |
-| `/api/v1/api-scopes`, `/api/v1/flag-kinds` | `401` | The routes ship; without migration `0010` their tables do not exist, so they answer `500` for a signed-in caller |
+| `/`, `/login`, `/terms`, `/privacy`, `/console` | `200`; **no `4xx` and no console error on any of them** | The signed-out console is the sign-in sheet *in place*: `/console` keeps its URL, draws the email field and "Send me a code", and renders no workspace chrome at all |
+| `/icon-192.png`, `/icon-512.png`, `/apple-touch-icon.png` | `image/png`; ground `rgb(25,28,33)`, primary `rgb(234,88,12)`, **0 blue-dominant pixels** | The tab and home-screen icons are the palette's — they were 92 % old-palette blue pixels until this pass |
+| `/api/v1/api-scopes`, `/api/v1/flag-kinds` | `401` | The machine surface denies by default: those two routes answer only to a session or a key |
 
-The gap is one command, run with the production owner connection — not a code change:
+### The migration gap: two databases, and how that was established
+
+The deployment's own summary reports nine migrations, and this workspace's production connection has ten.
+They are not the same database — read from each side rather than inferred:
+
+| | The connection this workspace names production (`INICIO_PROD_DB_*`, `MIGRATION_DATABASE_URL`) | The database the deployment answers from |
+|---|---|---|
+| `current_setting('server_version')` | `18.6 (c021049)` | `18.6 (653b019)` |
+| `pg_postmaster_start_time()` | `2026-10-14T03:10:46Z` | `2026-10-14T05:29:45Z` — a different compute |
+| `schema_migrations` | **10**, latest `0010_api_keys_webhooks_flags.sql` | **9**, latest `0009_collection_sync.sql` |
+| Migration `0010`'s objects | `api_key`, `webhook`, `webhook_delivery`, `response_flag`, four functions, the `app_role` grants | none of them |
+
+So `0010` *is* applied — to the database this workspace migrates, which is the one the workspace's own
+API, console and harnesses run against, and the Quality and Integrations screens were walked against it
+at five viewports with a session. What is behind is the endpoint the *deployment* dials, and its
+connection string exists only in the hosting project's environment: a workspace with no credential for it
+cannot migrate it, and guessing at a host would be worse than saying so. It closes one of two ways, both
+one step:
 
 ```bash
+# Either apply the migration with the deployment's own owner connection …
 MIGRATION_DATABASE_URL='postgres://…' pnpm --filter @inicio/api db:migrate
+# … or point that project's DATABASE_URL / APP_DATABASE_URL / MIGRATION_DATABASE_URL at the
+# database this repository migrates, and redeploy.
 ```
 
-Until it runs, the API-key, webhook and quality-flag surfaces, and the Quality and Integrations screens
-that read them, are deployed but not *usable* in production — which is the same class of quiet lie as a
-`sent` for a mail that never left, so it is written down here instead of being left to a dashboard.
+Until one of them runs, the API-key, webhook and quality-flag surfaces, and the Quality and Integrations
+screens that read them, are deployed but not *usable* in that deployment — which is the same class of
+quiet lie as a `sent` for a mail that never left, so it is written down here instead of being left to a
+dashboard.
 
 <details>
 <summary><b>⚠️ The deployment trap this project actually hit</b></summary>
@@ -2217,9 +2243,9 @@ illustrations and the sample questionnaire are covered by the same licence as th
 
 <div align="center">
 
-[![Star this repository](https://img.shields.io/badge/⭐_STAR_THIS_REPOSITORY-fbbf24?style=for-the-badge&labelColor=0b1120)](https://github.com/flawsom/Inicio/stargazers)
-[![Sponsor](https://img.shields.io/badge/💖_SPONSOR_ON_GITHUB-ea4aaa?style=for-the-badge&labelColor=0b1120&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/flawsom)
-[![Report an issue](https://img.shields.io/badge/🐛_REPORT_AN_ISSUE-ef4444?style=for-the-badge&labelColor=0b1120&logo=github&logoColor=white)](https://github.com/flawsom/Inicio/issues)
+[![Star this repository](https://img.shields.io/badge/⭐_STAR_THIS_REPOSITORY-b45309?style=for-the-badge&labelColor=191c21)](https://github.com/flawsom/Inicio/stargazers)
+[![Sponsor](https://img.shields.io/badge/💖_SPONSOR_ON_GITHUB-ea4aaa?style=for-the-badge&labelColor=191c21&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/flawsom)
+[![Report an issue](https://img.shields.io/badge/🐛_REPORT_AN_ISSUE-b91c1c?style=for-the-badge&labelColor=191c21&logo=github&logoColor=white)](https://github.com/flawsom/Inicio/issues)
 
 </div>
 
@@ -2245,7 +2271,7 @@ GitHub Sponsors is linked above. If you also want a coffee link or another platf
 so the README keeps a single, obvious place for funding:
 
 ```markdown
-[![Buy me a coffee](https://img.shields.io/badge/☕_BUY_ME_A_COFFEE-FFDD00?style=for-the-badge&labelColor=0b1120&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/<your-handle>)
+[![Buy me a coffee](https://img.shields.io/badge/☕_BUY_ME_A_COFFEE-FFDD00?style=for-the-badge&labelColor=191c21&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/<your-handle>)
 ```
 
 It was left out rather than guessed at: a funding link that points at somebody else's account is worse
@@ -2265,6 +2291,6 @@ than no link at all.
 
 <br /><br />
 
-[![Back to top](https://img.shields.io/badge/⬆_BACK_TO_TOP-38bdf8?style=for-the-badge&labelColor=0b1120)](#inicio)
+[![Back to top](https://img.shields.io/badge/⬆_BACK_TO_TOP-c2410c?style=for-the-badge&labelColor=191c21)](#inicio)
 
 </div>

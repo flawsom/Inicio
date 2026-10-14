@@ -1,22 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 520" width="1280" height="520" role="img" aria-label="Diagram: one form definition in the browser is read three ways by the shared engine — the XLSForm workbook sheets, the publish-time analyser, and the respondent's form — with no server round trip and nothing cached">
   <defs>
     <linearGradient id="fbg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#06080f"/><stop offset="1" stop-color="#0c1322"/>
+      <stop offset="0" stop-color="#101216"/><stop offset="1" stop-color="#1f242b"/>
     </linearGradient>
     <radialGradient id="fglow" cx="0.12" cy="0.06" r="0.6">
-      <stop offset="0" stop-color="#38bdf8" stop-opacity="0.16"/><stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+      <stop offset="0" stop-color="#ea580c" stop-opacity="0.16"/><stop offset="1" stop-color="#ea580c" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="fglow2" cx="0.9" cy="0.95" r="0.55">
-      <stop offset="0" stop-color="#7b4dff" stop-opacity="0.14"/><stop offset="1" stop-color="#7b4dff" stop-opacity="0"/>
+      <stop offset="0" stop-color="#c2410c" stop-opacity="0.14"/><stop offset="1" stop-color="#c2410c" stop-opacity="0"/>
     </radialGradient>
     <linearGradient id="fwire" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#38bdf8" stop-opacity="0.75"/><stop offset="1" stop-color="#7dd3fc" stop-opacity="0.35"/>
+      <stop offset="0" stop-color="#ea580c" stop-opacity="0.75"/><stop offset="1" stop-color="#fdba74" stop-opacity="0.35"/>
     </linearGradient>
     <linearGradient id="fwire2" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#a78bfa" stop-opacity="0.75"/><stop offset="1" stop-color="#c4b5fd" stop-opacity="0.35"/>
+      <stop offset="0" stop-color="#fdba74" stop-opacity="0.75"/><stop offset="1" stop-color="#fed7aa" stop-opacity="0.35"/>
     </linearGradient>
     <linearGradient id="fwire3" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#34d399" stop-opacity="0.75"/><stop offset="1" stop-color="#6ee7b7" stop-opacity="0.35"/>
+      <stop offset="0" stop-color="#86efac" stop-opacity="0.75"/><stop offset="1" stop-color="#bbf7d0" stop-opacity="0.35"/>
     </linearGradient>
     <filter id="fshadow" x="-25%" y="-25%" width="150%" height="150%">
       <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#000000" flood-opacity="0.5"/>
@@ -29,63 +29,63 @@
   <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
 
     <!-- heading -->
-    <text x="56" y="62" font-size="11" font-weight="700" letter-spacing="1.6" fill="#6b7c95">THE DEFINITION STUDIO</text>
-    <text x="56" y="96" font-size="26" font-weight="700" fill="#e8eef9">One definition, read three ways — in the browser</text>
-    <text x="56" y="124" font-size="13" fill="#93a1b8">The JSON panel is the source. The other two panels are functions of it, recomputed on the keystroke, with the same engine the server validates and re-checks with.</text>
+    <text x="56" y="62" font-size="11" font-weight="700" letter-spacing="1.6" fill="#9ca3af">THE DEFINITION STUDIO</text>
+    <text x="56" y="96" font-size="26" font-weight="700" fill="#f4f2ef">One definition, read three ways — in the browser</text>
+    <text x="56" y="124" font-size="13" fill="#a8a5a0">The JSON panel is the source. The other two panels are functions of it, recomputed on the keystroke, with the same engine the server validates and re-checks with.</text>
 
     <!-- the source -->
-    <rect x="56" y="158" width="330" height="252" rx="16" fill="#0a0e18" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.12" filter="url(#fshadow)"/>
-    <circle cx="80" cy="188" r="3.5" fill="#38bdf8"/>
-    <text x="92" y="192" font-size="11" font-weight="700" letter-spacing="1.2" fill="#6b7c95">ONE DEFINITION</text>
-    <text x="80" y="218" font-size="16" font-weight="700" fill="#e8eef9">The JSON panel</text>
-    <rect x="80" y="232" width="282" height="108" rx="10" fill="#04060c" stroke="#ffffff" stroke-opacity="0.10"/>
+    <rect x="56" y="158" width="330" height="252" rx="16" fill="#14161b" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.12" filter="url(#fshadow)"/>
+    <circle cx="80" cy="188" r="3.5" fill="#ea580c"/>
+    <text x="92" y="192" font-size="11" font-weight="700" letter-spacing="1.2" fill="#9ca3af">ONE DEFINITION</text>
+    <text x="80" y="218" font-size="16" font-weight="700" fill="#f4f2ef">The JSON panel</text>
+    <rect x="80" y="232" width="282" height="108" rx="10" fill="#0b0d0f" stroke="#ffffff" stroke-opacity="0.10"/>
     <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">
-      <text x="92" y="254" fill="#7dd3fc">{</text>
-      <text x="92" y="270" fill="#93a1b8">  "title":</text>
-      <text x="156" y="270" fill="#c4b5fd">"School Ranking 2026",</text>
-      <text x="92" y="286" fill="#93a1b8">  "questions": [</text>
-      <text x="92" y="302" fill="#93a1b8">    { "name": "school_name" },</text>
-      <text x="92" y="318" fill="#93a1b8">    { "name": "school_type" }</text>
-      <text x="92" y="334" fill="#7dd3fc">  ]</text>
+      <text x="92" y="254" fill="#fdba74">{</text>
+      <text x="92" y="270" fill="#a8a5a0">  "title":</text>
+      <text x="156" y="270" fill="#fed7aa">"School Ranking 2026",</text>
+      <text x="92" y="286" fill="#a8a5a0">  "questions": [</text>
+      <text x="92" y="302" fill="#a8a5a0">    { "name": "school_name" },</text>
+      <text x="92" y="318" fill="#a8a5a0">    { "name": "school_type" }</text>
+      <text x="92" y="334" fill="#fdba74">  ]</text>
     </g>
-    <text x="80" y="362" font-size="11.5" fill="#93a1b8">Read once, from the version being edited.</text>
-    <text x="80" y="380" font-size="11.5" fill="#6b7c95">Nothing below is copied; each panel is a call.</text>
-    <text x="80" y="400" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#7dd3fc">apps/web/src/studio.tsx</text>
+    <text x="80" y="362" font-size="11.5" fill="#a8a5a0">Read once, from the version being edited.</text>
+    <text x="80" y="380" font-size="11.5" fill="#9ca3af">Nothing below is copied; each panel is a call.</text>
+    <text x="80" y="400" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" fill="#fdba74">apps/web/src/studio.tsx</text>
 
     <!-- the three readers -->
-    <rect x="500" y="158" width="724" height="86" rx="16" fill="#0a0e18" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.12" filter="url(#fshadow)"/>
-    <circle cx="524" cy="186" r="3.5" fill="#a78bfa"/>
-    <text x="536" y="190" font-size="11" font-weight="700" letter-spacing="1.2" fill="#6b7c95">PANEL 2 · THE WORKBOOK</text>
-    <text x="524" y="216" font-size="13.5" font-weight="600" fill="#c4b5fd" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">xlsFormSheets(def)</text>
-    <text x="716" y="216" font-size="12.5" fill="#e8eef9">→ the survey, choices and settings sheets</text>
-    <text x="524" y="234" font-size="11.5" fill="#93a1b8">The same rows `exportXlsForm` zips into the .xlsx, so the panel and the download cannot disagree.</text>
+    <rect x="500" y="158" width="724" height="86" rx="16" fill="#14161b" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.12" filter="url(#fshadow)"/>
+    <circle cx="524" cy="186" r="3.5" fill="#fdba74"/>
+    <text x="536" y="190" font-size="11" font-weight="700" letter-spacing="1.2" fill="#9ca3af">PANEL 2 · THE WORKBOOK</text>
+    <text x="524" y="216" font-size="13.5" font-weight="600" fill="#fed7aa" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">xlsFormSheets(def)</text>
+    <text x="716" y="216" font-size="12.5" fill="#f4f2ef">→ the survey, choices and settings sheets</text>
+    <text x="524" y="234" font-size="11.5" fill="#a8a5a0">The same rows `exportXlsForm` zips into the .xlsx, so the panel and the download cannot disagree.</text>
 
-    <rect x="500" y="256" width="724" height="86" rx="16" fill="#0a0e18" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.12" filter="url(#fshadow)"/>
+    <rect x="500" y="256" width="724" height="86" rx="16" fill="#14161b" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.12" filter="url(#fshadow)"/>
     <circle cx="524" cy="284" r="3.5" fill="#fcd34d"/>
-    <text x="536" y="288" font-size="11" font-weight="700" letter-spacing="1.2" fill="#6b7c95">PANEL 1 · THE ANALYSER</text>
+    <text x="536" y="288" font-size="11" font-weight="700" letter-spacing="1.2" fill="#9ca3af">PANEL 1 · THE ANALYSER</text>
     <text x="524" y="314" font-size="13.5" font-weight="600" fill="#fcd34d" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">validateForm(def)</text>
-    <text x="684" y="314" font-size="12.5" fill="#e8eef9">→ errors and warnings, while you type</text>
-    <text x="524" y="332" font-size="11.5" fill="#93a1b8">Duplicate names, missing choice lists, unknown references: the same rules the API applies at publish.</text>
+    <text x="684" y="314" font-size="12.5" fill="#f4f2ef">→ errors and warnings, while you type</text>
+    <text x="524" y="332" font-size="11.5" fill="#a8a5a0">Duplicate names, missing choice lists, unknown references: the same rules the API applies at publish.</text>
 
-    <rect x="500" y="354" width="724" height="86" rx="16" fill="#0a0e18" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.12" filter="url(#fshadow)"/>
-    <circle cx="524" cy="382" r="3.5" fill="#34d399"/>
-    <text x="536" y="386" font-size="11" font-weight="700" letter-spacing="1.2" fill="#6b7c95">PANEL 3 · THE PREVIEW</text>
-    <text x="524" y="412" font-size="13.5" font-weight="600" fill="#6ee7b7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">evaluateForm(form, answers)</text>
-    <text x="748" y="412" font-size="12.5" fill="#e8eef9">→ the form a respondent opens</text>
-    <text x="524" y="430" font-size="11.5" fill="#93a1b8">Rendered by `RespondentForm` — the very component the collection page renders, hidden fields and all.</text>
+    <rect x="500" y="354" width="724" height="86" rx="16" fill="#14161b" fill-opacity="0.72" stroke="#ffffff" stroke-opacity="0.12" filter="url(#fshadow)"/>
+    <circle cx="524" cy="382" r="3.5" fill="#86efac"/>
+    <text x="536" y="386" font-size="11" font-weight="700" letter-spacing="1.2" fill="#9ca3af">PANEL 3 · THE PREVIEW</text>
+    <text x="524" y="412" font-size="13.5" font-weight="600" fill="#bbf7d0" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">evaluateForm(form, answers)</text>
+    <text x="748" y="412" font-size="12.5" fill="#f4f2ef">→ the form a respondent opens</text>
+    <text x="524" y="430" font-size="11.5" fill="#a8a5a0">Rendered by `RespondentForm` — the very component the collection page renders, hidden fields and all.</text>
 
     <!-- wires: one source, three readers -->
     <path d="M386 226 C 440 226 448 201 500 201" fill="none" stroke="url(#fwire2)" stroke-width="1.6"/>
     <path d="M386 252 C 440 252 448 299 500 299" fill="none" stroke="url(#fwire)" stroke-width="1.6"/>
     <path d="M386 300 C 440 300 448 397 500 397" fill="none" stroke="url(#fwire3)" stroke-width="1.6"/>
-    <circle cx="386" cy="226" r="3" fill="#a78bfa" fill-opacity="0.9"/>
-    <circle cx="386" cy="252" r="4" fill="#38bdf8"/>
-    <circle cx="386" cy="300" r="3" fill="#34d399" fill-opacity="0.9"/>
+    <circle cx="386" cy="226" r="3" fill="#fdba74" fill-opacity="0.9"/>
+    <circle cx="386" cy="252" r="4" fill="#ea580c"/>
+    <circle cx="386" cy="300" r="3" fill="#86efac" fill-opacity="0.9"/>
 
     <!-- what is deliberately absent -->
     <rect x="56" y="440" width="1168" height="64" rx="14" fill="#ffffff" fill-opacity="0.03" stroke="#ffffff" stroke-opacity="0.10"/>
-    <text x="80" y="464" font-size="11" font-weight="700" letter-spacing="1.2" fill="#6b7c95">WHAT IS NOT HAPPENING</text>
-    <text x="80" y="484" font-size="12.5" fill="#93a1b8">No server round trip to see a definition: the panels read the text that is on screen. No cache and no snapshot table, because every panel is recomputed from that text.</text>
-    <text x="80" y="500" font-size="12.5" fill="#93a1b8">And no lookalike preview: the third panel is the respondent's own component, and the answers typed into it are never sent or stored.</text>
+    <text x="80" y="464" font-size="11" font-weight="700" letter-spacing="1.2" fill="#9ca3af">WHAT IS NOT HAPPENING</text>
+    <text x="80" y="484" font-size="12.5" fill="#a8a5a0">No server round trip to see a definition: the panels read the text that is on screen. No cache and no snapshot table, because every panel is recomputed from that text.</text>
+    <text x="80" y="500" font-size="12.5" fill="#a8a5a0">And no lookalike preview: the third panel is the respondent's own component, and the answers typed into it are never sent or stored.</text>
   </g>
 </svg>

@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 880" width="460" height="880" role="img" aria-label="The collection renderer on a phone, offline: the definition is cached, answers are saved on the device and queued">
   <defs>
     <linearGradient id="mbg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#06080f"/><stop offset="1" stop-color="#0c1322"/>
+      <stop offset="0" stop-color="#101216"/><stop offset="1" stop-color="#1f242b"/>
     </linearGradient>
     <radialGradient id="mglow" cx="0.5" cy="0.0" r="0.8">
-      <stop offset="0" stop-color="#34d399" stop-opacity="0.18"/><stop offset="1" stop-color="#34d399" stop-opacity="0"/>
+      <stop offset="0" stop-color="#86efac" stop-opacity="0.18"/><stop offset="1" stop-color="#86efac" stop-opacity="0"/>
     </radialGradient>
   </defs>
   <rect width="460" height="880" rx="34" fill="url(#mbg)"/>
@@ -13,49 +13,49 @@
   <g font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
     <rect x="180" y="14" width="100" height="6" rx="3" fill="#ffffff" fill-opacity="0.18"/>
 
-    <text x="28" y="72" font-size="21" font-weight="700" fill="#eef4fd">School Ranking</text>
-    <text x="28" y="96" font-size="13" fill="#8394ad">2 of 3 sections · autosave on</text>
+    <text x="28" y="72" font-size="21" font-weight="700" fill="#faf8f6">School Ranking</text>
+    <text x="28" y="96" font-size="13" fill="#8f8c88">2 of 3 sections · autosave on</text>
 
     <!-- offline pill -->
     <rect x="24" y="116" width="412" height="44" rx="12" fill="#fbbf24" fill-opacity="0.10" stroke="#fbbf24" stroke-opacity="0.30"/>
     <text x="40" y="136" font-size="12.5" font-weight="600" fill="#fcd34d">No connection</text>
     <text x="40" y="152" font-size="11.5" fill="#e3cfa0">Answers are saved on this device and sent automatically.</text>
 
-    <text x="28" y="192" font-size="12" fill="#6b7c95">Saved on this device at 14:22 · not sent yet</text>
+    <text x="28" y="192" font-size="12" fill="#9ca3af">Saved on this device at 14:22 · not sent yet</text>
 
     <!-- fields -->
-    <text x="28" y="232" font-size="14" font-weight="600" fill="#dbe6f5">School type <tspan fill="#fb7185">*</tspan></text>
-    <rect x="24" y="244" width="412" height="46" rx="12" fill="#0b1120" stroke="#ffffff" stroke-opacity="0.14"/>
-    <text x="42" y="273" font-size="14" fill="#e8eef9">Government</text>
-    <path d="M414 262l8 8 8-8" fill="none" stroke="#93a1b8" stroke-width="2" stroke-linecap="round"/>
+    <text x="28" y="232" font-size="14" font-weight="600" fill="#ebe7e2">School type <tspan fill="#fca5a5">*</tspan></text>
+    <rect x="24" y="244" width="412" height="46" rx="12" fill="#191c21" stroke="#ffffff" stroke-opacity="0.14"/>
+    <text x="42" y="273" font-size="14" fill="#f4f2ef">Government</text>
+    <path d="M414 262l8 8 8-8" fill="none" stroke="#a8a5a0" stroke-width="2" stroke-linecap="round"/>
 
-    <text x="28" y="326" font-size="14" font-weight="600" fill="#dbe6f5">Enrolment (students)</text>
-    <rect x="24" y="338" width="412" height="46" rx="12" fill="#0b1120" stroke="#38bdf8" stroke-opacity="0.45"/>
-    <text x="42" y="367" font-size="14" fill="#eef4fd">1,248</text>
-    <text x="368" y="367" font-size="11.5" fill="#6ee7b7">valid</text>
+    <text x="28" y="326" font-size="14" font-weight="600" fill="#ebe7e2">Enrolment (students)</text>
+    <rect x="24" y="338" width="412" height="46" rx="12" fill="#191c21" stroke="#ea580c" stroke-opacity="0.45"/>
+    <text x="42" y="367" font-size="14" fill="#faf8f6">1,248</text>
+    <text x="368" y="367" font-size="11.5" fill="#bbf7d0">valid</text>
 
-    <text x="28" y="420" font-size="14" font-weight="600" fill="#dbe6f5">How many classrooms are usable?</text>
-    <rect x="24" y="432" width="412" height="46" rx="12" fill="#0b1120" stroke="#ffffff" stroke-opacity="0.14"/>
-    <text x="42" y="461" font-size="14" fill="#e8eef9">38</text>
+    <text x="28" y="420" font-size="14" font-weight="600" fill="#ebe7e2">How many classrooms are usable?</text>
+    <rect x="24" y="432" width="412" height="46" rx="12" fill="#191c21" stroke="#ffffff" stroke-opacity="0.14"/>
+    <text x="42" y="461" font-size="14" fill="#f4f2ef">38</text>
 
-    <text x="28" y="514" font-size="14" font-weight="600" fill="#dbe6f5">Evidence: school photograph</text>
+    <text x="28" y="514" font-size="14" font-weight="600" fill="#ebe7e2">Evidence: school photograph</text>
     <rect x="24" y="526" width="412" height="64" rx="12" fill="#ffffff" fill-opacity="0.03" stroke="#ffffff" stroke-opacity="0.12" stroke-dasharray="5 5"/>
-    <text x="42" y="556" font-size="12.5" fill="#93a1b8">Not yet collected</text>
-    <text x="42" y="576" font-size="11.5" fill="#6b7c95">Uploads arrive with object storage</text>
+    <text x="42" y="556" font-size="12.5" fill="#a8a5a0">Not yet collected</text>
+    <text x="42" y="576" font-size="11.5" fill="#9ca3af">Uploads arrive with object storage</text>
 
     <!-- hidden by logic -->
-    <rect x="24" y="610" width="412" height="58" rx="12" fill="#a78bfa" fill-opacity="0.08" stroke="#a78bfa" stroke-opacity="0.28"/>
-    <text x="42" y="636" font-size="12.5" font-weight="600" fill="#c4b5fd">Hidden by logic</text>
-    <text x="42" y="654" font-size="11.5" fill="#a99ec9">"Secondary details" — stored as null, not kept.</text>
+    <rect x="24" y="610" width="412" height="58" rx="12" fill="#fdba74" fill-opacity="0.08" stroke="#fdba74" stroke-opacity="0.28"/>
+    <text x="42" y="636" font-size="12.5" font-weight="600" fill="#fed7aa">Hidden by logic</text>
+    <text x="42" y="654" font-size="11.5" fill="#f0c39a">"Secondary details" — stored as null, not kept.</text>
 
     <!-- submit -->
-    <rect x="24" y="694" width="412" height="50" rx="14" fill="#38bdf8" fill-opacity="0.18" stroke="#38bdf8" stroke-opacity="0.5"/>
-    <text x="180" y="725" font-size="15" font-weight="700" fill="#bae6fd">Submit</text>
-    <text x="24" y="772" font-size="11.5" fill="#6b7c95">Submitting with no signal queues the response and</text>
-    <text x="24" y="790" font-size="11.5" fill="#6b7c95">sends it the moment a connection returns.</text>
+    <rect x="24" y="694" width="412" height="50" rx="14" fill="#ea580c" fill-opacity="0.18" stroke="#ea580c" stroke-opacity="0.5"/>
+    <text x="180" y="725" font-size="15" font-weight="700" fill="#ffe4c7">Submit</text>
+    <text x="24" y="772" font-size="11.5" fill="#9ca3af">Submitting with no signal queues the response and</text>
+    <text x="24" y="790" font-size="11.5" fill="#9ca3af">sends it the moment a connection returns.</text>
 
     <rect x="24" y="812" width="412" height="1" fill="#ffffff" fill-opacity="0.08"/>
-    <circle cx="44" cy="842" r="6" fill="#34d399"/>
-    <text x="60" y="847" font-size="12" fill="#93a1b8">Service worker caches the shell, never the data</text>
+    <circle cx="44" cy="842" r="6" fill="#86efac"/>
+    <text x="60" y="847" font-size="12" fill="#a8a5a0">Service worker caches the shell, never the data</text>
   </g>
 </svg>

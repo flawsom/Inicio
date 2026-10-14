@@ -1120,3 +1120,63 @@ change (`https://inicio.unifies.codes`), all five of its assertions passed, and 
 the URL and the time. The result is checkable in the images themselves: the desktop sign-in capture is warm
 grey with 361,691 warm pixels against 906 cool ones, where the previous version of that screen was blue, and
 the landing page's three captures carry no cool pixels at all.
+
+## D35 — The artifacts a stylesheet cannot reach are generated, and then read
+
+**Context.** D34 moved the palette into the two stylesheets and measured it there. A stylesheet is edited; a
+PNG is not. So the artifacts that live outside CSS went on wearing the theme the brand replaced, and each
+one was found the same way — by looking at the thing rather than at the repository: nine of the README's ten
+drawings (navy grounds, a light blue accent, a violet second hue, cool blue-grey type), every badge on the
+repository page, and the three app icons, which had been generated once before the palette existed and
+measured **92 % blue-dominant pixels** after two palette changes. The icons are the worst of the three
+because they are the most seen: they are the tab, the bookmarked app, and the home-screen tile on a
+respondent's phone, where the product's first impression is a colour it stopped being.
+
+**Decision: nothing that carries the brand is hand-edited if it can be generated, and nothing is trusted to
+have been generated.** The icons are drawn by `scripts/make-icons.mjs` from the palette's own values —
+`--surface`, white and `--primary`, on the tile the product's header already draws — and encoded with
+`node:zlib` rather than an image library, so `pnpm icons` is reproducible on any machine and the diff of a
+palette change is a diff of a script. The drawings are hand-made art and stay hand-made; they were rewritten
+**by role** instead of by find-and-replace, which is the difference between preserving the relationships the
+art depends on (ground darkest, panel lighter, two accents that remain two) and turning nine drawings into
+five hues of orange.
+
+**Then the artifacts are read, because a claim about a picture needs a picture.** The drawings are checked by
+value (no colour from the palette this replaced, no saturated blue-violet accent) and, when the check was
+written, were rasterised in Chromium and measured: **zero** saturated blue-violet pixels across all nine,
+against 2.4 % to 17.1 % before. The icons are decoded pixel by pixel in the suite — which is why there is a
+sixty-line PNG reader in `apps/web/test/png.ts` instead of a dependency — and required to be the palette's
+ground, to carry the primary, to contain no blue-dominant pixel and none of the three colours the previous
+icon was drawn from. A guard nobody has seen fail is a guard nobody knows works, so it was broken on purpose
+once: one `#38bdf8` returned to `rule.svg` failed the suite naming the file and the colour.
+
+**Honest limits.** The check draws a boundary, not a picture: it can say a drawing is not the old palette, it
+cannot say it looks right, and the recolouring is a judgement made by a script and reviewed as a rendering.
+The icons have the same limit — three values and a shape are asserted, not taste. And the threshold between
+"a neutral the palette keeps" and "a cool accent" is stated in the test as the two sets that actually exist
+(near-black grounds carry six to twelve units of chroma to the cool side, the accents this replaced carry
+twenty-four or more, with saturation above 0.35), so a reviewer can disagree with the line rather than guess
+at it.
+
+## D36 — A workspace cannot migrate a database it has no credential for, and says so
+
+**Context.** The published summary reported nine migrations where this workspace's production connection had
+ten, which reads as "the deployment is one migration behind". Reading both sides showed something else: they
+are different Postgres endpoints — `18.6 (c021049)` against `18.6 (653b019)`, compute start times two hours
+and nineteen minutes apart, and migration `0010`'s four tables and four functions present on one side and
+absent on the other. So the migration is applied where this repository's own API, console and harnesses run,
+and the endpoint the deployment dials is the one still behind.
+
+**Decision: state which database is behind, name the command, and do not invent a connection string.** The
+deployment's credentials exist only in the hosting project's environment. A workspace has three wrong options
+here — guess a host, write the migration into a startup path so the *runtime* role does DDL, or quietly
+report "production is migrated" on the evidence of a different database — and one right one: measure both
+sides, put the readings in the README's deployment section next to the command that closes the gap, and let
+the person who holds the credential run it. A migration is not a code change, and a gap that cannot be closed
+from here is a sentence to write down rather than a silence to keep.
+
+**What that leaves true.** The workspace's own stack is on the current schema: the API answers
+`"migrationsApplied": 10` and a session-minted walk of every route and every workspace view — including the
+Quality and Integrations screens that `0010` is what makes usable — passes at five viewports. What is not
+true, and is written in the README instead of implied, is that the API-key, webhook and quality-flag
+surfaces are *usable in that deployment* until one of the two commands runs.

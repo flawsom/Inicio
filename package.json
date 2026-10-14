@@ -20,6 +20,7 @@
     "dev:api": "pnpm --filter @inicio/api dev",
     "dev:web": "pnpm --filter @inicio/web dev",
     "budgets": "node scripts/check-budgets.mjs",
+    "icons": "node scripts/make-icons.mjs",
     "db:migrate": "pnpm --filter @inicio/api db:migrate",
     "admin:create": "pnpm --filter @inicio/api admin:create"
   },
