@@ -1,6 +1,6 @@
 {
-  "base": "https://inicio-prjct.vercel.app",
-  "at": "2026-10-13T16:20:58.702Z",
+  "base": "https://inicio.unifies.codes",
+  "at": "2026-10-14T02:38:37.386Z",
   "checks": [
     {
       "name": "the landing read its figures from the API in this request",
@@ -15,12 +15,12 @@
     {
       "name": "the primary call to action reached /login",
       "ok": true,
-      "detail": "https://inicio-prjct.vercel.app/login"
+      "detail": "https://inicio.unifies.codes/login"
     },
     {
       "name": "the call to action works on a phone viewport",
       "ok": true,
-      "detail": "https://inicio-prjct.vercel.app/login"
+      "detail": "https://inicio.unifies.codes/login"
     },
     {
       "name": "nothing 4xx'd except the signed-out 401",
@@ -32,17 +32,17 @@
     "Failed to load resource: the server responded with a status of 401 ()"
   ],
   "bad": [
-    "401 https://inicio-prjct.vercel.app/api/v1/auth/me",
-    "[phone] 401 https://inicio-prjct.vercel.app/api/v1/auth/me",
-    "[phone] 401 https://inicio-prjct.vercel.app/api/v1/auth/me"
+    "401 https://inicio.unifies.codes/api/v1/auth/me",
+    "[phone] 401 https://inicio.unifies.codes/api/v1/auth/me",
+    "[phone] 401 https://inicio.unifies.codes/api/v1/auth/me"
   ],
   "sizes": {
-    "landing-hero.jpg": "154 kB",
-    "landing-capabilities.jpg": "115 kB",
-    "landing-scene.jpg": "213 kB",
-    "landing-templates.jpg": "135 kB",
+    "landing-hero.jpg": "216 kB",
+    "landing-capabilities.jpg": "154 kB",
+    "landing-scene.jpg": "198 kB",
+    "landing-templates.jpg": "197 kB",
     "login-desktop.jpg": "154 kB",
-    "landing-mobile.jpg": "117 kB",
+    "landing-mobile.jpg": "169 kB",
     "login-mobile.jpg": "182 kB"
   }
 }
