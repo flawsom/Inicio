@@ -1,7 +1,7 @@
 # Platform roadmap and verified status
 
-Where the product is, what has been proven, what is explicitly not done, and what the free
-infrastructure underneath really allows.
+Where the product is, what has been proven, what is explicitly not done, where it stands against the
+2026 market, and what the free infrastructure underneath really allows.
 
 Legend: **built+verified** · **built, partially verified** · **not built**
 
@@ -25,7 +25,7 @@ Legend: **built+verified** · **built, partially verified** · **not built**
 - **Operational detail is admin-only.** The public mail status says whether codes
   can be sent, not which relay refused or why.
 
-## 1. Verified now (256 automated tests, plus end-to-end over HTTP)
+## 1. Verified now (305 automated tests, plus end-to-end over HTTP)
 
 | Area | State | Evidence |
 |---|---|---|
@@ -37,7 +37,9 @@ Legend: **built+verified** · **built, partially verified** · **not built**
 | XLSForm adapter | built+verified | `packages/engine/src/adapters/xlsform.*`; hand-written XLSX reader/writer; round-trip is a **fixpoint** test; unknown types/columns/ODK metadata are preserved or reported, never dropped silently |
 | Logic engine | built+verified | visibility, branching, validation, calculation, cascading selects; blank≠zero; hidden ⇒ null |
 | Export bundle | built+verified | data + codebook + value labels + missing table + metadata as CSV (zip), XLSX (5 sheets), JSON; multi-select dichotomous or slots; injection-safe view |
-| Distribution + collection | built+verified | anonymous / single-use / multiple / panel links; token shown once; partial save and resume; required + constraint enforcement **server-side**; `.sav`/`.dta` refused with 501 |
+| Statistical export (`.sav` / `.dta`) | built (the worker itself is outside this repository's suite) | `services/pyreadstat/` writes the file with pyreadstat over HTTP; the API sends the engine's dataset, its value labels and its missing codes, and the worker reports every rename, truncation and dropped label rather than discarding it. `PYREADSTAT_WORKER_URL` is what turns the refusal into a file; without it the route returns the same `501` naming that variable. A worker that is unreachable, or that answers with zero bytes, is a `502` **and never a download** — five tests in `apps/api/test/pyreadstat-export.test.ts` pin both branches over a stub worker. **Not covered:** the worker's own Python logic, because this repository's runner is Node, and its deployment, which is a separate service by design |
+| Distribution + collection | built+verified | anonymous / single-use / multiple / panel links; token shown once; partial save and resume; required + constraint enforcement **server-side**; `.sav`/`.dta` written by the pyreadstat worker when one is configured, refused with a `501` naming `PYREADSTAT_WORKER_URL` when not |
+| Attachments (`image`, `audio`, `video`, `file`) | built+verified | `apps/api/src/storage/{presign,s3,scan,limits}.ts`, plus the two routes in `platform/collect.ts`, exercised headlessly over a stub store and a stub scanner, and driven from a real browser by the control in `apps/web/src/respondent.tsx` — shared with the studio's preview, which is told there is no response here for a file to belong to — wired by `collect.tsx`, which authorises the upload, PUTs the bytes straight to the store and calls `complete`, then stores the returned attachment id as that question's answer through the same draft-and-outbox path as any other answer. The bytes travel browser-to-store against a URL the API presigns, so a file never passes through the serverless function and no credential leaves the server; presigning is hand-written SigV4 (D30), so one signing path covers the upload and the API's own HEAD, GET and DELETE, with the content type bound into the signature. Limits are enforced twice — an explicit per-question-type MIME allowlist and `UPLOAD_MAX_BYTES` when the upload is authorised, then the size and type *the store reports* before the row is `uploaded`, which is what makes a lying client change nothing. `sha256` is computed server-side from the bytes read. The scan is clamd INSTREAM with `clean`/`infected`/`error`/`skipped`; an infected object is deleted before the row records why, and no path reports `clean` without a scanner. Whether an *unscanned* file may become an answer is a named policy rather than an accident of the environment: `ATTACHMENT_SCAN_POLICY` defaults to `allow_unscanned`, which accepts both `skipped` and `error` — a field team whose scanner host is unreachable must not lose every upload — while the row keeps the two distinct, and the capability block reports the policy so the client states it instead of assuming it. `require` makes a scanner's verdict mandatory and refuses with `scan_required` at authorisation, before any URL is signed. Submission refuses an answer whose attachment the server has not accepted (`attachment_not_ready`). Authors read a file back through `GET /orgs/:orgId/attachments/:attachmentId` (session-only, `409` for an infected row, a five-minute URL). **No migration was needed**: `0003_platform.sql` already modelled `response_attachment`. **Not built:** a console screen that lists or downloads an attachment (the author route exists and nothing in the browser calls it), and choosing a file while the device is offline — the control says it needs a connection rather than pretending to queue one |
 | Templates | built+verified | the school ranking survey publishes, round-trips through a spreadsheet and collects a real response with a server-computed score |
 | Web app | built+verified (API-level) | login, organisations, forms, and a **three-panel studio** — the JSON definition, the XLSForm sheets the download writes, and the respondent's form as a live preview, all three from one parsed definition, with the analyser running per keystroke — live counts pushed over the change stream, export buttons, copy-once link, a collection renderer that shares the engine with the server, an integration screen (API keys with the scope catalogue read from the server, webhook endpoints with delivery history, a real "send test" round trip and a retry) a per-form **Quality** tab whose evidence rendering and decision-carrying write are asserted in jsdom; and a `Flag` action on a response row that requires a reason and reports "already in the queue, so nothing new was written" differently from "recorded", because a dropped finding reported as a recorded one is the same class of lie as a `sent` that never left the building; the integration screen's own promises are asserted too — the `enforced` flag genuinely disables a scope no route declares, a secret is shown once in a read-only field, `http://` cannot be submitted at all, and "send test" reports the receiver's real `500` |
 | Push channel for the console | built+verified | `apps/api/src/platform/events.ts`; one server-sent event stream per form, behind the session cookie and the terms gate, reading the per-aggregate revision vector inside the tenant transaction. An unchanged revision writes **no event at all**, which is what makes the poll removable; a write produces exactly one `change` naming the aggregate that moved. `apps/api/test/realtime.test.ts` opens a real stream over a real socket: `ready` first, silence across three ticks, then one coalesced event after a real collection write, and **404 with no stream** for a form the caller cannot see. `apps/web/src/realtime.ts` coalesces a burst into one notification and gives up to `offline` after repeated failures, both asserted in jsdom. `console-live.test.tsx` proves the console's own live read: a push naming its aggregate refetches the screen, a push naming another one does not, two pushes inside a frame cost one read, and **a minute of clock passes while the stream is live without a single timed request** |
@@ -48,7 +50,7 @@ Legend: **built+verified** · **built, partially verified** · **not built**
 | One visual system across the product | built+verified (component-level) | one stylesheet defines the palette (pearl and ink, blue `#2a5bff`, violet `#7b4dff`, cyan for live only), the spacing scale and one glass pane reused by the console, collection, administration and the legal surfaces; the light theme is a token block rather than a second stylesheet. The signed-in shell carries a fixed application bar, chapter headings, tabular metric figures and an ambient light field (`apps/web/src/immersive/ambient.ts`) that draws the landing sculpture's own node-and-filament structure on a 2D canvas at no dependency cost, stops when the tab is hidden, and is absent-without-breaking under `prefers-reduced-motion` or with no canvas. `ambient.test.ts` asserts with a recording context that a frame is painted, that scrolling rearranges the structure, that an inactive field stops drawing and that a disposed one touches nothing. The field also caused the one defect in this table that a stylesheet-level test was needed for: its host element and a form's question block were both called `.field`, so every question on a collection page was `position: fixed; inset: 0; z-index: -1; pointer-events: none` — invisible, unclickable, and invisible to every jsdom test because jsdom applies no stylesheet. The host is `.ambient` now and `shell.test.ts` asserts the properties rather than the names. **Not measured:** the light theme and the field have not been seen rendered on real hardware |
 | Immersive public page | built+verified (component-level) | `apps/web/src/landing.tsx`, `apps/web/src/immersive/instrument.ts`; every figure is read in that request, the WebGL scene is a separate dynamically imported chunk, `aria-hidden`, and stops when the tab is hidden or the stage is off screen. `landing.test.tsx` mounts it in jsdom: the figures come from the API, the page is complete and readable when the scene returns nothing (the WebGL-unavailable path), and it prints no figure at all rather than an old one when the API does not answer. **Not measured:** frame rate and GPU cost on real hardware |
 | Offline collection | built+verified | `apps/web/src/offline`; the published definition is cached and every answer is written to IndexedDB before anything is sent; a durable one-deep queue syncs on change, on blur, on tab hide, on reconnect and on a 2-minute timer; the device owns a stable response UUID so a retried start is idempotent; `collect-sync.test.ts` proves two-device merges keep the losing value in `response_answer.device_value` and record it in `response_conflict`; `scripts/e2e-offline.mjs` runs 28 checks over a real database through the preview origin (24 when the PWA assertions were written; the harness prints the count it ran) |
-| CI on every push | built+verified | `.github/workflows/ci.yml` runs on a push to `main` and on every pull request. `verify` installs from the lockfile and runs lint, typecheck, the whole suite (256 tests) against a PostgreSQL 16 service, the build and `pnpm budgets`; `harnesses` then migrates a database, bootstraps an owner, starts the API and the web server, waits for both to answer, and runs the 35-check consumer and 28-check offline harnesses over the browser's own origin. **It has run, and the first runs found three things no local run could see**, each of which is a good argument for having this in one command rather than in a habit: `@inicio/engine` is consumed through its own `dist`, which a working tree already has and a clean checkout does not (so `typecheck`/`test`/`coverage` build it first); the suite migrated `postgres_test` while `APP_DATABASE_URL` — which `env.ts` prefers — pointed the application pool at the un-migrated owner database, so every database-backed API test ran against an empty schema and thirteen of fourteen files failed on `relation "school" does not exist`; and the `harnesses` job named only `MIGRATION_DATABASE_URL` and `APP_DATABASE_URL`, which `env.ts` refuses outright because `DATABASE_URL` must also exist. All three are fixed; both jobs are green on `main` |
+| CI on every push | built+verified | `.github/workflows/ci.yml` runs on a push to `main` and on every pull request. `verify` installs from the lockfile and runs lint, typecheck, the whole suite (305 tests) against a PostgreSQL 16 service, the build and `pnpm budgets`; `harnesses` then migrates a database, bootstraps an owner, starts the API and the web server, waits for both to answer, and runs the 35-check consumer and 28-check offline harnesses over the browser's own origin. **It has run, and the first runs found three things no local run could see**, each of which is a good argument for having this in one command rather than in a habit: `@inicio/engine` is consumed through its own `dist`, which a working tree already has and a clean checkout does not (so `typecheck`/`test`/`coverage` build it first); the suite migrated `postgres_test` while `APP_DATABASE_URL` — which `env.ts` prefers — pointed the application pool at the un-migrated owner database, so every database-backed API test ran against an empty schema and thirteen of fourteen files failed on `relation "school" does not exist`; and the `harnesses` job named only `MIGRATION_DATABASE_URL` and `APP_DATABASE_URL`, which `env.ts` refuses outright because `DATABASE_URL` must also exist. All three are fixed; both jobs are green on `main` |
 | The definition studio | built+verified (component-level) | `apps/web/src/studio.tsx`, loaded as its own 5.5 kB chunk. Three panels over one parsed definition: the JSON the API stores, the XLSForm sheets that `Download .xlsx` writes, and the form a respondent opens. `studio.test.tsx` holds the coupling rather than the layout — editing the JSON repaints both other panels **with no request at all** (all three read one object, asserted by asserting the request log is reads only), the sheet panel's rows are `xlsFormSheets`' rows and the tab count is the sheet's own row count, the preview hides a question whose relevance rule says so and renders the two inline choices, the submit button is present and `disabled`, typing in it sends and stores nothing, an analyser finding appears before anything is saved, half-typed JSON leaves three panels standing with a sentence saying what it is, and the preview's `.field` markup is **character-for-character identical** to the same component mounted the way the collection page mounts it. `xlsform.test.ts` proves the sheet viewer and the file cannot drift: `readWorkbook(exportXlsForm(def).bytes).sheets` equals `xlsFormSheets(def).sheets`, trailing blank cells aside (a spreadsheet cannot store one). **Not measured:** the three-panel layout on real hardware at each breakpoint |
 | The API contract | built+verified | `specs/openapi.yaml` enumerates every mounted path — `/health`, the Phase-1 `/auth` block marked `deprecated`, and the whole `/api/v1` surface — with the credentials, the scope table and the stable error vocabulary. It replaced a revision that documented a questionnaire/`admin` surface no longer mounted anywhere. It is now **held to the code rather than to a memory of the code**: `apps/api/test/openapi.test.ts` parses the file, extracts the routes out of the source with the prefixes `app.ts`/`platform/index.ts` actually mount, and compares them both ways — a route added without its entry fails, and so does an entry kept after its route is gone (it caught two: the invitation routes were documented at `/api/v1/invite/...` when they are mounted at `/api/v1/auth/invite/...`). The same test pins the machine surface to the eleven operations a key may call, requires the scope each needs to be *named in its description*, asserts the unauthenticated surface as an explicit list rather than a count, and checks that no scope-shaped token appears that `API_SCOPES` does not define |
 | Bundle budgets | built+verified | `scripts/check-budgets.mjs` (`pnpm budgets`) measures the gzipped build: 80 kB of JavaScript and 7 kB of CSS on the critical path, 8 kB and 6 kB for the landing chunk, 150 kB for any chunk, and it *asserts the split* rather than trusting it — a critical chunk containing `WebGLRenderer` or `createInstrument` fails the build, which is what a static import of the scene would do. This build: 73.4 kB JS and 4.9 kB CSS critical, 5.4 kB landing, 5.5 kB studio, 132.6 kB renderer |
@@ -59,8 +61,6 @@ Legend: **built+verified** · **built, partially verified** · **not built**
 
 | Area | State | What it needs |
 |---|---|---|
-| `.sav` / `.dta` export | not built | a Python `pyreadstat` worker (Cloud Run free tier); until then the API returns **501 with a reason** rather than the label-syntax-only "SPSS export" that some tools ship |
-| File uploads (image/audio/video) | not built | object storage (R2/S3) with presigned URLs and a virus-scan step; the renderer marks those inputs as not yet collected rather than silently skipping them |
 | AI authoring / grounded analysis | not built | Workers AI or an LLM API; the **guardrails** are already specified (draft-only, analyser-validated, evidence-linked) in `specs/PLATFORM.md` §7 |
 | SSO/SAML/passkeys, SCIM, backups | not built | hardening phase. (Automated accessibility rules and measured colour contrast landed in §1; a WCAG 2.2 AA audit — a person, a screen reader, a keyboard-only pass over every signed-in screen — has not) |
 | Realtime fan-out across instances | not built | the push channel re-reads the revision vector once per tick (1.5 s) per open stream, which is correct and is one round trip inside the tenant transaction, but it is per-instance work. A broker (Valkey or `pg-boss`) is the upgrade that makes fan-out free across several instances. It is deliberately not `postgres_changes`: the API runs as a serverless function, where a `LISTEN` connection does not survive between invocations, so a `NOTIFY` fired by one instance would reach nobody |
@@ -71,54 +71,155 @@ Legend: **built+verified** · **built, partially verified** · **not built**
 The product's own limits are generous and unmetered on purpose: **we do not cap responses.** The
 constraint is the free tier underneath us, and pretending otherwise would be a lie of omission.
 
-| Layer | Service | Free allowance | Breaks first |
+| Layer | What we run on | Free allowance (2026) | Breaks first |
 |---|---|---|---|
-| Postgres + RLS | Supabase | 500 MB DB, 500 MB RAM, 5 GB egress, 2 projects, **pauses after 7 days idle**, **no backups** | DB size, then the idle pause |
-| Object storage | Cloudflare R2 | 10 GB, 1M Class A / 10M Class B ops | storage, then reads |
-| API | Cloudflare Workers | 100,000 requests/day, 10 ms CPU/invocation | CPU on heavy report queries |
-| Realtime | Supabase Realtime | 200 concurrent connections, 2M messages/month | connection count |
-| Queue | `pg-boss` on our Postgres | free (no extra service) | DB I/O |
-| AI | Cloudflare Workers AI | 10,000 Neurons/day | the daily budget |
+| Postgres + RLS | Neon (Free) | 1 GB storage/project, 100 CU-hours/project/month (≈400 active hours at the default 0.25 CU), 10 branches, **5 GB public network transfer/project/month**; compute scales to zero after five minutes idle | transfer or CU-hours — both **suspend compute until the next cycle** rather than billing a surprise |
+| Object storage | S3-compatible — Neon Object Storage here, with R2 and B2 as the portable alternatives | Neon: 5 GB/project, no per-operation charge, egress counted against the same 5 GB transfer allowance. Cloudflare R2: 10 GB-month, 1M Class A / 10M Class B operations, and **no egress fee at all**. Backblaze B2: first 10 GB free, free egress up to 3× stored | egress on Neon, storage on the others |
+| API + SPA | Vercel, one project and one origin | Hobby: 1M invocations, 4 CPU-hours, 360 GB-hours, **300 s maximum function duration** | the 300 s ceiling — and Hobby overage cannot be bought, you wait for the cycle to reset. **Hobby is also personal, non-commercial use only**, which is a licensing question rather than a technical one |
+| Live updates | SSE from the API, one revision re-read per tick | free (an ordinary response body) | WebSockets on Vercel are beta and **close at the function duration ceiling** — which is part of why this is SSE rather than a socket |
+| Queue, webhooks, audit | rows and `pg-boss`-style claiming on our own Postgres | free (no extra service) | DB I/O |
 | Email | Resend | 3,000/month, **100/day**, verified domain required | the 100/day cap during an OTP burst |
-| `.sav`/`.dta` worker | Google Cloud Run | 2M requests, 180k vCPU-s/month | cold start latency |
-| SPA | Cloudflare Pages | free | Vercel Hobby is **non-commercial use only** — do not ship there |
+| Object scanning | clamd, self-hosted, if it is run at all | none — the ClamAV Docker guidance asks for **3 GiB minimum and 4 GiB preferred**, and signature reloads alone can exceed 2.4 GiB | RAM on any free tier. This is the honest reason `ATTACHMENT_SCAN_POLICY` defaults to accepting unscanned files and says so per row |
+| `.sav`/`.dta` worker | not hosted; a small always-on Python service | ~**$6.70/month** (Fly.io, 1 GB, lowest-priced regions) to ~**$10/month** (Railway, 1 GB of RAM alone). Render builds straight from a `requirements.txt` but its free instances sleep after 15 minutes | the first component that costs money, and it is optional by design: without it those two exports refuse, with a reason |
+| AI | not built (Workers AI or an LLM API) | Workers AI: 10,000 Neurons/day | the daily budget |
+
+Two things that were once free are not any more, and the difference matters when somebody asks why
+the stack looks the way it does. **Vercel Postgres no longer exists** — existing databases were moved
+to Neon in December 2024, and new projects get a marketplace database instead. **AWS S3 has no
+standing free allowance for a new account**: the offer is up to $200 of credits over six months, so a
+personal S3 deployment is a trial rather than a tier. R2 is the free-tier object store of choice
+mostly because it does not charge for egress; B2 is close behind; either is an `S3_ENDPOINT` change
+away, which is the point of the `S3_*` variables.
 
 Three consequences we state rather than hide:
 
 1. **"Free and uncapped" describes our product, not the hosting.** A viral survey will hit a
    provider ceiling. We therefore show live usage against each ceiling and keep the stack
    portable — one `DATABASE_URL` moves Postgres to a paid host with no code change.
-2. **No backups on a free Supabase project.** Anything a real customer collects needs either a
-   paid plan or a scheduled `pg_dump` to object storage. This is a phase-9 task and it is
-   currently *not* done.
+2. **No backups on a free Neon project.** Anything a real customer collects needs either a paid
+   plan or a scheduled `pg_dump` to object storage. This is a phase-9 task and it is currently
+   *not* done.
 3. **Abuse controls are the cost of "free".** Open signup plus unmetered responses is an
    attractive spam target. Today: email-verified signup, per-email OTP cooldown, a per-IP rate
    limit, per-org fair-use visibility. Not yet: CAPTCHA, disposable-domain screening, and a
    budget alarm per organisation.
 
-## 4. Next, in order
+## 4. Where this stands in the 2026 market
 
-1. **Object storage + uploads** — R2 with presigned URLs, size/type limits, scan status already
-   modelled in `response_attachment`. Unblocks the honest `image`/`file` question types.
-2. **The `.sav`/`.dta` worker** — unblocks SPSS/Stata exports and the missing-code numeric
-   mapping already documented in the codebook.
-3. **AI authoring + grounded analysis** — draft-only generation, validated by the same analyser;
+This is not a blank space, and saying otherwise would be the first dishonest line in this document.
+**KoboToolbox** and **ODK** already own offline field collection and XLSForm; **SurveyCTO** and
+**CommCare** own supervised, high-stakes workflows; **Qualtrics** and **SurveyMonkey** own mainstream
+research; and **LimeSurvey** is the established open-source, self-hostable option — one that
+**already writes SPSS and Stata**. Everything below is read against them, not against an empty field.
+
+| Product | What the 2026 sources support on price | Where it is ahead of us | Where it is not |
+|---|---|---|---|
+| KoboToolbox | Free **Community** plan for nonprofits, government, UN and education; paid tiers roughly **$25–$359/month** by organisation type and billing; submission caps of **1,000–50,000/month** | Depth of field operations, a large practitioner community, EU hosting | Accounts, projects and data **cannot move between its global and EU servers** once chosen; activity-log retention is limited, and its own docs warn that CSV export omits repeat-group data |
+| ODK (Central / Collect) | Open source and self-hostable; **ODK Cloud ≈ $199/month** (one project, 10,000 submissions) to **≈ $499/month** | The reference implementation of the standard, and the richer audit log | Self-hosting carries the operations burden, and plain exports do not carry labels or question context — which is why the community built `odkmeta` to generate Stata import scripts |
+| SurveyCTO | **$225–$630/month** by tier (5,000 to unlimited submissions); extra submissions **$100 per 1,000**; a free sandbox capped at 200 | Mature automated quality checks, audit and review workflows, offline case management | Hosted only, and the per-submission economics bite at volume |
+| CommCare | **$100–$1,000/month** by tier; extra mobile users **$2/user/month**; a signed **HIPAA BAA** at Advanced | Longitudinal case management, and a compliance story it sells explicitly | Not a general research instrument, and cost scales with the number of enumerators |
+| Ona | Free tier **500 submissions**; Standard **≈ $199/month** (15,000) | Managed in-country instances | That is not the same as a supported self-install |
+| Qualtrics | Free account: 3 surveys, 500 responses; self-serve **$420/month** for 1,000 shared responses | Enterprise analysis and panel breadth | General online research rather than field-first offline collection |
+| SurveyMonkey | **$0.15 per response** over the plan limit, and incomplete or deleted responses count toward it | Ubiquity | That overage model punishes precisely the incomplete responses field work produces |
+| LimeSurvey | Community Edition free, GPLv2+, self-hostable; cloud from **≈ $39/month** | Free, open source, self-hosted — and it **already writes SPSS and Stata** | Not offline-first field operations in the ODK sense |
+| Formbricks | Free 250 responses/month; Pro **$74/month** | Moving quickly, and it added **offline link surveys in April 2026** | Not an XLSForm field-operations stack |
+
+*Prices are vendor-page snapshots read in 2026; most of those pages state no effective date, so treat
+them as indicative and re-check before quoting. Figures that could not be verified are absent rather
+than guessed at.*
+
+### Where the evidence says the gap is
+
+- **Recovery, not offline.** "Works offline" is table stakes. The reported failure mode in the
+  incumbent communities is sync friction and *local-data recovery*: submissions that appeared sent
+  but were not visible on the server, drafts out of reach after a reinstall, a duplicate-submission
+  edge case when one draft is opened in two tabs. That argues for making the device's own state
+  inspectable and recoverable — not for claiming other people lose data.
+- **Export *fidelity*, not export existence.** Kobo ships an SPSS Labels export; ODK users wrote
+  `odkmeta` to generate Stata import scripts; Kobo documents that CSV drops repeat groups. The unmet
+  need is a `.sav` or `.dta` that carries variable labels, value labels, missing-code semantics,
+  repeat structure and the instrument version — plus a codebook to read it by.
+- **Pricing that surprises.** A per-response overage charge that counts *incomplete* responses is
+  the exact opposite of what a field instrument used where the network drops needs.
+- **Residency that cannot be changed after setup** is a trap, not a feature.
+- **Compliance that is real but shallow in places.** Several incumbents genuinely have GDPR, HIPAA
+  and audit capabilities. What differs is *retention, provenance and portability* — and that is the
+  honest place to compete, rather than pretending they have nothing.
+
+### The position worth defending
+
+Not "another survey builder", and not "offline surveys that never fail". The defensible position is
+the **combination**: a portable, self-hostable, standards-oriented collection platform whose offline
+state, statistical exports and audit history stay **inspectable and recoverable** — with the tenant
+boundary, the consent record and the export metadata implemented rather than asserted.
+
+Three things that position must not do:
+
+1. **claim an incumbent's existing feature as a differentiator.** SPSS export, GDPR support and
+   automated quality checks are *prerequisites* here, not selling points, and this document should
+   never imply otherwise.
+2. **promise durability it cannot prove.** Every offline claim must be a test, and the queue state,
+   retry history and failed items have to be visible to the person holding the device.
+3. **let the builder become a proprietary dead end.** The schema is the source of truth, the
+   expression engine is shared with the server, and XLSForm stays the interchange format.
+
+### Standards worth committing to
+
+**XLSForm / ODK XForms first** — field interoperability is where the users are, and the adapter is
+already a fixpoint test. Then FHIR Questionnaire / SDC for health-system exchange, CDISC ODM for
+regulated clinical research, and DDI for social-science codebooks. Each should be a documented
+subset with a report of what it could not carry, which is exactly the pattern the XLSForm adapter
+already follows.
+
+### The regulatory context that shapes the product
+
+- **GDPR** — a lawful basis under Article 6 *plus* an Article 9 condition for special-category data;
+  research is not a blanket exemption. Region, sub-processors, backups and deletion are controller
+  decisions to be made administrable, not a badge to be claimed.
+- **HIPAA** — applies when the customer is a covered entity or business associate, which is why
+  CommCare sells a BAA. We do not have one, and should not imply otherwise.
+- **The US Common Rule (45 CFR 46)** — governs federally conducted or supported human-subjects
+  research; the exempt-or-review determination belongs to the institution. Our job is to hand it
+  evidence: what was asked, who consented, to which text, and when.
+- **The EU AI Act** — general application and transparency obligations began **2 August 2026**, with
+  high-risk obligations later (December 2027 / August 2028). It matters if and when AI features are
+  added, not because survey answers are stored.
+
+## 5. Next, in order
+
+1. **Make offline safety provable rather than promised** — the queue, its retries and its failures
+   visible on the device; a local export/recovery path that works with no network at all; attachment
+   retry across a reconnect; and tests that exercise an interrupted upload, a browser restart and
+   storage exhaustion. Conflicts are already kept and surfaced, but a field worker cannot yet rescue
+   a stuck device unaided.
+2. **Make the statistical export faithful rather than present** — round-trip `.sav` and `.dta`
+   against representative instruments with repeat groups, several languages, value labels and missing
+   codes, and ship the codebook beside them. A `.sav` that imports but drops a label is the specific
+   failure this feature exists to prevent, and "we have SPSS export" is not yet an honest sentence
+   until that test exists.
+3. **Put compliance into the tenant model** — region and deployment configuration, configurable
+   retention, consent versioning, and access/export logs with a stated retention — instead of
+   claiming a certification.
+4. **AI authoring + grounded analysis** — draft-only generation, validated by the same analyser; an
    analysis must render the response ids it was derived from.
-4. **A broker for realtime fan-out** — the push channel works on one instance (see §2); a Valkey or
+5. **A broker for realtime fan-out** — the push channel works on one instance (see §2); a Valkey or
    `pg-boss` hop is what makes it cheap on several.
-5. **Hardening** — passkeys/SSO, SCIM, per-org budgets, backups/restore drills, WCAG 2.2 AA.
+6. **Hardening** — passkeys/SSO, SCIM, per-org budgets, backups and a rehearsed restore, WCAG 2.2 AA.
 
 Done since this list was written: **API keys with scopes, and webhooks** and **quality flags and a flag
 queue** (both moved to §1), **offline collection + the installable PWA** (moved to §1), the
 sync conflicts it produces are surfaced in the Responses tab, the console's 5 s poll is replaced by
-the push channel in §1, the landing page and the realtime client now have component tests, and the two
-items that guard everything after them — **CI on every push** and the **accessibility and performance
-budgets it enforces** — are in §1. What is left of this list needs infrastructure rather than code:
-object storage credentials, a Python worker host, and a broker.
+the push channel in §1, the landing page and the realtime client now have component tests, **attachments end to end** — the
+control on the collection page, not only the routes — and **the statistical export**, both moved to
+§1, and the two items that guard everything after them — **CI on every
+push** and the **accessibility and performance budgets it enforces** — are in §1. Of what remains, the last two items need
+infrastructure rather than code — a host for the statistical-export worker wherever one is not
+already running, and a broker — while the first three need the unglamorous work of tests and of
+saying plainly what is *not* true yet.
 
-## 5. What a reviewer should check first
+## 6. What a reviewer should check first
 
-- `pnpm test` — 256 tests; the RLS suites are the ones that matter most. `pnpm budgets` after `pnpm build`
+- `pnpm test` — 305 tests; the RLS suites are the ones that matter most. `pnpm budgets` after `pnpm build`
   shows what the browser is asked to download, and `.github/workflows/ci.yml` is the same two in order.
 - `apps/api/test/platform-api.test.ts` — the whole product over HTTP as two accounts, including
   cross-tenant 404/403 behaviour and a full collection lifecycle.

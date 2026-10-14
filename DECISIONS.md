@@ -774,7 +774,144 @@ surprising one database over from the real data. Verified both ways — the depl
 pass.
 
 **Honest limits.** Object storage and the AI gateway are configured and were probed successfully with real
-calls, but no feature consumes them yet: file uploads are deliberately unbuilt (`docs/ROADMAP.md`), this
+calls, but no feature consumed them yet: file uploads were deliberately unbuilt when this was written, and were
+built afterwards in two halves (D30 below), this
 platform's identity is its own invitation-only OTP flow rather than Neon Auth, and nothing calls a model.
 Credentials that exist are not integration, so none of the three is claimed as integrated here; the
 object-storage path (attachments) is the one that has a designed feature waiting for it.
+
+## D30 - Attachments are signed by hand, and `clean` is a verdict rather than a hope
+
+**What was wired.** Uploads, end to end. An `image`, `audio`, `video` or `file` question on a public
+link can be authorised, uploaded and verified — and now from the product's own interface: the control in
+`apps/web/src/respondent.tsx`, wired by `collect.tsx`, authorises the upload, PUTs the bytes and calls
+`complete`, then stores the attachment id the server returns as that question's answer.
+The path the browser takes is the one the tests also drive headlessly: a PUT of the bytes to S3-compatible
+object storage against a URL this API presigns, so a video is not a video-sized response body from a
+serverless function and the store's credentials never leave the server. The first thing worth noticing is what did *not* have to happen: `response_attachment` was
+already in `0003_platform.sql` with `storage_key`, `sha256`, `scan_status` (`pending`, `clean`, `infected`,
+`error`, `skipped`), `status`, `FORCE ROW LEVEL SECURITY` and the collector policies, and `app_role`
+already held the grants — **so this shipped with no migration at all**. The schema was written for this
+feature and the feature caught up with it. D29 recorded object storage as configured but unconsumed; this is
+the feature that consumes it, so the "credentials that exist are not integration" caveat no longer applies
+to storage.
+
+**Why SigV4 is written out rather than imported.** `@aws-sdk/client-s3` is the obvious dependency and it was
+not taken. Every operation this product needs is a *presigned* request — the upload the browser makes, and
+the API's own HEAD, GET and DELETE — so a single signing implementation covers all four, whereas the library
+route means signing a query string for the browser and signing headers for our own calls: two code paths
+that can disagree about what "the same request" is. It is also a large dependency inside a serverless
+function whose only job here is to sign a string, in a repository that hand-writes the XLSX reader and
+writer it depends on for exactly this reason. What made that safe rather than brave is that this algorithm
+is provable: the test that covers it stands up a stub store which **recomputes the signature from the
+incoming request and refuses anything that does not match**, so the suite does not assert that a URL looks
+plausible — it asserts that an independent implementation of the store's own verification accepts it. The
+content type travels inside the signature, which is what makes a handed-out URL able to upload one object of
+one type rather than "anything to this key".
+
+**Why `error` and `skipped` are statuses, and `clean` is not a default.** A deployment with no scanner is
+the normal case for a self-hosted instance, and the honest record of that is `skipped` with a reason — not
+`clean`, which asserts that a scanner read the bytes and found nothing. `error` covers the third case that a
+boolean cannot express: a scanner *was* configured and did not answer, which is a different fact from a
+clean file and from no scanner at all. The consequence is deliberate and is the point of the vocabulary:
+**there is no code path that reports a file clean without a scanner saying so**, an infected object is
+deleted from the store before the row records why (a row is not a reason to keep bytes), and the verdict
+travels with the file — the author-facing route returns `scan_status` and refuses to serve an infected row at
+all, so a reader who would otherwise not be told cannot be misled.
+
+**And acceptance is a policy, not an accident of the environment.** The vocabulary above records what
+happened to a file; it said nothing about whether an *unscanned* file may become an answer, and that was
+decided by whether `CLAMD_HOST` happened to be set — which cannot be told apart from somebody forgetting to
+set it. `ATTACHMENT_SCAN_POLICY` now names the stance. Its default, `allow_unscanned`, accepts a file whose
+scan was `skipped` **or** `error`, because this product collects data where connectivity is a hope: a field
+team whose scanner host is unreachable must not lose every upload, and refusing everything while a scanner is
+down was the behaviour before — the failure mode the product exists to avoid. The two statuses are not merged
+to buy that. The row keeps whichever it was, so the data still distinguishes "no scanner here" from "a
+scanner that did not answer", and the capability block reports the policy (`unscanned: accepted | refused`)
+beside `scan: on | off`, so the client states the stance instead of assuming it. `ATTACHMENT_SCAN_POLICY=require`
+buys the other posture for a deployment that wants it, and with no scanner configured it refuses at
+authorisation — before a URL is signed — rather than letting a respondent transfer a file that would only be
+rejected at the end. What a deployment gives up by choosing acceptance is worth saying plainly: an unscanned
+file is a file from the internet that nobody looked at, and the only things standing between it and a
+researcher's disk are the per-question type allowlist and the size ceiling.
+
+**Why the store's answer beats the client's.** The device declares a size and a type so that the URL can be
+scoped to them, and neither declaration is believed. A row becomes `uploaded` only after a HEAD has reported
+what actually arrived; a file over the ceiling, or of a type that was not signed, is deleted from the store
+and the attempt recorded as refused. Submission adds the last check, because a row can exist while its bytes
+do not: an answer naming an attachment the server has not accepted is refused with `attachment_not_ready`
+rather than committed with a reference that leads nowhere.
+
+**Honest limits.** The console has no screen that lists or downloads an attachment: the author route exists
+(`GET /orgs/:orgId/attachments/:attachmentId`) and nothing in the browser calls it. The offline promise
+covers answers, not attachments, so the control says it needs a connection rather than pretending to
+queue a file, and that gap is named in `docs/ROADMAP.md` rather than glossed over. The studio's preview
+receives no upload function, because there is no response for a file to belong to, and it says that
+instead of offering a control that would fail on use. A deployment with no
+bucket configured answers `501 storage_not_configured` and goes on saying that these questions are not
+collected here, which is a supported state for an instance with nowhere to put a file — not a broken one.
+
+**The continuation, and why the same reasoning produced a separate service for `.sav` and `.dta`.** Two
+things were left when this decision was written, and both are now built.
+
+The respondent's control exists, and it takes its limits from the server rather than from the bundle: the
+public link read carries a capability block (`enabled`, `maxBytes`, the scan state, and the per-type MIME
+allowlist) and `respondent.tsx` renders the input from it, so the browser cannot offer a file the API would
+refuse and cannot be wrong about the ceiling when an operator changes it. The control renders in one place
+and degrades in two — no bucket, and the studio's preview, where there is no response for a file to belong
+to — because the alternative, a control that looks live and fails on use, is the same class of lie as a
+`sent` for a mail that never left.
+
+`.sav` and `.dta` are the same principle applied to a binary format, and the answer is a service rather than
+a dependency here. This process cannot verify that the bytes it wrote are a valid SPSS or Stata file, and
+**a `.sav` this process cannot verify must not be invented** — that was D9's whole point and it did not
+change. What changed is where the writer lives: `pyreadstat` is Python, and writing it out in TypeScript
+would mean hand-rolling two more binary formats this repository could not check either. So
+`services/pyreadstat/` does that one job, the API sends it the engine's dataset as JSON, and the split is
+deliberate in both directions — the worker never touches the database, and this process never assembles a
+statistical file. A deployment without `PYREADSTAT_WORKER_URL` keeps D9's answer exactly, down to naming the
+variable, and a worker that is unreachable or answers with zero bytes is a refusal rather than an empty
+download. The presign route exists for the mirror-image reason: a file path with no server in it is what
+keeps a video from becoming a video-sized response body, and it is why the same content type has to travel
+inside the signature.
+
+## D31 — The landing page carries the brand palette, on two materials
+
+**Context.** The public page was built in the product's dark theme: near-black ground, pearl type, blue and
+violet accents — the same palette as the console, applied to a marketing page. The brand palette is not
+that. It is an orange primary on a white ground, with one near-black surface for the things that should
+read as a different material.
+
+**Decision.** The landing page is anchored on the brand values and is one page made of two materials. The
+ground is `#ffffff` with ink type (`#111827`); the surface is `#191c21`, and it is what the stage and the
+footer are made of; the primary is `#ea580c`; the accent is `#fdba74`. Type on the ground cannot be type on
+the surface, and vice versa — those are four distinct roles rather than one palette with a tint applied —
+and a border is a hairline of whichever material it is drawn on. The console is deliberately **not**
+rethemed: it is a dark room with glass in it, it is a working surface rather than a marketing one, and a
+palette is not a reason to redesign the thing people do their job in.
+
+**Why the primary is two tokens.** `#ea580c` as a glyph on `#ffffff` measures 3.6:1 — under the 4.5:1 that
+text needs, and this was measured rather than assumed. So the primary is `--l-primary` wherever it is a
+fill (a button, a dot, a hairline) and `--l-primary-text` (`#c2410c`, 5.18:1) wherever it is type. Two
+consequences follow and both are deliberate: the primary action's label is the type colour rather than
+white, because white on `#ea580c` is 3.6:1 and `#111827` on it is 4.98:1; and the hero's display gradient
+stops at the brand value, because a 150px line is held to the 3:1 that large text is allowed rather than
+the 4.5:1 a paragraph needs, which is exactly why that treatment belongs to the two headlines and nowhere
+else. The peach accent appears only on the surface, where it is 10:1 — on white it is 1.9:1.
+
+**Why the palette is now measured rather than reviewed.** A palette is the easiest thing in a codebase to
+drift, because every individual nudge looks fine. `apps/web/test/contrast.test.ts` reads the tokens out of
+the stylesheets, composites the translucent ones over the ground they sit on and asserts the WCAG AA ratio
+for 25 pairs across the console's two themes and the landing page's two materials. It also asserts the
+brand anchors by value, and that no blue, violet or cyan survives on the landing page as a token **or as a
+literal** — a leftover `rgba(42, 91, 255, 0.42)` on a hover border is the realistic way a palette change
+leaves a mess, and a test that only checks tokens would miss it.
+
+**What the browser found that no stylesheet review would.** Measuring computed colour at five viewports
+(320, 390, 768, 1280, 1440) turned up a defect that predates this change: `styles.css` styles
+`h1, h2, h3, h4` globally with `color: var(--text)`, and the console's `--text` is `--ink` — near-black —
+for anyone whose operating system is in light mode. Every headline on the landing page had therefore been
+near-black on a near-black ground for half of all visitors, and the screenshots could not show it because
+headless browsers ask for a light colour scheme while rendering a dark page for real. The landing page now
+declares the colour of its own headings. The lesson is not "add a colour"; it is that a page assembled from
+two stylesheets has to be measured as rendered, in a browser, at the widths people actually use.

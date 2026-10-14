@@ -7,8 +7,14 @@
  * stylesheet stays exactly as it is, so this cannot restyle a table row or an input
  * by accident.
  *
- * The theme is the product's theme: near-black, pearl type, one blue, one violet,
- * one cyan used only where something is genuinely live, and glass everywhere.
+ * The theme is the brand palette: a light ground (#ffffff) with ink type on it, one
+ * orange as the primary, one peach as the accent, and one near-black surface
+ * (#191c21) that the stage and the footer are made of. Background, surface, text and
+ * border are four separate roles and no rule borrows one for another: type on the
+ * ground uses `--l-text`/`--l-muted`, type on the surface uses
+ * `--l-on-surface`/`--l-muted-on-surface`, and a border is a hairline of whichever
+ * of the two it is drawn on. That is what keeps a page made of two materials
+ * legible in both.
  *
  * Two rules keep the page from cramping.
  *
@@ -31,19 +37,40 @@
   --l-sp-7: 48px;
   --l-sp-8: 72px;
 
-  /* The product palette. */
-  --l-pearl: #f3f2ee;
-  --l-ink: #05070d;
-  --l-panel: rgba(255, 255, 255, 0.038);
-  --l-line: rgba(243, 242, 238, 0.12);
-  --l-line-strong: rgba(243, 242, 238, 0.22);
-  --l-text: var(--l-pearl);
-  --l-muted: #8e8e96;
-  --l-blue: #2a5bff;
-  --l-blue-text: #6f95ff;
-  --l-violet: #7b4dff;
-  --l-violet-text: #b7b0ff;
-  --l-cyan: #1cc7d0;
+  /*
+   * The brand palette.
+   *
+   * The orange is the primary and it is two tokens, because one value cannot do
+   * both jobs honestly: #ea580c as type on white is 3.6:1, short of the 4.5:1 text
+   * needs, so `--l-primary` is the brand value wherever it is a fill or a mark and
+   * `--l-primary-text` is the darker shade wherever it is a glyph. Both, and every
+   * other pair below, are measured in `apps/web/test/contrast.test.ts`.
+   *
+   * `--l-line-control` and `--l-line-control-on-surface` exist for the same reason:
+   * a hairline chosen for looks is about 1.2:1 against either ground, and WCAG 1.4.11
+   * asks the boundary of a control to reach 3:1 against what is behind it.
+   */
+  --l-primary: #ea580c;
+  --l-primary-text: #c2410c;
+  --l-on-primary: #111827;
+  --l-accent: #fdba74;
+  --l-bg: #ffffff;
+  --l-surface: #191c21;
+  --l-text: #111827;
+  --l-muted: #4b5563;
+  --l-on-surface: #ffffff;
+  --l-muted-on-surface: #9ca3af;
+  --l-panel: rgba(253, 186, 116, 0.12);
+  --l-line: rgba(17, 24, 39, 0.12);
+  --l-line-control: rgba(17, 24, 39, 0.5);
+  --l-line-on-surface: rgba(255, 255, 255, 0.16);
+  --l-line-control-on-surface: rgba(255, 255, 255, 0.45);
+
+  /* One radius language. A chip, a card and a pill on this page is one of these
+     three values and never a fourth one invented at the point of use. */
+  --l-radius-sm: 8px;
+  --l-radius: 16px;
+  --l-radius-pill: 999px;
 
   --l-gutter: clamp(20px, 5vw, 84px);
   --l-measure: 68ch;
@@ -55,7 +82,14 @@
   --l-line-gap: clamp(10px, 1.6vh, 22px);
 
   position: relative;
-  background: var(--l-ink);
+  /*
+   * The ground is the surface, and that is not a contradiction: the stage is painted
+   * straight onto it and every section below the stage is an opaque sheet of
+   * `--l-bg` laid over it. Painting the base dark is what makes the first paint
+   * correct — the scene is a separate chunk, and a light base would show white text
+   * on a white page for as long as that chunk takes to arrive.
+   */
+  background: var(--l-surface);
   color: var(--l-text);
   font-family: var(--l-display);
   font-size: 16px;
@@ -75,6 +109,15 @@
   html:has(.landing) {
     scroll-behavior: smooth;
   }
+}
+
+/*
+ * The landing is a light page inside an application whose shell is dark-first, so
+ * the browser's own chrome — the scrollbar, and any form control a reader's browser
+ * draws for them — follows the page rather than the console.
+ */
+html:has(.landing) {
+  color-scheme: light;
 }
 
 /* ---------------------------------------------------------------- the scene */
@@ -102,38 +145,45 @@
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(120% 80% at 78% 8%, rgba(42, 91, 255, 0.24), transparent 60%),
-    radial-gradient(90% 70% at 12% 82%, rgba(123, 77, 255, 0.18), transparent 62%),
-    radial-gradient(60% 50% at 50% 50%, rgba(28, 199, 208, 0.07), transparent 70%);
+    radial-gradient(120% 80% at 78% 8%, rgba(234, 88, 12, 0.34), transparent 60%),
+    radial-gradient(90% 70% at 12% 82%, rgba(253, 186, 116, 0.2), transparent 62%),
+    radial-gradient(60% 50% at 50% 55%, rgba(17, 24, 39, 0.55), transparent 72%),
+    var(--l-surface);
 }
 
 /* ------------------------------------------------------- grain and vignette */
 
 /*
- * Grain over the whole page, and a vignette under it.
+ * Grain over the whole page, and a vignette over the stage.
  *
  * Both are decoration and both are CSS: the scene behind them is expensive and the
- * flats of a large dark page are the one place a viewer notices that nothing is
+ * flats of a large page are the one place a viewer notices that nothing is
  * physically there. Neither one takes a pointer event, and neither animates when the
  * reader has asked for stillness.
+ *
+ * The vignette belongs to the stage and is sized to it rather than fixed to the
+ * viewport, because the page is two materials: a fixed one would darken the white
+ * sections below the stage as well, which is how a depth cue turns into a grey band.
  */
-.landing::before {
+.lstage::after {
   content: '';
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 34;
+  z-index: 20;
   pointer-events: none;
   background: radial-gradient(125% 95% at 50% 0%, transparent 44%, rgba(4, 5, 10, 0.74) 100%);
 }
 
+/* The grain sits over both materials, so it is neither pearl nor ink: a neutral
+   dot, at a whisper, legible on the dark stage and on the white sheets alike. */
 .landing::after {
   content: '';
   position: fixed;
   inset: -50%;
   z-index: 35;
   pointer-events: none;
-  opacity: 0.035;
-  background-image: radial-gradient(var(--l-pearl) 0.5px, transparent 0.5px);
+  opacity: 0.08;
+  background-image: radial-gradient(rgba(128, 132, 140, 1) 0.5px, transparent 0.5px);
   background-size: 3px 3px;
   animation: lgrain 6s steps(6) infinite;
 }
@@ -151,56 +201,33 @@
   .landing::after { animation: none; }
 }
 
-/* --------------------------------------------------------------- cursor ring */
+/* -------------------------------------------------------------- cursor trail */
 
-.lcursor-dot,
-.lcursor-ring {
+/*
+ * The pointer trail.
+ *
+ * One fixed canvas across the viewport that the springs are drawn into. It is
+ * decoration and it behaves like it: `pointer-events: none`, so every control
+ * underneath still receives its click, and `aria-hidden` in the markup, so it is
+ * nothing to a screen reader. The canvas is transparent — what a reader sees when
+ * the trail is at rest is the page behind it, unchanged.
+ *
+ * Reduced motion hides it here as well as switching it off in the effect. Two
+ * guards for one rule is deliberate: the script decides whether to spend frames,
+ * the stylesheet decides whether a decoration is painted at all, and a reader who
+ * asked for less motion should not depend on the script having loaded.
+ */
+.lcursor {
   position: fixed;
-  top: 0;
-  left: 0;
+  inset: 0;
   z-index: 40;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  border-radius: 50%;
-  mix-blend-mode: difference;
 }
 
-.lcursor-dot {
-  width: 6px;
-  height: 6px;
-  margin: -3px 0 0 -3px;
-  background: #fff;
-}
-
-.lcursor-ring {
-  width: 34px;
-  height: 34px;
-  margin: -17px 0 0 -17px;
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  display: grid;
-  place-items: center;
-  font-size: 8px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: #fff;
-  transition: width 0.3s ease, height 0.3s ease, margin 0.3s ease, background 0.3s ease;
-}
-
-.lcursor-ring.on {
-  width: 62px;
-  height: 62px;
-  margin: -31px 0 0 -31px;
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.lcursor-ring.on::after {
-  content: attr(data-label);
-}
-
-@media (hover: none), (prefers-reduced-motion: reduce) {
-  .lcursor-dot,
-  .lcursor-ring {
-    display: none;
-  }
+@media (prefers-reduced-motion: reduce) {
+  .lcursor { display: none; }
 }
 
 /* ------------------------------------------------------------------ reveal */
@@ -266,12 +293,30 @@
   text-decoration: none;
 }
 
+/*
+ * The headings say what colour they are, rather than inheriting it.
+ *
+ * This is not belt and braces. `styles.css` carries `h1, h2, h3, h4 { color:
+ * var(--text) }` for every signed-in screen, and `--text` is the *console's* type
+ * colour — `--ink`, near-black, for anyone whose operating system is in light mode.
+ * The landing page's headlines therefore inherited near-black on a near-black ground
+ * for every light-mode visitor, and a screenshot taken in a light-scheme browser is
+ * the one place that is not visible as a defect. The page is two materials, so its
+ * headings inherit from the material they are printed on: white on the stage, ink on
+ * the sheets below it.
+ */
+.landing h1,
+.landing h2,
+.landing h3 {
+  color: inherit;
+}
+
 .landing code {
   font-family: var(--l-mono);
   font-size: 0.88em;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(17, 24, 39, 0.05);
   border: 1px solid var(--l-line);
-  border-radius: 5px;
+  border-radius: var(--l-radius-sm);
   padding: 1px 5px;
 }
 
@@ -301,6 +346,13 @@
   opacity: 0.5;
 }
 
+/*
+ * The bar.
+ *
+ * It is the ground's material, not the surface's: it starts over the dark stage and
+ * ends over the white sheets, so a light translucent bar reads on both, and the
+ * hairline under it is what gives it an edge over white.
+ */
 .lnav {
   position: fixed;
   inset: 0 0 auto 0;
@@ -311,8 +363,9 @@
   gap: var(--l-sp-4);
   padding: var(--l-sp-5) var(--l-gutter);
   backdrop-filter: blur(14px);
-  background: linear-gradient(to bottom, rgba(5, 7, 13, 0.82), rgba(5, 7, 13, 0.32));
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.6));
   border-bottom: 1px solid var(--l-line);
+  color: var(--l-text);
 }
 
 .lbrand {
@@ -328,8 +381,8 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: var(--l-blue);
-  box-shadow: 0 0 16px rgba(42, 91, 255, 0.9);
+  background: var(--l-primary);
+  box-shadow: 0 0 14px rgba(234, 88, 12, 0.55);
 }
 
 .lnav nav {
@@ -354,6 +407,14 @@
   }
 }
 
+/*
+ * The primary action.
+ *
+ * The label is `--l-on-primary` rather than white: white on #ea580c is 3.6:1, which
+ * is under what 14.5px text needs, and the honest way to keep the brand value on the
+ * button is to put ink on it instead of a white that fails. The radius, the padding
+ * and the lift are the same language as every other control on the page.
+ */
 .lcta {
   appearance: none;
   border: 0;
@@ -361,23 +422,37 @@
   font: inherit;
   font-weight: 600;
   font-size: 14.5px;
-  color: var(--l-ink);
-  background: linear-gradient(120deg, #cfe0ff, #ffffff 45%, #cfe0ff);
+  color: var(--l-on-primary);
+  background: var(--l-primary);
   padding: 13px 22px;
-  border-radius: 999px;
-  box-shadow: 0 12px 40px rgba(42, 91, 255, 0.28);
-  transition: box-shadow 0.25s ease, filter 0.25s ease;
+  border-radius: var(--l-radius-pill);
+  box-shadow: 0 12px 34px rgba(234, 88, 12, 0.28);
+  transition: box-shadow 0.25s ease, filter 0.25s ease, transform 0.25s ease;
   will-change: transform;
 }
 
 .lcta:hover {
-  filter: brightness(1.06);
-  box-shadow: 0 16px 54px rgba(42, 91, 255, 0.44);
+  filter: brightness(1.04);
+  transform: translateY(-1px);
+  box-shadow: 0 16px 44px rgba(234, 88, 12, 0.38);
 }
 
 .lcta.small {
   font-size: 13px;
   padding: 9px 16px;
+}
+
+.lcta:focus-visible,
+.lghost:focus-visible {
+  outline: 2px solid var(--l-primary);
+  outline-offset: 3px;
+}
+
+.lstage .lcta:focus-visible,
+.lfooter .lcta:focus-visible,
+.lstage .lghost:focus-visible,
+.lfooter .lghost:focus-visible {
+  outline-color: var(--l-accent);
 }
 
 .lghost {
@@ -387,23 +462,52 @@
   font-size: 13.5px;
   font-weight: 500;
   color: var(--l-muted);
-  border: 1px solid var(--l-line-strong);
-  border-radius: 999px;
+  border: 1px solid var(--l-line-control);
+  border-radius: var(--l-radius-pill);
   padding: 12px 20px;
   transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
 }
 
 .lghost:hover {
-  color: var(--l-text);
-  border-color: rgba(42, 91, 255, 0.5);
-  background: rgba(42, 91, 255, 0.08);
+  color: var(--l-primary-text);
+  border-color: var(--l-primary);
+  background: var(--l-panel);
+}
+
+/* The same control, on the surface rather than on the ground. */
+.lstage .lghost,
+.lfooter .lghost {
+  color: var(--l-on-surface);
+  border-color: var(--l-line-control-on-surface);
+}
+
+.lstage .lghost:hover,
+.lfooter .lghost:hover {
+  color: var(--l-accent);
+  border-color: var(--l-accent);
+  background: rgba(253, 186, 116, 0.12);
 }
 
 /* ------------------------------------------------------------------- stage */
 
+/*
+ * The stage is the surface, so its type is on-surface type. This one line is what
+ * keeps the hero legible: the headings inherit it, and the handful of rules inside
+ * the stage that carry their own colour are set to the on-surface pair below.
+ */
 .lstage {
   position: relative;
   z-index: 10;
+  color: var(--l-on-surface);
+}
+
+.lstage .leyebrow {
+  color: var(--l-muted-on-surface);
+}
+
+.lstage code {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--l-line-on-surface);
 }
 
 .lstage > section {
@@ -441,7 +545,13 @@
 
 .lhero-line2 {
   margin-top: var(--l-line-gap);
-  background: linear-gradient(96deg, #ffffff 8%, var(--l-blue) 48%, var(--l-violet) 92%);
+  /*
+   * The gradient runs from ink to the primary, and stops there: its lightest stop is
+   * #ea580c at 3.6:1 on white, which is over the 3:1 a display size is allowed and
+   * under the 4.5:1 a paragraph would need, so this treatment belongs to the two
+   * 150px lines and nowhere else. Measured in the contrast test.
+   */
+  background: linear-gradient(96deg, var(--l-text) 6%, var(--l-primary-text) 52%, var(--l-primary) 96%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -452,7 +562,7 @@
   max-width: 62ch;
   font-size: clamp(15px, 1.35vw, 18px);
   line-height: 1.64;
-  color: var(--l-muted);
+  color: var(--l-muted-on-surface);
 }
 
 .lhero-actions {
@@ -468,8 +578,8 @@
   max-width: var(--l-measure);
   font-size: 13px;
   line-height: 1.7;
-  color: rgba(142, 142, 150, 0.9);
-  border-left: 1px solid var(--l-line-strong);
+  color: var(--l-muted-on-surface);
+  border-left: 1px solid var(--l-line-on-surface);
   padding-left: var(--l-sp-4);
 }
 
@@ -495,7 +605,7 @@
 .lclaim-body {
   margin: 0;
   max-width: var(--l-measure);
-  color: var(--l-muted);
+  color: var(--l-muted-on-surface);
   font-size: clamp(14.5px, 1.3vw, 17px);
   line-height: 1.68;
 }
@@ -512,7 +622,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--l-sp-4);
-  border-bottom: 1px solid var(--l-line);
+  border-bottom: 1px solid var(--l-line-on-surface);
   padding-bottom: var(--l-sp-4);
   margin-bottom: var(--l-sp-6);
 }
@@ -522,32 +632,34 @@
   align-items: center;
   gap: var(--l-sp-2);
   font-size: 12.5px;
-  color: var(--l-muted);
+  color: var(--l-muted-on-surface);
 }
 
+/* The live dot is what the accent is for: #fdba74 is 10:1 on the surface and would
+   be 1.9:1 on white, so it appears here and never on a light ground. */
 .llive-state i {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--l-cyan);
-  box-shadow: 0 0 0 0 rgba(28, 199, 208, 0.6);
+  background: var(--l-accent);
+  box-shadow: 0 0 0 0 rgba(253, 186, 116, 0.6);
   animation: lpulse 2.6s ease-out infinite;
 }
 
 .llive-state.bad i {
-  background: #ff7a7a;
+  background: #dc2626;
   animation: none;
 }
 
 @keyframes lpulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(28, 199, 208, 0.5);
+    box-shadow: 0 0 0 0 rgba(253, 186, 116, 0.5);
   }
   70% {
-    box-shadow: 0 0 0 12px rgba(28, 199, 208, 0);
+    box-shadow: 0 0 0 12px rgba(253, 186, 116, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(28, 199, 208, 0);
+    box-shadow: 0 0 0 0 rgba(253, 186, 116, 0);
   }
 }
 
@@ -559,17 +671,21 @@
 
 .llive-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  /* `min(100%, 220px)`: a bare 220px minimum overflows the column on a 320px phone,
+     which is the one width where a grid with a fixed minimum clips its content. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 1px;
   margin: 0;
-  background: var(--l-line);
-  border: 1px solid var(--l-line);
-  border-radius: 14px;
+  background: var(--l-line-on-surface);
+  border: 1px solid var(--l-line-on-surface);
+  border-radius: var(--l-radius);
   overflow: hidden;
 }
 
+/* A sheet of the surface over the scene, not a hole in it: the figures stay
+   readable whatever the instrument behind them happens to be doing. */
 .llive-grid > div {
-  background: rgba(8, 11, 20, 0.72);
+  background: rgba(25, 28, 33, 0.78);
   backdrop-filter: blur(16px);
   padding: var(--l-sp-6) var(--l-sp-5);
 }
@@ -580,33 +696,39 @@
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
   line-height: 1.04;
-  color: #fff;
+  color: var(--l-on-surface);
 }
 
 .llive-grid dd {
   margin: var(--l-sp-3) 0 0;
   font-size: 12.5px;
   line-height: 1.55;
-  color: var(--l-muted);
+  color: var(--l-muted-on-surface);
 }
 
 .llive-note {
   margin: var(--l-sp-5) 0 0;
   font-size: 13px;
   line-height: 1.7;
-  color: rgba(142, 142, 150, 0.9);
+  color: var(--l-muted-on-surface);
   max-width: 76ch;
 }
 
 /* --------------------------------------------- after the stage: solid ground */
 
+/*
+ * Below the stage the page is the light ground, and opaque: these sheets are what a
+ * reader actually reads, and painting them solid is also what keeps the fixed scene
+ * behind them instead of through them.
+ */
 .lcapabilities,
 .ltemplates,
 .lhonest,
 .lfooter {
   position: relative;
   z-index: 10;
-  background: var(--l-ink);
+  background: var(--l-bg);
+  color: var(--l-text);
   border-top: 1px solid var(--l-line);
   padding: clamp(72px, 9.5vw, 140px) var(--l-gutter);
 }
@@ -644,25 +766,31 @@
 
 .lcards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
   gap: var(--l-sp-5);
   margin-top: clamp(40px, 5vw, 68px);
 }
 
 .lcards article {
   border: 1px solid var(--l-line);
-  border-radius: 16px;
+  border-radius: var(--l-radius);
   padding: var(--l-sp-6) var(--l-sp-5) var(--l-sp-5);
-  background: var(--l-panel);
+  background: var(--l-bg);
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
   display: flex;
   flex-direction: column;
   gap: var(--l-sp-4);
-  transition: border-color 0.3s ease, transform 0.5s cubic-bezier(0.2, 0.75, 0.2, 1), background 0.3s ease;
+  transition:
+    border-color 0.3s ease,
+    transform 0.5s cubic-bezier(0.2, 0.75, 0.2, 1),
+    background 0.3s ease,
+    box-shadow 0.3s ease;
 }
 
 .lcards article:hover {
-  border-color: rgba(42, 91, 255, 0.42);
-  background: rgba(42, 91, 255, 0.06);
+  border-color: rgba(234, 88, 12, 0.45);
+  background: var(--l-panel);
+  box-shadow: 0 18px 40px rgba(17, 24, 39, 0.1);
   transform: translateY(-3px);
 }
 
@@ -691,7 +819,7 @@
 .lcode {
   font-family: var(--l-mono);
   font-size: 12px;
-  color: var(--l-blue-text);
+  color: var(--l-primary-text);
   word-break: break-all;
   margin-top: var(--l-sp-2);
   padding-top: var(--l-sp-3);
@@ -704,19 +832,34 @@
 
 .ltemplate-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   gap: var(--l-sp-5);
   margin-top: clamp(40px, 5vw, 68px);
 }
 
+/* Same radius, same border, same lift as the capability cards: two card grids on one
+   page are one card, and this is where that stops being a coincidence. */
 .ltemplate-grid article {
   border: 1px solid var(--l-line);
-  border-radius: 16px;
+  border-radius: var(--l-radius);
   padding: var(--l-sp-6) var(--l-sp-5);
-  background: var(--l-panel);
+  background: var(--l-bg);
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
   display: flex;
   flex-direction: column;
   gap: var(--l-sp-4);
+  transition:
+    border-color 0.3s ease,
+    transform 0.5s cubic-bezier(0.2, 0.75, 0.2, 1),
+    background 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.ltemplate-grid article:hover {
+  border-color: rgba(234, 88, 12, 0.45);
+  background: var(--l-panel);
+  box-shadow: 0 18px 40px rgba(17, 24, 39, 0.1);
+  transform: translateY(-3px);
 }
 
 .ltemplate-grid h3 {
@@ -740,9 +883,9 @@
   font-family: var(--l-mono);
   font-size: 11.5px;
   letter-spacing: 0.06em;
-  color: var(--l-cyan);
-  border: 1px solid rgba(28, 199, 208, 0.34);
-  border-radius: 999px;
+  color: var(--l-primary-text);
+  border: 1px solid rgba(234, 88, 12, 0.36);
+  border-radius: var(--l-radius-pill);
   padding: 3px 10px;
 }
 
@@ -775,7 +918,7 @@
   font-family: var(--l-mono);
   font-size: 11.5px !important;
   line-height: 2;
-  color: rgba(142, 142, 150, 0.72) !important;
+  color: var(--l-muted) !important;
   margin-top: var(--l-sp-2);
 }
 
@@ -809,7 +952,7 @@
   top: 0.72em;
   width: 12px;
   height: 1px;
-  background: var(--l-violet);
+  background: var(--l-primary);
 }
 
 .lhonest strong {
@@ -819,20 +962,41 @@
 
 /* ------------------------------------------------------------------ footer */
 
+/*
+ * The footer closes on the surface, the way the page opened on it: the stage is dark,
+ * the middle is paper, and the last thing a reader sees is the same material the
+ * first thing was. Everything on it is on-surface type.
+ */
 .lfooter {
   display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.9fr);
   gap: clamp(32px, 5vw, 72px);
   align-items: end;
   padding-bottom: var(--l-sp-7);
+  background: var(--l-surface);
+  color: var(--l-on-surface);
+  border-top-color: var(--l-line-on-surface);
+}
+
+.lfooter .leyebrow,
+.lfooter p {
+  color: var(--l-muted-on-surface);
+}
+
+.lfooter code {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--l-line-on-surface);
 }
 
 .lfooter p {
   margin: var(--l-sp-5) 0 0;
-  color: var(--l-muted);
   max-width: 58ch;
   font-size: 14.5px;
   line-height: 1.7;
+}
+
+.lfooter a:hover {
+  color: var(--l-accent);
 }
 
 .lfooter-actions {
@@ -850,9 +1014,9 @@
   gap: var(--l-sp-3);
   margin-top: var(--l-sp-7);
   padding-top: var(--l-sp-5);
-  border-top: 1px solid var(--l-line);
+  border-top: 1px solid var(--l-line-on-surface);
   font-size: 12.5px;
-  color: var(--l-muted);
+  color: var(--l-muted-on-surface);
 }
 
 @media (max-width: 860px) {
@@ -867,5 +1031,44 @@
 
   .lhero h1 {
     font-size: clamp(42px, 13vw, 96px);
+  }
+}
+
+/*
+ * A phone.
+ *
+ * Four things change, and each of them is a measurement rather than a preference.
+ * The display type drops a step so the longest word in the headline still fits the
+ * column it is given at 320px; the eyebrow loses tracking, which is worth more at
+ * 11px on a narrow screen than the look is; the two calls to action in the hero and
+ * the footer take the full width, because a 44px-tall target that cannot be missed
+ * beats two buttons stacked off-centre; and the grids are already one column, which
+ * is asserted in the audit rather than assumed here.
+ */
+@media (max-width: 560px) {
+  .lhero h1 {
+    font-size: clamp(38px, 12vw, 62px);
+  }
+
+  .leyebrow {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+  }
+
+  .lhero-actions,
+  .lfooter-actions {
+    width: 100%;
+  }
+
+  .lhero-actions .lcta,
+  .lhero-actions .lghost,
+  .lfooter-actions .lcta,
+  .lfooter-actions .lghost {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .llive-grid > div {
+    padding: var(--l-sp-5) var(--l-sp-4);
   }
 }

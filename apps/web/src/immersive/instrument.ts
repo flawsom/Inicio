@@ -53,10 +53,19 @@ export interface Instrument {
 
 const TAU = Math.PI * 2;
 
-/** Product accents, so the glass refracts the same colours as the interface. */
-const ACCENT_BLUE = new THREE.Color('#4c8dff');
-const ACCENT_VIOLET = new THREE.Color('#7b4dff');
-const NIGHT = new THREE.Color('#05070d');
+/**
+ * The brand accents, so the glass refracts the same two colours as the interface.
+ *
+ * The stage is the page's dark surface, so the light that falls on it is the
+ * palette's own: the primary orange, and the peach accent, which is only ever seen
+ * on a dark surface because it is 1.9:1 on white. Nothing blue survives here — a
+ * scene lit in a colour the interface does not use is the quickest way to make one
+ * product look assembled out of two.
+ */
+const PRIMARY = new THREE.Color('#ea580c');
+const ACCENT_WARM = new THREE.Color('#fdba74');
+/** The stage's ground: the same value as the stylesheet's `--l-surface`. */
+const SURFACE = new THREE.Color('#191c21');
 
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
@@ -98,18 +107,18 @@ function buildEnvironment(renderer: THREE.WebGLRenderer): THREE.Texture {
         float u = atan(dir.z, dir.x);
         float v = dir.y;
 
-        // Base: a cold floor rising into a pale ceiling.
-        vec3 colour = mix(vec3(0.02, 0.03, 0.06), vec3(0.72, 0.78, 0.95), smoothstep(-0.7, 0.9, v));
+        // Base: a dark floor rising into a warm ceiling.
+        vec3 colour = mix(vec3(0.02, 0.02, 0.025), vec3(0.92, 0.90, 0.88), smoothstep(-0.7, 0.9, v));
 
         // The key light: a broad window high and to the left.
-        colour += vec3(1.0) * 2.1 * exp(-pow((v - 0.66) / 0.10, 2.0));
-        // A second, cooler strip lower down so the chrome has something to catch.
-        colour += vec3(0.75, 0.86, 1.0) * 0.7 * exp(-pow((v - 0.10) / 0.05, 2.0));
+        colour += vec3(1.0, 0.97, 0.94) * 2.1 * exp(-pow((v - 0.66) / 0.10, 2.0));
+        // A second, warmer strip lower down so the chrome has something to catch.
+        colour += vec3(1.0, 0.86, 0.74) * 0.7 * exp(-pow((v - 0.10) / 0.05, 2.0));
 
-        // Product accents at the edges: the blue and violet from the interface.
-        colour += vec3(0.28, 0.52, 1.0) * 1.15 * exp(-pow((u - 1.75) / 0.62, 2.0)) * exp(-pow((v - 0.02) / 0.42, 2.0));
-        colour += vec3(0.55, 0.34, 1.0) * 0.85 * exp(-pow((u + 1.65) / 0.62, 2.0)) * exp(-pow((v + 0.06) / 0.42, 2.0));
-        colour += vec3(0.18, 0.85, 0.78) * 0.45 * exp(-pow((u + 0.15) / 0.5, 2.0)) * exp(-pow((v + 0.55) / 0.3, 2.0));
+        // The brand accents at the edges: the primary orange and the peach.
+        colour += vec3(0.92, 0.35, 0.05) * 1.15 * exp(-pow((u - 1.75) / 0.62, 2.0)) * exp(-pow((v - 0.02) / 0.42, 2.0));
+        colour += vec3(1.0, 0.73, 0.45) * 0.85 * exp(-pow((u + 1.65) / 0.62, 2.0)) * exp(-pow((v + 0.06) / 0.42, 2.0));
+        colour += vec3(1.0, 0.50, 0.20) * 0.35 * exp(-pow((u + 0.15) / 0.5, 2.0)) * exp(-pow((v + 0.55) / 0.3, 2.0));
 
         gl_FragColor = vec4(colour, 1.0);
       }
@@ -246,7 +255,7 @@ export async function createInstrument(
   }
 
   const scene = new THREE.Scene();
-  scene.background = NIGHT.clone();
+  scene.background = SURFACE.clone();
   const environment = buildEnvironment(renderer);
   scene.environment = environment;
 
@@ -256,15 +265,15 @@ export async function createInstrument(
   const key = new THREE.DirectionalLight(0xffffff, 1.5);
   key.position.set(5, 9, 7);
   scene.add(key);
-  const rim = new THREE.DirectionalLight(0x9fc0ff, 1.1);
+  const rim = new THREE.DirectionalLight(0xffb27a, 0.9);
   rim.position.set(-8, 2, -6);
   scene.add(rim);
-  const accent = new THREE.PointLight(ACCENT_BLUE.getHex(), 0, 40, 1.8);
+  const accent = new THREE.PointLight(PRIMARY.getHex(), 0, 40, 1.8);
   accent.position.set(2.5, 1.5, 5);
   scene.add(accent);
 
   const glass = new THREE.MeshPhysicalMaterial({
-    color: 0xdfe9ff,
+    color: 0xffe9d6,
     metalness: 0,
     roughness: 0.06,
     transmission: low ? 0 : 1,
@@ -275,12 +284,12 @@ export async function createInstrument(
     iridescence: 0.8,
     iridescenceIOR: 1.3,
     iridescenceThicknessRange: [120, 540],
-    attenuationColor: ACCENT_BLUE.clone().lerp(new THREE.Color('#ffffff'), 0.35),
+    attenuationColor: PRIMARY.clone().lerp(new THREE.Color('#ffffff'), 0.35),
     attenuationDistance: 1.4,
     envMapIntensity: 1.25,
     transparent: low,
     opacity: low ? 0.82 : 1,
-    emissive: ACCENT_VIOLET.clone(),
+    emissive: ACCENT_WARM.clone(),
     emissiveIntensity: 0,
   });
 
@@ -291,7 +300,7 @@ export async function createInstrument(
     envMapIntensity: 1.4,
     clearcoat: 0.5,
     clearcoatRoughness: 0.05,
-    emissive: ACCENT_BLUE.clone(),
+    emissive: PRIMARY.clone(),
     emissiveIntensity: 0,
   });
 
@@ -323,7 +332,7 @@ export async function createInstrument(
       slot[i] = glassIndex;
       // Glass keeps a trace of colour, taken from the product accents, so the
       // structure reads as belonging to this interface and not to a demo.
-      tint.copy(ACCENT_BLUE).lerp(ACCENT_VIOLET, hash(i * 17 + 9)).lerp(new THREE.Color('#ffffff'), 0.72);
+      tint.copy(PRIMARY).lerp(ACCENT_WARM, hash(i * 17 + 9)).lerp(new THREE.Color('#ffffff'), 0.72);
       blades.setColorAt(glassIndex, tint);
       glassIndex += 1;
     }
@@ -339,7 +348,7 @@ export async function createInstrument(
   filamentAttribute.setUsage(THREE.DynamicDrawUsage);
   filamentGeometry.setAttribute('position', filamentAttribute);
   const filamentMaterial = new THREE.LineBasicMaterial({
-    color: 0x8fb4ff,
+    color: 0xfdba74,
     transparent: true,
     opacity: 0.24,
     blending: THREE.AdditiveBlending,
@@ -360,7 +369,7 @@ export async function createInstrument(
   const dustGeometry = new THREE.BufferGeometry();
   dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
   const dustMaterial = new THREE.PointsMaterial({
-    color: 0xbcd0ff,
+    color: 0xfdba74,
     size: 0.05,
     transparent: true,
     opacity: 0.5,
@@ -482,7 +491,7 @@ export async function createInstrument(
     filamentMaterial.opacity = 0.08 + 0.24 * smooth(range(progress, 0.1, 0.6));
 
     // The interface colours move through the structure as it opens.
-    accent.color.copy(ACCENT_BLUE).lerp(ACCENT_VIOLET, smooth(range(progress, 0.5, 1)));
+    accent.color.copy(PRIMARY).lerp(ACCENT_WARM, smooth(range(progress, 0.5, 1)));
     accent.position.set(Math.cos(elapsed * 0.3) * 4, Math.sin(elapsed * 0.22) * 2.4, 4);
     accent.intensity = 8 * presence;
 

@@ -62,6 +62,59 @@ what changed and why.
   inside a frame cost one read, and a minute of clock passes while the stream is live without a single
   timed request. `pnpm test` is the suite these entries describe; it stood at 169 tests when the push
   channel shipped, and it is 256 now: 55 engine, 103 API, 98 web.
+- **File uploads: presigned, bounded, scanned, and picked from the browser.** An `image`, `audio`,
+  `video` or `file` question can be authorised, uploaded around the server and verified — and now from
+  the product's own interface, which was the half that was missing. A respondent gets a real file input,
+  which appears only when the deployment actually has storage and takes its accepted types and its size
+  ceiling from the server's own capability block rather than from a constant in the bundle; the two states
+  where it cannot work — no bucket configured, and the studio's preview, where there is no response for a
+  file to belong to — each say so rather than offering a control that would fail on use. The page then
+  authorises the upload, sends the bytes and calls `complete`, and stores the attachment id the server
+  returns as that question's answer, through the same draft-and-outbox path as any other answer. The file
+  travels as a PUT straight from the browser to S3-compatible
+  object storage against a URL the API presigns, so a video is not a video-sized response body from a
+  serverless function and the store's credentials never leave the server. SigV4 presigning is written out
+  (`apps/api/src/storage/presign.ts`) rather than imported, so one signing path covers the upload and the
+  API's own HEAD, GET and DELETE, and the content type is bound into the signature — a URL that has been
+  handed out uploads one object, of one type. The limits are enforced twice for that reason: an explicit
+  per-question-type MIME allowlist and `UPLOAD_MAX_BYTES` (10 MB by default) are checked when the upload
+  is authorised, and the size and type **the store reports** are checked again before the row is called
+  `uploaded`, because the answer that counts comes from the thing that received the bytes. `sha256` is
+  computed server-side from those bytes. The scan step is a clamd INSTREAM client with four honest
+  outcomes: `clean` (a scanner read it), `infected` (a scanner named it, and the object is deleted),
+  `error` (a scanner was configured and did not answer) and `skipped` (this deployment has no scanner) —
+  there is deliberately no path that reports `clean` without a scanner saying so. Whether an unscanned file
+  may be *accepted* is now a named policy rather than a side effect of an unset variable:
+  `ATTACHMENT_SCAN_POLICY` defaults to `allow_unscanned`, which accepts both `skipped` and `error`, because a
+  field team whose scanner host is unreachable must not lose every upload — while the row keeps the two apart,
+  so the data still distinguishes "no scanner here" from "a scanner that did not answer", and the capability
+  block reports the policy so the client states it instead of assuming it. `ATTACHMENT_SCAN_POLICY=require`
+  makes a scanner's verdict mandatory and refuses at authorisation, before a URL is signed, rather than letting
+  a respondent transfer a file that would only be rejected at the end. Submission
+  cross-checks as well: an answer naming an attachment the server has not accepted is refused with
+  `attachment_not_ready` instead of submitted with a link that leads nowhere. **No migration was
+  needed**: `response_attachment` already carried `storage_key`, `sha256`, `scan_status` and `status`
+  under `FORCE` row-level security in `0003_platform.sql`, and `app_role` already held the grants, so
+  the schema written for this feature was the schema it shipped on. Authors read a file back through
+  `GET /orgs/:orgId/attachments/:attachmentId` — session-only, and `409` for a row the scanner named
+  infected. **Not built:** a console screen that lists or downloads an attachment — the author route exists and
+  nothing in the browser calls it. A file is also not choosable while the device is offline, because the
+  offline promise covers answers rather than attachments; the control says it needs a connection rather
+  than pretending to queue one.
+- **Statistical export: `.sav` and `.dta` are files now, or an honest refusal.** They used to be a
+  `501` and nothing else. `services/pyreadstat/` is a small Python service (stdlib `http.server` plus
+  pyreadstat, so there is no web framework here to keep patched) that takes the engine's dataset as JSON —
+  columns with their prompts and their numeric-ness, the rows, the value labels and the declared missing
+  codes — and writes an SPSS `.sav` or a Stata `.dta`, reporting every rename, name truncation,
+  reserved-word collision and dropped label back rather than discarding them. `pyreadstat` is the reason
+  this is a service and not a function: the format needs a writer that knows it, and this repository's
+  build and install steps are Node-only, so nothing here installs Python. What the API does with it is the
+  same posture as everywhere else — `PYREADSTAT_WORKER_URL` is what turns the refusal into a file, the
+  `501` without it **names that variable**, and a worker that is unreachable, or that answers with zero
+  bytes, is a `502` with a reason and never a download a researcher opens and finds empty. Five tests in
+  `apps/api/test/pyreadstat-export.test.ts` stub the worker over a local HTTP server and pin both
+  branches, including the zero-byte case. **Not covered:** the worker's own Python logic, because the
+  runner here is Node, and its deployment, which is deliberately somebody else's.
 - **One visual world, for the whole product.** The signed-in surfaces were restyled onto a single design
   system: the pearl and ink palette with the two accents, a spacing scale used for every margin, padding
   and gap, a type scale with real line heights, and one glass pane (`.card`) at four sizes. The console
@@ -194,6 +247,32 @@ what changed and why.
 
 ### Changed
 
+- **The landing page is the brand's palette now, and the console keeps its own.** The page is anchored on
+  the brand values — primary `#ea580c`, accent `#fdba74`, background `#ffffff`, surface `#191c21`, type
+  `#111827` — and it is one page made of **two materials** rather than one flat theme: the stage and the
+  footer are the surface, and every section a reader actually reads is an opaque sheet of the light ground
+  laid over it. Type on the ground is ink and type on the surface is white; a border is a hairline of
+  whichever of the two it is drawn on; nothing borrows a colour from the other role. The signed-in console
+  is deliberately untouched: it is a dark room with glass in it, and it stays that way.
+- **The brand orange cannot be a glyph on white, so the primary is two tokens.** `#ea580c` measures 3.6:1
+  on `#ffffff`, under the 4.5:1 text needs, so `--l-primary` is the brand value wherever it is a fill or a
+  mark and `--l-primary-text` is a darker `#c2410c` (5.18:1) wherever it is type. The hero's display
+  gradient stops at the brand value because a 150px line is held to 3:1 rather than 4.5:1, and the primary
+  action's label is the type colour rather than white — `#111827` on `#ea580c` is 4.98:1, white is 3.6:1.
+  The peach accent appears **only** on the dark surface, where it is 10:1; on white it is 1.9:1, so it
+  never appears there. Every one of these is a measurement rather than a preference, printed by
+  `apps/web/test/contrast.test.ts` on each run.
+- **One radius language, and two grids that are one card.** The capability cards and the template cards
+  now share the same radius token, the same hairline border and the same hover lift, because two card grids
+  on one page are one card. The live figures, the footer and the section sheets each take a radius from the
+  same three-value scale rather than a fourth value invented at the point of use.
+- **The scene refracts the palette it sits in.** `immersive/instrument.ts` was lit blue and violet while
+  the page was blue and violet; its environment, key light, dust, filaments, glass attenuation and chrome
+  now carry the brand orange and the peach, and the stage's ground value is the surface token itself. The
+  pointer trail changed with it, and for a structural reason: it was composited `lighter` (additive), which
+  on a page that is now mostly white makes a white stroke — the trail simply did not exist below the stage.
+  It paints normally, walks its hue inside the brand's band rather than through the spectrum, and both
+  thickens and strengthens over something interactive.
 - **The console no longer polls.** The responses table polled every 5 seconds, analytics every 10, the
   forms list every 10 and the link table every 15. Four screens open on one form meant four timers per
   browser and a query per timer whether or not anything had changed, and a number that could still be
@@ -224,7 +303,8 @@ what changed and why.
   a real PostgreSQL 16, the build, the byte budgets, the renderer-split assertion, 23 measured colour pairs
   and `axe-core` on every push, before both end-to-end harnesses. Two entries in a list of what is *next*
   were also simply done. The checklist now separates what is enforced today (moved up to *shipped*) from
-  what genuinely is not: **backups and a rehearsed restore**, file uploads, `.sav`/`.dta`, a WCAG 2.2 AA
+  what genuinely is not: **backups and a rehearsed restore**, file uploads and `.sav`/`.dta` (both built
+  since, and moved up), a WCAG 2.2 AA
   audit by a person with a screen reader, the Lighthouse budget that is still deliberately empty, and the
   drag-and-drop builder. The counts were stale in the same pass — 253 tests to 256, of which `apps/web`
   went from 95 to 98 when the reveal test for the template cards landed.
@@ -349,6 +429,30 @@ what changed and why.
   actually paints" from being something nobody checks.
 - **A resize after dispose touched the canvas.** `resize` was handed out unguarded, so a window resize
   arriving in the same tick as teardown would keep sizing a canvas the field had already let go of.
+- **Every headline on the landing page was invisible to a light-mode visitor.** `styles.css` styles
+  `h1, h2, h3, h4` globally with `color: var(--text)`, and the console's `--text` is `--ink` — near-black —
+  whenever the operating system asks for a light colour scheme. The landing page's headings inherited it:
+  near-black type on a near-black ground, for that half of visitors, and invisible in the screenshots taken
+  in a light-scheme browser for exactly the same reason. The landing now declares the colour of its own
+  headings and inherits from the material each one is printed on — white on the stage, ink on the sheets.
+  Found by reading the *computed* colour in a real browser at five viewports, which is the only place it
+  shows up, and now held by `contrast.test.ts`, which asserts both the leaking rule and the declaration
+  that answers it.
+- **The API suite could send real email, and asserted against whatever transport the machine had.** A
+  workspace `.env` holds a live provider key, because that is how the deployment sends mail, and
+  `selectTransport` prefers a key over SMTP — so the suite really did send login codes to the provider over
+  `fetch`, and two tests failed on a machine with a key while passing in CI. The mail verdict reported
+  `last-send` (the provider accepting a message) where the test was asserting the SMTP probe, and the
+  webhook receiver's capture held the provider's own HTTP call as well as the delivery under test.
+  `apps/api/test/setup.ts` pins `MAIL_TRANSPORT=smtp` for the whole suite, which makes both deterministic
+  and makes a real send impossible; the provider path is tested where it belongs, by injecting a sender in
+  `mail-https.test.ts`. Verified with the key present: 16 files, 126 tests, green — and the two failures
+  were reproduced in both directions before and after the pin.
+- **`pnpm lint` failed on a scratch directory.** The ignore pattern was `.run/**`, which matches the root
+  only, so a throwaway browser harness written in `apps/api/.run/` was linted as if it were source and
+  failed the run over `document` and `fetch`. It is `**/.run/**` now, which is what the comment above it
+  already claimed. The two errors it had been hiding in real source are fixed with it: an unnecessary
+  escape in `safeFilename`'s leading-dot strip, and an unused constant in the attachments suite.
 
 ## [0.1.0] — 2026-10-12
 

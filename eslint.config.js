@@ -3,8 +3,12 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   // `.run/` holds local dev artefacts (env file, logs, PIDs, throwaway test
-  // harnesses) and is gitignored, so it is not part of the linted source.
-  { ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', '**/*.d.ts', '.run/**', '.vercel/**', '.netlify/**'] },
+  // harnesses) and is gitignored, so it is not part of the linted source. The pattern
+  // is `**/.run/**` rather than `.run/**` because the throwaway harnesses end up in
+  // whichever package they were written for, and a root-only ignore lints them as if
+  // they were source — which is how a browser probe in `apps/api/.run/` fails a lint
+  // run over `document` and `fetch`.
+  { ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', '**/*.d.ts', '**/.run/**', '.vercel/**', '.netlify/**'] },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {

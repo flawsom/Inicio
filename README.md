@@ -19,7 +19,7 @@ there is no signal** — and exporting data that is ready for analysis rather th
 [![License](https://img.shields.io/badge/license-Apache--2.0-34d399?style=flat-square&labelColor=0f172a)](LICENSE)
 [![Build](https://img.shields.io/badge/build-clean-34d399?style=flat-square&labelColor=0f172a)](#-testing)
 [![CI](https://img.shields.io/badge/CI-lint_·_types_·_tests_·_budgets-34d399?style=flat-square&labelColor=0f172a)](#enforced-on-every-push)
-[![Tests](https://img.shields.io/badge/tests-256%20passing-34d399?style=flat-square&labelColor=0f172a)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-305%20passing-34d399?style=flat-square&labelColor=0f172a)](#-testing)
 [![Typecheck](https://img.shields.io/badge/typecheck-0%20errors-38bdf8?style=flat-square&labelColor=0f172a)](#-testing)
 [![Lint](https://img.shields.io/badge/lint-0%20errors-a78bfa?style=flat-square&labelColor=0f172a)](#-testing)
 [![Production](https://img.shields.io/badge/production-live-22c55e?style=flat-square&labelColor=0f172a&logo=vercel&logoColor=white)](https://inicio-prjct.vercel.app/health)
@@ -92,8 +92,9 @@ Inicio is three things that are usually three different products:
    keystroke is written to IndexedDB before anything is sent, and a durable outbox syncs when the
    network returns. A retried submission never becomes a second response, and a field edited on two
    devices is **kept twice**, never silently overwritten.
-3. **An export pipeline.** CSV bundle (data + codebook + value labels + missing-code table), XLSX and
-   JSON — with `.sav` and `.dta` refusing politely with a reason instead of shipping a file that is
+3. **An export pipeline.** CSV bundle (data + codebook + value labels + missing-code table), XLSX,
+   JSON, and SPSS `.sav` / Stata `.dta` written by the pyreadstat worker — which refuses politely, naming
+   the variable that would change it, wherever no worker is deployed, instead of shipping a file that is
    quietly wrong.
 
 Around those: organisations, roles, invitation-only onboarding, single-use distribution links,
@@ -230,7 +231,7 @@ promise.
 CSV bundle (data, codebook, value labels, missing codes), XLSX and JSON, generated from the definition
 version that actually collected the data.
 
-<sub>`GET /forms/:id/responses/export?format=…` — `.sav` / `.dta` return `501` with a reason until the pyreadstat worker ships (D9)</sub>
+<sub>`GET /forms/:id/responses/export?format=…` — `.sav` / `.dta` are written by the pyreadstat worker (`services/pyreadstat`) when `PYREADSTAT_WORKER_URL` names one, and refused with a `501` naming that variable when it does not (D9, D30)</sub>
 
 </td>
 </tr>
@@ -364,12 +365,13 @@ standing, rather than showing the definition they used to have.
 | 🔔 **Webhooks that survive a bad receiver** | Enqueued in the publishing transaction, signed over a timestamp and the body, retried with backoff, and self-disabling with a stated reason after five consecutive failures — plus a **Send test** button that reports what the receiver actually answered. |
 | 🧾 **A quality queue, not a score** | Speeding, straight-lining, duplicates and findings raised by hand, each row showing the evidence behind it and recording who decided what, when and why. |
 | 🌌 **A public surface with nothing invented on it** | Every figure on the landing page is read in that request from `GET /api/v1/public/summary`, and the scene is decoration: it is `aria-hidden`, it stops when the tab is hidden or the stage has scrolled past, and the page is complete with no WebGL at all. |
-| 🪞 **One world, not two** | The signed-in app wears the same palette, the same type scale and the same glass as the landing page, over an ambient light field drawn from the product's own node-and-filament structure. Every figure on a console screen is live, every panel arrives with the same entrance, and the whole shell is complete with no canvas and under `prefers-reduced-motion`. |
+| 🎨 **A brand palette with the contrast measured, not hoped for** | The landing page is the brand's: an orange primary on a white ground, with one near-black surface (`#191c21`) for the stage and the footer, and a peach accent that appears **only** on that surface, where it is 10:1 rather than the 1.9:1 it would be on white. The primary is two tokens for the same reason — `#ea580c` as a fill, a darker `#c2410c` as type, because the brand value is 3.6:1 as a glyph on white and text needs 4.5:1. All 25 pairs are computed from the stylesheets in `apps/web/test/contrast.test.ts`. |
+| 🪞 **One product, two materials** | The signed-in app keeps the product's own dark-pearl theme over an ambient light field drawn from the same node-and-filament structure as the landing page's scene, with the same type scale, the same radius language and the same entrance. Every figure on a console screen is live, and the whole shell is complete with no canvas and under `prefers-reduced-motion`. |
 | 🏫 **A real template** | The 2026 school ranking survey — the project this platform grew out of — ships as template #1, not as the product. |
 | 📶 **Honest connection state** | "No connection. Your answers are saved on this device and will be sent automatically", plus a **Send now** button and the timestamp the server has everything up to. |
 | 🐳 **A self-hosted profile** | Compose brings up PostgreSQL 16, Valkey, MinIO, ClamAV and Mailpit, with Caddy in front. |
 | 🧪 **Two live harnesses** | 35 end-to-end consumer checks and 28 offline-sync checks drive a real database through the same origin the browser uses. Each harness prints its own pass/fail line and reports the count it actually ran. |
-| 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 256 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
+| 🤖 **Checked on every push** | GitHub Actions runs lint, typecheck, 305 tests against a real PostgreSQL 16, the build, the bundle budgets and both harnesses against a running stack, on a push to `main` and on every pull request. |
 | ⚖️ **Budgets, not intentions** | The build fails if the critical path grows past 80 kB gzipped, if any chunk passes 150 kB, if the WebGL scene *or the XLSForm writer* leaks out of its lazy chunk, if a measured colour pair drops under 4.5:1, or if `axe-core` finds a violation on the public page or the consent gate. |
 
 </details>
@@ -788,11 +790,13 @@ product does not phone anywhere.
 </td>
 <td valign="top" width="50%">
 
-**💾 Cache, queue and object storage — provisioned, not yet load-bearing**
+**💾 Cache, queue and object storage — provisioned, and load-bearing for uploads**
 
 Valkey (cache/queue), MinIO (S3-compatible object storage) and ClamAV (upload scanning) are in the
-self-hosted compose profile so the upload path has somewhere to land. Today the product runs without
-them: nothing in the request path depends on Redis, and file uploads are not wired up yet.
+self-hosted compose profile, and the attachment path is the one that uses them: point
+`AWS_ENDPOINT_URL_S3` at MinIO and `CLAMD_HOST` at ClamAV and uploads, limits and the scan run exactly
+as they do in production, where the store is a managed one. Nothing in the request path depends on Redis
+yet, which is why Valkey stays provisioned rather than required.
 
 <sub>An honest status beats a stack diagram that lies.</sub>
 
@@ -896,7 +900,7 @@ Open **http://localhost:3000**, request a one-time code, read it in Mailpit, and
 ```bash
 pnpm lint        # ESLint 9, flat config
 pnpm typecheck   # tsc across four workspace packages
-pnpm test        # 256 tests
+pnpm test        # 305 tests
 pnpm coverage    # v8 coverage, per package
 pnpm build       # engine -> api -> web
 pnpm budgets     # the built bundle, gzipped, against its ceilings
@@ -937,7 +941,7 @@ docker compose -f docker/docker-compose.yml ps
 |---|---|---|---|
 | `postgres` | `postgres:16` | `5432` | Database; `docker/postgres-init` seeds extensions and the app role |
 | `valkey` | `valkey/valkey:8-alpine` | `6379` | Cache and queue (provisioned; not in the request path yet) |
-| `minio` | `minio/minio` | `9000`, `9001` | S3-compatible object storage for the (unshipped) upload path |
+| `minio` | `minio/minio` | `9000`, `9001` | S3-compatible object storage; point `AWS_ENDPOINT_URL_S3` at it to collect attachments locally |
 | `clamav` | `clamav/clamav:stable` | `3310` | Antivirus for uploads; heavy — start it only when you need it |
 | `mailpit` | `axllent/mailpit` | `1025`, `8025` | SMTP catcher and web inbox, so local mail never escapes |
 
@@ -1112,6 +1116,17 @@ deployment cannot have a test run create `…_test` on it and drop that schema. 
 | `MAIL_FROM` | | `Inicio Survey <no-reply@…>` | Envelope sender |
 | `MAIL_TRANSPORT` | | inferred | `smtp` or `resend`; inferred from `RESEND_API_KEY` when unset |
 | `RESEND_API_KEY` | | — | Choose the HTTPS API when the network refuses SMTP ports (25/465/587) |
+| `S3_BUCKET` | for file uploads | — | Where attachments live. With no bucket the upload control is not offered at all, and an `image`/`audio`/`video`/`file` question stays unanswered and says so |
+| `S3_ENDPOINT` | | — | For object storage that is not AWS and is reached by a bare endpoint |
+| `S3_REGION` | | — | The region to sign for, when `AWS_REGION` is not the one in use |
+| `AWS_ACCESS_KEY_ID` | for file uploads | — | The signer: used for the presigned `PUT` and for the API's own `HEAD`, `GET` and `DELETE` |
+| `AWS_SECRET_ACCESS_KEY` | for file uploads | — | The signer's secret; it never leaves the server |
+| `AWS_REGION` | | — | The region bound into the signature |
+| `AWS_ENDPOINT_URL_S3` | | — | The standard AWS name for a custom endpoint, if that is how the host names it |
+| `UPLOAD_MAX_BYTES` | | `10485760` | The ceiling for one attachment — checked when the upload is authorised, and again against the size the store itself reports |
+| `CLAMD_HOST` | | — | The scanner the upload's scan step talks to. **With no host, a file is recorded `skipped`, which is not the same as `clean`.** `CLAMD_PORT` (3310) and `CLAMD_TIMEOUT_MS` (15000) have defaults |
+| `ATTACHMENT_SCAN_POLICY` | | `allow_unscanned` | Whether an unscanned file may become an answer. `allow_unscanned` accepts a file whose scan was `skipped` **or** `error` — a field team whose scanner host is unreachable must not lose every upload — while the row keeps the two apart; `require` makes a scanner's verdict mandatory and refuses at authorisation with `scan_required`, before any URL is signed. The policy is reported to the client, so the page states it rather than assuming it |
+| `PYREADSTAT_WORKER_URL` | | — | The `.sav`/`.dta` worker (`services/pyreadstat`). With no URL those two exports refuse with a `501` that names this variable. `PYREADSTAT_TIMEOUT_MS` (20000) has a default |
 | `RESEND_API_URL` | | `https://api.resend.com/emails` | Override for a compatible endpoint |
 
 A relay will not send from a domain the account does not own, and the failure is worth
@@ -1122,6 +1137,27 @@ rejected outright (`This API key is not authorized to send emails from …`), an
 is a guess — both are what the provider answered when asked. `GET /auth/mail-status` (and the
 sign-in screen, which is built on it) reports the same evidence rather than an assumption:
 a probe, a message the relay actually accepted, or nothing yet.
+
+### Attachments and object storage
+
+S3-compatible, and optional on purpose. **With no bucket configured the API answers `501
+storage_not_configured` and the renderer goes on saying those questions are not collected here** — a
+supported state for a deployment that has nowhere to put a file, not a broken one.
+
+| Variable | Required | Default | Description |
+|---|:---:|---|---|
+| `S3_BUCKET` | for uploads | — | Bucket that holds answer attachments |
+| `AWS_ENDPOINT_URL_S3` | for uploads | — | Path-style S3-compatible endpoint; `S3_ENDPOINT` overrides it |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | for uploads | — | Used to **sign** a URL and nothing else; they never reach a browser |
+| `AWS_REGION` | | `us-east-1` | Signing region; `S3_REGION` overrides it |
+| `UPLOAD_MAX_BYTES` | | `10485760` | Ceiling for one attachment, checked when the upload is authorised and again against the size the store reports |
+| `CLAMD_HOST` | | — | Scanner for uploaded bytes. Unset means nothing is scanned and every file records `skipped` |
+| `CLAMD_PORT`, `CLAMD_TIMEOUT_MS` | | `3310`, `15000` | clamd INSTREAM port, and how long its verdict is awaited |
+
+The allowlist of file types is per question type and lives in the API
+(`apps/api/src/storage/limits.ts`), not in the browser. What `scan_status` says is what happened:
+`clean` means a scanner read the bytes, `infected` means it named something and the object was deleted,
+`error` means a configured scanner did not answer, and `skipped` means there is no scanner here at all.
 
 ### Cache, bootstrap and access control
 
@@ -1533,7 +1569,7 @@ done
 | `/health` | Function **with** a database round trip | **393 ms** | 412 ms | max 420 ms |
 
 <sub>¹ The three asset rows measure the build that was deployed, which predates the integration and
-quality screens; the current tree compiles to 234.8 kB of app and 73.6 kB over the wire (see
+quality screens; the current tree compiles to 239.9 kB of app and 75.1 kB over the wire (see
 [Bundle size](#bundle-size)), and the *latency* is a property of the host and the request, not of a
 particular hash.</sub>
 
@@ -1563,13 +1599,13 @@ the table below is a budget rather than a report:
 | Asset | Raw | Gzip | Budget | Loaded by |
 |---|---:|---:|---:|---|
 | `index.html` | 1.74 kB | 0.84 kB | — | everyone |
-| `index-*.css` (the whole app) | 18.8 kB | 4.8 kB | 7 kB | everyone |
-| `index-*.js` (console, collection, admin, legal) | **234.8 kB** | **73.6 kB** | 80 kB | everyone |
-| `landing-*.css` | 12.1 kB | 3.4 kB | 6 kB | the landing page |
-| `landing-*.js` | 15.8 kB | 5.4 kB | 8 kB | the landing page |
+| `index-*.css` (the whole app) | 20.2 kB | 5.1 kB | 7 kB | everyone |
+| `index-*.js` (console, collection, admin, legal) | **239.9 kB** | **75.1 kB** | 80 kB | everyone |
+| `landing-*.css` | 13.9 kB | 3.6 kB | 6 kB | the landing page |
+| `landing-*.js` | 15.9 kB | 5.5 kB | 8 kB | the landing page |
 | `instrument-*.js` (three.js) | 521.0 kB | 132.6 kB | 150 kB | the landing page, after first paint |
 
-The console bundle is 234.8 kB raw, which carries the push channel, the console — including the
+The console bundle is 239.9 kB raw, which carries the push channel, the console — including the
 integration, quality and raise-a-finding screens — and the ambient light field that makes the signed-in app the same
 world as the landing page. There is no charting library, no
 UI kit, no state manager and no icon package: the console is hand-built React with CSS custom
@@ -1604,19 +1640,19 @@ than pretending the score is 100. What can be verified today is verifiable: the 
 ```bash
 pnpm lint         # ESLint 9, flat config — 0 errors
 pnpm typecheck    # tsc across engine, api, web and the serverless entry
-pnpm test         # 256 tests
+pnpm test         # 305 tests
 pnpm coverage     # v8 coverage, per package
 pnpm build        # engine -> api -> web
 pnpm budgets      # the built bundle, gzipped, against its ceilings
 ```
 
-### What the 256 tests actually cover
+### What the 305 tests actually cover
 
 | Suite | Tests | Focus |
 |---|---:|---|
 | `packages/engine` | **55** | Expression parsing and evaluation, validation, XLSForm round-trip fixpoint, XLSX read/write, dataset and codebook assembly, every export writer, and **the workbook the studio shows**: `xlsFormSheets` asserted row by row against the file `exportXlsForm` zips, so the viewer and the download cannot drift |
-| `apps/api` | **103** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers, and **the push channel over a real socket**: `ready` first, silence while nothing changes, then one coalesced event naming the aggregate that moved, with a 404 and no stream for a form the caller cannot see, plus the public summary: read live, and asserted key by key to carry no tenant data, **and the integration surface**: a key whose secret is shown once and stored as a hash, its scope enforced at the route that declares it and *named* when it is missing, a key refused across organisations even though its creator belongs to both, revocation effective on the very next request, an endpoint that disables itself after five consecutive failures, a delivery signature checked against an independent HMAC in the test, a duplicate scan that refuses to record the same finding twice, and **the read scopes**: a key granted `forms:read` reaches the forms list *narrowed to its own organisation*, is `403 key_org_mismatch` on another organisation's form even though its creator belongs to both, and is told it is missing `responses:export` when it tries to export with only `responses:read` |
-| `apps/web` | **98** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer), **and the cards that arrive after the mount** (the template articles the API renders are handed to the reveal observer instead of keeping the hidden state, which is how three invisible cards reached production) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request), **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure), **23 measured contrast pairs** taken from the stylesheets themselves, **`axe-core` audits** of the two public surfaces, **the quality queue** (the evidence behind each finding is on the row, a decision carries the reason typed with it and re-reads the list it just changed, dismissing is asserted to be a different outcome from resolving, and a second scan is reported as finding nothing new rather than as doing nothing) and **the integration screen** (the scope catalogue's `enforced` flag genuinely disables a scope no route declares, a key secret is shown once in a read-only field that carries a panel saying so, an `http://` endpoint cannot be added at all, and "send test" reports the receiver's real `500` rather than "sent"), **raising a finding by hand** from a response row (the raise waits for a reason, and "already in the queue" is asserted to read differently from "recorded"), **the definition studio** (the JSON panel is the server's own definition; its rows move the XLSForm sheets and the preview with no request at all, because all three read one object; the sheets are the workbook the download writes; the preview hides a question whose relevance rule says so, renders the two inline choices, sends nothing and stores nothing when it is typed into, and produces *field-for-field identical markup* to the component the collection page renders), and **the shell guard** that keeps the ambient layer and a form field from ever sharing a class name again |
+| `apps/api` | **126** | Auth and OTP, invitations (single-use, expiry, revocation), RBAC, tenancy with a forged `org_id`, publish and restore immutability, **the sync contract**: idempotent start, base-aware merge, conflict retention, `409 already_submitted`, re-validation nulling irrelevant answers, and **the push channel over a real socket**: `ready` first, silence while nothing changes, then one coalesced event naming the aggregate that moved, with a 404 and no stream for a form the caller cannot see, plus the public summary: read live, and asserted key by key to carry no tenant data, **and the integration surface**: a key whose secret is shown once and stored as a hash, its scope enforced at the route that declares it and *named* when it is missing, a key refused across organisations even though its creator belongs to both, revocation effective on the very next request, an endpoint that disables itself after five consecutive failures, a delivery signature checked against an independent HMAC in the test, a duplicate scan that refuses to record the same finding twice, and **the read scopes**: a key granted `forms:read` reaches the forms list *narrowed to its own organisation*, is `403 key_org_mismatch` on another organisation's form even though its creator belongs to both, and is told it is missing `responses:export` when it tries to export with only `responses:read` |
+| `apps/web` | **124** | The offline core (`planSync`, outbox supersede rules, draft persistence), the service worker's routing executed in a VM, the realtime client (a burst inside one frame becomes one notification, an unknown aggregate is dropped, repeated failures end in `offline`), the landing page mounted in jsdom (its figures come from the API, it is readable when WebGL is unavailable, and it shows nothing rather than something old when the API does not answer), **and the cards that arrive after the mount** (the template articles the API renders are handed to the reveal observer instead of keeping the hidden state, which is how three invisible cards reached production) **the console's live read** (a push naming its aggregate refetches, a push naming another one does not, two pushes in a frame cost one read, and a minute of clock passes while the stream is live without a single timed request), **the ambient field** (a frame really is painted, no 2D context returns nothing rather than throwing, a hidden tab stops drawing, and scrolling genuinely rearranges the structure), **25 measured contrast pairs** taken from the stylesheets themselves — including the landing page's two materials, its primary-as-type pair and both of its control boundaries — **`axe-core` audits** of the two public surfaces, **the quality queue** (the evidence behind each finding is on the row, a decision carries the reason typed with it and re-reads the list it just changed, dismissing is asserted to be a different outcome from resolving, and a second scan is reported as finding nothing new rather than as doing nothing) and **the integration screen** (the scope catalogue's `enforced` flag genuinely disables a scope no route declares, a key secret is shown once in a read-only field that carries a panel saying so, an `http://` endpoint cannot be added at all, and "send test" reports the receiver's real `500` rather than "sent"), **raising a finding by hand** from a response row (the raise waits for a reason, and "already in the queue" is asserted to read differently from "recorded"), **the definition studio** (the JSON panel is the server's own definition; its rows move the XLSForm sheets and the preview with no request at all, because all three read one object; the sheets are the workbook the download writes; the preview hides a question whose relevance rule says so, renders the two inline choices, sends nothing and stores nothing when it is typed into, and produces *field-for-field identical markup* to the component the collection page renders), and **the shell guard** that keeps the ambient layer and a form field from ever sharing a class name again |
 
 ### Enforced on every push
 
@@ -1633,7 +1669,7 @@ with the API and web logs printed when a step fails.
 | Landing JS / CSS | over **8 kB** / **6 kB** gzipped |
 | Any single chunk | over **150 kB** gzipped |
 | The renderer split | a critical chunk contains `WebGLRenderer` or `createInstrument` — what a stray static import of the scene would do |
-| Colour | any of the 23 measured pairs drops below 4.5:1 for text, or 3:1 for a control boundary or the live dot |
+| Colour | any of the 25 measured pairs drops below 4.5:1 for text, or 3:1 for a control boundary or the live dot |
 | Accessibility | `axe-core` reports any violation on the landing page or the terms gate |
 
 ### Coverage
@@ -1906,15 +1942,15 @@ ceilings underneath — lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). This is t
 - [x] **A one-origin deployment** with verified tenancy on production
 - [x] **CI on every push** — lint, typecheck, the whole suite against a real PostgreSQL 16, the build and the byte budgets, then both end-to-end harnesses over the same origin a browser uses. Both jobs are green on `main`, so "verified" no longer means "verified on somebody's machine at the time"
 - [x] **Component tests for the React UI** — the landing page, the realtime client, the ambient field, the console's live read, the quality queue, the integration screen and the definition studio are mounted in jsdom, so the web number is no longer carried by the harnesses alone
-- [x] **Budgets enforced rather than intended** — the gzip ceilings, the assertion that the WebGL scene and the XLSForm writer stay out of the critical chunks, 23 measured colour pairs and an `axe-core` audit of the public surfaces all fail the build
+- [x] **Budgets enforced rather than intended** — the gzip ceilings, the assertion that the WebGL scene and the XLSForm writer stay out of the critical chunks, 25 measured colour pairs and an `axe-core` audit of the public surfaces all fail the build
+- [x] **Attachments, end to end** — an `image`, `audio`, `video` or `file` question is authorised, uploaded browser-to-store against a presigned URL, verified against what the store reports, scanned, and only then accepted as an answer; the control says so rather than pretending when a deployment has no bucket
+- [x] **`.sav` / `.dta` export** — written by the pyreadstat worker `PYREADSTAT_WORKER_URL` names, with the same honest `501` naming that variable when no worker is deployed
 
 ### 🔜 Next, in order
 
-- [ ] **File uploads** — object storage with presigned URLs, type and size limits and a scan step; unblocks the honest `image` and `file` question types
-- [ ] **`.sav` / `.dta` export** — the Python `pyreadstat` worker that turns today's `501` into a real file
 - [ ] **Backups and one rehearsed restore** — currently *not done*, and the single most important gap: nothing dumps the database, and no restore has ever been rehearsed
 - [ ] **A WCAG 2.2 AA audit and a Lighthouse budget** — everything a rule engine can decide is already enforced on every push (the colour measurements, the `axe-core` audit, the byte ceilings); what is still missing is a person with a screen reader, a keyboard-only pass over every signed-in screen, and a Lighthouse run against the deployment with the sign-in flow scripted — which is why [Lighthouse](#lighthouse) is empty rather than filled with a number nobody can reproduce
-- [ ] **A visual builder and logic editor** — the JSON editor is complete; the drag-and-drop surface is not
+- [ ] **A visual builder and logic editor** — the JSON editor is complete; the drag-and-drop surface is being written now, so treat it as in progress rather than as something you can use yet
 
 ### 🧭 Longer horizon
 
@@ -2021,8 +2057,9 @@ collection with conflict retention, exports in three formats, live analytics, an
 between two accounts.
 
 What is missing before you would run a serious multi-week survey: **backups and a rehearsed restore**
-(the biggest gap), file uploads, `.sav` and `.dta`, a WCAG 2.2 AA audit, and a rate limiter that
-survives more than one instance. All of it is in the [roadmap](#-roadmap) with reasons.
+(the biggest gap), a host for the statistical-export worker if you want `.sav`/`.dta` out of a deployment
+that has none — the API says exactly that rather than inventing a file — a WCAG 2.2 AA audit, and a rate
+limiter that survives more than one instance. All of it is in the [roadmap](#-roadmap) with reasons.
 
 </details>
 
@@ -2031,10 +2068,14 @@ survives more than one instance. All of it is in the [roadmap](#-roadmap) with r
 
 <br />
 
-In **your** PostgreSQL. The only outbound traffic is your mail relay (one-time codes and invitation
-emails). There is no telemetry, no analytics SDK, no crash reporter, no model provider in the request
-path, and no AI feature that would ship answers anywhere. Exports are generated by the API from your
-database on demand.
+In **your** PostgreSQL. Outbound traffic is your mail relay (one-time codes and invitation emails) and,
+for a deployment that points file uploads at object storage, that store — the API presigns those
+uploads, so no file passes through the serverless function and no store credential reaches a browser.
+The collection page now uses that path: it asks for a signed URL, the browser sends the bytes to the store,
+and the API is told when to check what arrived. There is no
+telemetry, no analytics SDK, no crash reporter, no model provider in the request path, and no AI
+feature that would ship answers anywhere. Exports are generated by the API from your database on
+demand.
 
 </details>
 
@@ -2044,9 +2085,12 @@ database on demand.
 <br />
 
 Because a wrong SPSS file is worse than an honest error. A real `.sav` with value labels, variable
-labels and missing-code mappings needs `pyreadstat`; until that worker exists, the API refuses with a
-reason and offers CSV, XLSX and JSON, all of which carry the codebook and the label tables instead.
-Shipping a file that opens but means the wrong thing would be the actual bug.
+labels and missing-code mappings needs `pyreadstat`, which is a Python library — so it is written by a
+worker of its own (`services/pyreadstat`) rather than approximated in TypeScript. Point
+`PYREADSTAT_WORKER_URL` at one and the export is a real file, with every renamed variable, truncated name
+and dropped label reported back; deploy nothing and the API refuses with a reason naming that variable,
+and offers CSV, XLSX and JSON, all of which carry the codebook and the label tables instead. Shipping a
+file that opens but means the wrong thing would be the actual bug.
 
 </details>
 

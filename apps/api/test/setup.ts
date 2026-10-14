@@ -84,6 +84,23 @@ Object.assign(process.env, {
   COOKIE_SECURE: 'false',
   SMTP_HOST: 'localhost',
   SMTP_PORT: '1025',
+  /*
+   * Which relay carries mail, pinned rather than inherited.
+   *
+   * A workspace `.env` holds a live provider key, because that is how the
+   * deployment sends mail — and `selectTransport` prefers a key over SMTP. So
+   * without this line the suite did two things it must never do: it really sent
+   * login codes to the provider over `fetch`, and it asserted against whichever
+   * transport the machine happened to be configured for. Both showed up as
+   * failures on a developer's machine and passed in CI, which is the worst way
+   * round: the mail verdict reported `last-send` — the provider accepting a
+   * message — where the test was asserting the SMTP probe, and the webhook
+   * receiver's capture held the provider's own HTTP call as well as the delivery
+   * under test. Pinning the transport makes both deterministic and makes a real
+   * send impossible. The provider path is tested where it belongs: by injecting a
+   * sender, in `mail-https.test.ts`.
+   */
+  MAIL_TRANSPORT: 'smtp',
   APP_ORIGIN: 'http://localhost:3000',
   // Tests sign in through the front door: request → read the code the way the
   // mailbox would (fixtures.readLiveOtp, from the stored hash) → verify. There is

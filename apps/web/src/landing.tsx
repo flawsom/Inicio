@@ -368,56 +368,45 @@ function InstrumentStage({ quality }: { quality: 'high' | 'low' }): JSX.Element 
   );
 }
 
-/** The pointer ring. Desktop only, and never the only way to see something. */
-function PointerRing(): JSX.Element | null {
-  const dotRef = useRef<HTMLDivElement>(null);
-  const ringRef = useRef<HTMLDivElement>(null);
-  const [enabled, setEnabled] = useState(false);
+/**
+ * The pointer trail, and never the only way to see something.
+ *
+ * A fixed, full-viewport canvas the trail is drawn into. It is decoration: it takes
+ * no pointer events, so every control underneath still receives its click, and it is
+ * hidden outright where there is no pointer to follow or motion is unwelcome. The
+ * effect itself lives in `landing-cursor.ts` and is imported on demand, for the same
+ * reason the scene is: nobody should download a decoration they will not see.
+ *
+ * The type below is structural rather than imported, which is the pattern this file
+ * already uses for the scene's handle — a type-only import would be erased anyway,
+ * and this keeps the dependency one-way.
+ */
+function CursorTrail(): JSX.Element {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    setEnabled(true);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    let handle: { dispose(): void } | null = null;
+    let disposed = false;
 
-    let ringX = window.innerWidth / 2;
-    let ringY = window.innerHeight / 2;
-    let targetX = ringX;
-    let targetY = ringY;
-    let frame = 0;
+    void import('./landing-cursor')
+      .then((module) => {
+        // The mount can lose the race with an unmount, which is normal under
+        // StrictMode's double mount: a trail created after teardown would draw into
+        // a canvas nobody is watching, forever.
+        if (disposed) return;
+        handle = module.mountCursorTrail(canvas);
+      })
+      .catch(() => undefined);
 
-    const tick = (): void => {
-      ringX += (targetX - ringX) * 0.18;
-      ringY += (targetY - ringY) * 0.18;
-      if (ringRef.current) ringRef.current.style.transform = `translate3d(${ringX}px, ${ringY}px, 0)`;
-      frame = requestAnimationFrame(tick);
-    };
-    const onMove = (event: PointerEvent): void => {
-      targetX = event.clientX;
-      targetY = event.clientY;
-      if (dotRef.current) dotRef.current.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0)`;
-      const target = event.target as HTMLElement | null;
-      const interactive = target?.closest('a, button, [data-cursor]');
-      if (ringRef.current) {
-        ringRef.current.classList.toggle('on', Boolean(interactive));
-        const label = interactive?.getAttribute('data-cursor');
-        ringRef.current.dataset.label = label ?? '';
-      }
-    };
-    window.addEventListener('pointermove', onMove, { passive: true });
-    frame = requestAnimationFrame(tick);
     return () => {
-      window.removeEventListener('pointermove', onMove);
-      cancelAnimationFrame(frame);
+      disposed = true;
+      handle?.dispose();
     };
   }, []);
 
-  if (!enabled) return null;
-  return (
-    <>
-      <div ref={dotRef} className="lcursor-dot" aria-hidden="true" />
-      <div ref={ringRef} className="lcursor-ring" aria-hidden="true" />
-    </>
-  );
+  return <canvas ref={canvasRef} className="lcursor" aria-hidden="true" />;
 }
 
 function LiveBand({ summary, readAt, failed }: { summary: Summary | null; readAt: Date | null; failed: boolean }): JSX.Element {
@@ -523,7 +512,7 @@ export function Landing(): JSX.Element {
   return (
     <div className="landing" ref={root}>
       <InstrumentStage quality={quality} />
-      <PointerRing />
+      <CursorTrail />
 
       <header className="lnav">
         <span className="lbrand">
@@ -675,13 +664,15 @@ export function Landing(): JSX.Element {
             font. There is no third-party script in the path.
           </li>
           <li>
-            <strong>No fake SPSS export.</strong> A <code>.sav</code> or <code>.dta</code> request answers 501 with a
-            reason, because the worker that would write a correct file does not exist yet. A file that fails inside
-            SPSS is worse than an honest refusal.
+            <strong>No invented SPSS export.</strong> A <code>.sav</code> or <code>.dta</code> is written by the
+            pyreadstat worker (<code>services/pyreadstat</code>); where no worker is deployed the request answers 501
+            naming the variable that would change it, because a file that fails inside SPSS is worse than an honest
+            refusal.
           </li>
           <li>
-            <strong>No half-built uploads.</strong> The <code>image</code> and <code>file</code> question types render
-            as "not collected yet" rather than silently skipping the answer.
+            <strong>No half-built uploads.</strong> An <code>image</code>, <code>audio</code>, <code>video</code> or{' '}
+            <code>file</code> question is collected from the browser against a URL the API presigns and checks. Where a
+            deployment has no object storage, the question says so rather than silently skipping the answer.
           </li>
           <li>
             <strong>No mock data anywhere.</strong> The console shows live queries, the collection app shows what is on

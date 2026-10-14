@@ -13,10 +13,11 @@ import { describe, expect, it } from 'vitest';
  * So the palette is measured directly: read the tokens out of the two stylesheets,
  * composite the translucent ones over the ground they sit on, pair each foreground
  * with the background it is actually used against, and assert the WCAG AA ratio.
- * This runs everywhere, needs no browser, covers both themes, and fails when
- * somebody nudges a token from a value that was chosen to one that is merely
- * pleasant. A just-over-the-line ratio is printed, not hidden, so a slow drift
- * towards the boundary is visible in the log before it becomes a failure.
+ * This runs everywhere, needs no browser, covers both of the console's themes and
+ * both of the landing page's materials, and fails when somebody nudges a token from
+ * a value that was chosen to one that is merely pleasant. A just-over-the-line ratio
+ * is printed, not hidden, so a slow drift towards the boundary is visible in the log
+ * before it becomes a failure.
  */
 
 const SRC = join(__dirname, '..', 'src');
@@ -113,7 +114,7 @@ const landingBlocks = tokenBlocks(landingCss);
 
 const dark = appBlocks.find((block) => block['bg'] !== undefined);
 const light = [...appBlocks].reverse().find((block) => block['bg'] !== undefined);
-const landing = landingBlocks.find((block) => block['l-ink'] !== undefined);
+const landing = landingBlocks.find((block) => block['l-bg'] !== undefined);
 if (!dark || !light || !landing) throw new Error('could not find the palettes in the stylesheets');
 
 /** A foreground has to be opaque: a translucent one has no single ratio. */
@@ -134,14 +135,22 @@ const landingColour = makeReader(landingBlocks);
 
 const darkGround = appColour(dark, 'bg').rgb;
 const lightGround = appColour(light, 'bg').rgb;
-const inkGround = landingColour(landing, 'l-ink').rgb;
+/**
+ * The landing page is made of two materials, and each pair below says which one it
+ * is measured on: the light ground (`--l-bg`, the sheets a reader reads) and the dark
+ * surface (`--l-surface`, the stage and the footer). Measuring a token against the
+ * wrong one is how a palette passes here and fails in a browser.
+ */
+const landingGround = landingColour(landing, 'l-bg').rgb;
+const landingSurface = landingColour(landing, 'l-surface').rgb;
 
 const onDarkSurface = (name: string): Rgb => over(appColour(dark, name), darkGround);
 const onDarkText = (name: string): Rgb => solid(appColour(dark, name), name);
 const onLightSurface = (name: string): Rgb => over(appColour(light, name), lightGround);
 const onLightText = (name: string): Rgb => solid(appColour(light, name), name);
-const onInkText = (name: string): Rgb => solid(landingColour(landing, name), name);
-const onInkSurface = (name: string): Rgb => over(landingColour(landing, name), inkGround);
+const landingText = (name: string): Rgb => solid(landingColour(landing, name), name);
+const onLandingGround = (name: string): Rgb => over(landingColour(landing, name), landingGround);
+const onLandingSurface = (name: string): Rgb => over(landingColour(landing, name), landingSurface);
 
 const channel = (value: number): number => {
   const c = value / 255;
@@ -159,6 +168,8 @@ const contrast = (a: Rgb, b: Rgb): number => {
 const AA_TEXT = 4.5;
 /** Icons, borders that carry meaning, and other non-text indicators. */
 const AA_UI = 3;
+/** Display type — 150px headlines — which WCAG measures against the smaller floor. */
+const AA_LARGE = 3;
 
 /** The primary action's label sits on a gradient: measured at its darkest stop. */
 const BUTTON_LABEL: Rgb = [0x05, 0x07, 0x0f];
@@ -193,11 +204,25 @@ const pairs: Array<{ what: string; fg: Rgb; bg: Rgb; min: number }> = [
   { what: 'light: the warning banner', fg: onLightText('warn-fg'), bg: onLightSurface('warn-bg'), min: AA_TEXT },
   { what: 'light: a control boundary', fg: onLightSurface('line-control'), bg: lightGround, min: AA_UI },
 
-  { what: 'landing: body text', fg: onInkText('l-text'), bg: inkGround, min: AA_TEXT },
-  { what: 'landing: muted copy', fg: onInkText('l-muted'), bg: inkGround, min: AA_TEXT },
-  { what: 'landing: blue as text', fg: onInkText('l-blue-text'), bg: inkGround, min: AA_TEXT },
-  { what: 'landing: violet as text', fg: onInkText('l-violet-text'), bg: inkGround, min: AA_TEXT },
-  { what: 'landing: the live dot', fg: onInkSurface('l-cyan'), bg: inkGround, min: AA_UI },
+  { what: 'landing: body text on the ground', fg: landingText('l-text'), bg: landingGround, min: AA_TEXT },
+  { what: 'landing: muted copy on the ground', fg: landingText('l-muted'), bg: landingGround, min: AA_TEXT },
+  { what: 'landing: the primary as type', fg: landingText('l-primary-text'), bg: landingGround, min: AA_TEXT },
+  {
+    what: 'landing: the primary action label',
+    fg: landingText('l-on-primary'),
+    bg: landingText('l-primary'),
+    min: AA_TEXT,
+  },
+  // The hero's two 150px lines run from ink to the primary, so this is the lightest
+  // stop of that gradient: display type, held to the large-text floor rather than to
+  // the paragraph one, which is exactly why the treatment stops at the headlines.
+  { what: 'landing: the display headline, at its lightest stop', fg: landingText('l-primary'), bg: landingGround, min: AA_LARGE },
+  { what: 'landing: a control boundary on the ground', fg: onLandingGround('l-line-control'), bg: landingGround, min: AA_UI },
+
+  { what: 'landing: type on the surface', fg: landingText('l-on-surface'), bg: landingSurface, min: AA_TEXT },
+  { what: 'landing: muted type on the surface', fg: landingText('l-muted-on-surface'), bg: landingSurface, min: AA_TEXT },
+  { what: 'landing: the live dot on the surface', fg: landingText('l-accent'), bg: landingSurface, min: AA_UI },
+  { what: 'landing: a control boundary on the surface', fg: onLandingSurface('l-line-control-on-surface'), bg: landingSurface, min: AA_UI },
 ];
 
 describe('the palettes, measured', () => {
@@ -217,16 +242,46 @@ describe('the palettes, measured', () => {
     expect(appCss).toContain('#05070f');
   });
 
-  it('uses one palette across the two stylesheets rather than two that drifted', () => {
-    // The landing page has its own file, so its accents can silently diverge from
-    // the app's. They are the same product: the blue and the violet have to be the
-    // same blue and violet, compared as values rather than as token names. The named
-    // palette lives in its own block, above the themes that use it.
+  it('anchors the landing page on the brand values rather than on ones that drifted', () => {
+    // The palette is the requirement: primary #ea580c, accent #fdba74, background
+    // #ffffff, surface #191c21, type #111827. Compared as values, so a nudge towards a
+    // colour that merely looked pleasant fails here instead of shipping.
+    expect(landing['l-primary']).toBe('#ea580c');
+    expect(landing['l-accent']).toBe('#fdba74');
+    expect(landing['l-bg']).toBe('#ffffff');
+    expect(landing['l-surface']).toBe('#191c21');
+    expect(landing['l-text']).toBe('#111827');
+    expect(landing['l-on-primary']).toBe('#111827');
+  });
+
+  it('makes the landing page say what colour its own headings are', () => {
+    // A leak, not a typo, and the reason this assertion is here rather than in the
+    // landing page's own test: `styles.css` styles `h1, h2, h3, h4` globally with
+    // `color: var(--text)`, and the console's `--text` is `--ink` — near-black — for
+    // any visitor whose operating system is in light mode. Nothing about that rule is
+    // wrong where it is written; it is wrong applied to a page made of another
+    // material, and it put near-black headlines on a near-black ground for those
+    // visitors while the screenshots, taken in a light-scheme browser, showed an
+    // ordinary dark page. The landing's headings inherit from the material they are
+    // printed on instead, which means they have to declare that.
+    expect(appCss).toMatch(/h1,\s*h2,\s*h3,\s*h4\s*\{[^}]*color:\s*var\(--text\)/);
+    expect(landingCss).toMatch(/\.landing h1,\s*\.landing h2,\s*\.landing h3\s*\{\s*color:\s*inherit;/);
+  });
+
+  it('leaves none of the console\'s accents on the landing page', () => {
+    // The realistic defect when a palette changes is a stale colour left behind in a
+    // token or, worse, in a rule: a hover border still painted in the old blue. The
+    // landing page is a light, orange page and may not carry the console's blue,
+    // violet or cyan as a token or as a literal.
     const palette = appBlocks.find((block) => block['blue'] !== undefined);
     expect(palette).toBeDefined();
-    expect(landing['l-blue']).toBe(palette?.['blue']);
-    expect(landing['l-violet']).toBe(palette?.['violet']);
-    // And the app's own two blues are one colour: one for text, one for fills.
+    const forbidden = new Set([palette?.['blue'], palette?.['violet'], palette?.['cyan']]);
+    expect(Object.entries(landing).filter(([, value]) => forbidden.has(value.toLowerCase()))).toEqual([]);
+    for (const stray of ['#2a5bff', '#6f95ff', '#7b4dff', '#1cc7d0', '42, 91, 255', '123, 77, 255', '28, 199, 208', '#8e8e96', '#f3f2ee']) {
+      expect(landingCss.toLowerCase(), `landing.css still carries ${stray}`).not.toContain(stray);
+    }
+    // And the console keeps the blue it has, for its own surfaces: one for type, one
+    // for fills, still the same colour.
     expect(appColour(dark, 'accent-solid').rgb).toEqual(appColour(dark, 'blue').rgb);
   });
 
