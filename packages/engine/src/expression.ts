@@ -11,6 +11,7 @@
  *   if() coalesce() length() upper() lower() trim() number() int() round()
  *   abs() min() max() sum() today() now() selected() count-selected()
  */
+import { lookupDataset } from './datasets.js';
 
 export type Expr =
   | { kind: 'num'; value: number }
@@ -26,13 +27,20 @@ export type Expr =
   | { kind: 'call'; name: string; args: Expr[] };
 
 export type BinaryOp =
-  | 'or' | 'and' | '=' | '!=' | '<' | '<=' | '>' | '>=' | '+' | '-' | '*' | '/' | '%';
+  | 'or' | 'and' | '=' | '!=' | '<' | '<=' | '>' | '>=' | '+' | '-' | '*' | '/' | '%' | 'div' | 'mod';
 
 export interface EvalContext {
   /** Answer values keyed by question name. */
   answers?: Record<string, unknown>;
   /** Embedded data / respondent variables. */
   variables?: Record<string, unknown>;
+  /**
+   * Attached server datasets, keyed by normalised code. `pulldata()` reads only
+   * this snapshot, so a calculation is identical in the browser and on the server.
+   */
+  datasets?: import('./datasets.js').DatasetContext;
+  /** Labels for static choices, keyed by question name and then choice value. */
+  choiceLabels?: Record<string, Record<string, string>>;
   /** The value being validated, bound to `.` inside a constraint. */
   current?: unknown;
   /**
@@ -105,8 +113,10 @@ export function tokenize(input: string): Token[] {
     }
 
     // Hyphenated function names must be matched before identifiers, otherwise
-    // `count-selected(...)` lexes as `count - selected`.
-    const hyphenated = /^(count-selected)(?=\s*\()/.exec(input.slice(i));
+    // `count-selected(...)` lexes as `count - selected`. The pattern is general
+    // because XLSForm has a family of them: `choice-label`, `selected-at`,
+    // `string-length`, `format-date-time`, `count-if`, and so on.
+    const hyphenated = /^([A-Za-z_][A-Za-z0-9_]*(?:-[A-Za-z0-9_]+)+)(?=\s*\()/.exec(input.slice(i));
     if (hyphenated) {
       tokens.push({ t: 'ident', v: hyphenated[1]! });
       i += hyphenated[1]!.length;
@@ -118,7 +128,7 @@ export function tokenize(input: string): Token[] {
       const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(input.slice(i))!;
       const word = m[0];
       const low = word.toLowerCase();
-      if (low === 'and' || low === 'or' || low === 'not') tokens.push({ t: 'op', v: low });
+      if (low === 'and' || low === 'or' || low === 'not' || low === 'div' || low === 'mod') tokens.push({ t: 'op', v: low });
       else tokens.push({ t: 'ident', v: word });
       i += word.length;
       continue;
@@ -191,6 +201,8 @@ export function parse(input: string): Expr {
       if (eatOp('*')) left = { kind: 'binary', op: '*', left, right: unary() };
       else if (eatOp('/')) left = { kind: 'binary', op: '/', left, right: unary() };
       else if (eatOp('%')) left = { kind: 'binary', op: '%', left, right: unary() };
+      else if (eatOp('div')) left = { kind: 'binary', op: 'div', left, right: unary() };
+      else if (eatOp('mod')) left = { kind: 'binary', op: 'mod', left, right: unary() };
       else return left;
     }
   }
@@ -217,7 +229,7 @@ export function parse(input: string): Expr {
         if (open.t !== 'punc' || open.v !== '(') {
           // A bare identifier is only legal as a `choice_filter` attribute name; the
           // publish-time analyser rejects it everywhere else, so authors still get a
-          // clear error — during authoring, not mid-interview.
+          // clear error - during authoring, not mid-interview.
           return { kind: 'bare', name: tk.v };
         }
         next(); // consume the '('
@@ -336,6 +348,8 @@ export function evaluate(expr: Expr, ctx: EvalContext = {}): unknown {
         case '*': return toNumber(a) * toNumber(b);
         case '/': return toNumber(a) / toNumber(b);
         case '%': return toNumber(a) % toNumber(b);
+        case 'div': return Math.trunc(toNumber(a) / toNumber(b));
+        case 'mod': return toNumber(a) % toNumber(b);
         default: throw new ExpressionError(`Unsupported operator ${expr.op}`);
       }
     }
@@ -344,8 +358,47 @@ export function evaluate(expr: Expr, ctx: EvalContext = {}): unknown {
   }
 }
 
+/** A date-time, an ISO string, or a SurveyCTO decimal day count. */
+function toDate(value: unknown): Date | null {
+  const date = typeof value === 'number'
+    ? new Date(value * 86_400_000)
+    : value instanceof Date
+      ? value
+      : new Date(String(value ?? ''));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatDateTime(value: unknown, pattern: string): string {
+  const date = toDate(value);
+  if (!date) return '';
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const pad = (n: number, width = 2): string => String(n).padStart(width, '0');
+  return pattern.replace(/%([YymndHhMSba%e3])/g, (_whole, token: string) => {
+    switch (token) {
+      case 'Y': return String(date.getUTCFullYear());
+      case 'y': return String(date.getUTCFullYear()).slice(-2);
+      case 'm': return pad(date.getUTCMonth() + 1);
+      case 'n': return String(date.getUTCMonth() + 1);
+      case 'd': return pad(date.getUTCDate());
+      case 'e': return String(date.getUTCDate());
+      case 'H': return pad(date.getUTCHours());
+      case 'h': return String(date.getUTCHours());
+      case 'M': return pad(date.getUTCMinutes());
+      case 'S': return pad(date.getUTCSeconds());
+      case 'b': return months[date.getUTCMonth()]!;
+      case 'a': return days[date.getUTCDay()]!;
+      case '3': return pad(date.getUTCMilliseconds(), 3);
+      default: return `%${token}`;
+    }
+  });
+}
+
 function callFunction(name: string, args: Expr[], ctx: EvalContext): unknown {
   const arg = (n: number): unknown => (args[n] ? evaluate(args[n]!, ctx) : null);
+  const list = (n: number): unknown[] => asList(arg(n));
+  const itemTest = (item: unknown, expr: Expr): boolean =>
+    truthy(evaluate(expr, { ...ctx, current: item }));
 
   switch (name) {
     // if() must not evaluate both branches eagerly.
@@ -358,7 +411,24 @@ function callFunction(name: string, args: Expr[], ctx: EvalContext): unknown {
       for (const a of args) { const v = evaluate(a, ctx); if (!isBlank(v)) return v; }
       return null;
     }
-    case 'length': return String(arg(0) ?? '').length;
+    case 'length':
+    case 'string-length': return String(arg(0) ?? '').length;
+    case 'string': {
+      const value = arg(0);
+      if (Array.isArray(value)) return value.map(String).join(' ');
+      return isBlank(value) ? '' : String(value);
+    }
+    case 'concat': return args.map((a) => {
+      const v = evaluate(a, ctx);
+      return Array.isArray(v) ? v.map(String).join(' ') : isBlank(v) ? '' : String(v);
+    }).join('');
+    case 'substr': {
+      const source = String(arg(0) ?? '');
+      const start = Math.max(0, Math.trunc(toNumber(arg(1))));
+      const end = args.length >= 3 ? Math.max(start, Math.trunc(toNumber(arg(2)))) : source.length;
+      return source.slice(start, end);
+    }
+    case 'linebreak': return '\n';
     case 'upper': return String(arg(0) ?? '').toUpperCase();
     case 'lower': return String(arg(0) ?? '').toLowerCase();
     case 'trim': return String(arg(0) ?? '').trim();
@@ -376,16 +446,167 @@ function callFunction(name: string, args: Expr[], ctx: EvalContext): unknown {
     }
     case 'selected': {
       requireArgs(name, args, 2);
-      const list = asList(arg(0));
+      const values = list(0);
       const needle = arg(1);
-      return list.some((v) => looseEquals(v, needle));
+      return values.some((v) => looseEquals(v, needle));
+    }
+    case 'selected-at': {
+      requireArgs(name, args, 2);
+      const values = list(0);
+      const index = Math.trunc(toNumber(arg(1)));
+      return index >= 0 && index < values.length ? values[index] : null;
+    }
+    case 'choice-label': {
+      requireArgs(name, args, 2);
+      const first = args[0];
+      const fieldName = first?.kind === 'ref' ? first.name : isBlank(arg(0)) ? '' : String(arg(0));
+      const labels = fieldName ? ctx.choiceLabels?.[fieldName] : undefined;
+      const key = String(arg(1) ?? '');
+      return labels?.[key] ?? null;
     }
     case 'count-selected': {
       requireArgs(name, args, 1);
-      return asList(arg(0)).length;
+      return list(0).length;
     }
+    case 'join': {
+      requireArgs(name, args, 2);
+      const separator = String(arg(0) ?? '');
+      const parts: string[] = [];
+      for (const a of args.slice(1)) {
+        const value = evaluate(a, ctx);
+        if (Array.isArray(value)) parts.push(...value.map(String));
+        else if (!isBlank(value)) parts.push(String(value));
+      }
+      return parts.join(separator);
+    }
+    case 'join-if': {
+      requireArgs(name, args, 3);
+      const separator = String(arg(0) ?? '');
+      const values = list(1);
+      const condition = args[2]!;
+      return values.filter((value) => itemTest(value, condition)).map(String).join(separator);
+    }
+    case 'count': {
+      requireArgs(name, args, 1);
+      return list(0).length;
+    }
+    case 'count-if': {
+      requireArgs(name, args, 2);
+      const values = list(0);
+      const condition = args[1]!;
+      return values.filter((value) => itemTest(value, condition)).length;
+    }
+    case 'sum-if': {
+      requireArgs(name, args, 2);
+      return list(0)
+        .filter((value) => itemTest(value, args[1]!))
+        .reduce<number>((total, value) => total + (Number.isNaN(toNumber(value)) ? 0 : toNumber(value)), 0);
+    }
+    case 'min-if': {
+      requireArgs(name, args, 2);
+      const values = list(0)
+        .filter((value) => itemTest(value, args[1]!))
+        .map((value) => toNumber(value))
+        .filter((value) => !Number.isNaN(value));
+      return values.length === 0 ? null : Math.min(...values);
+    }
+    case 'max-if': {
+      requireArgs(name, args, 2);
+      const values = list(0)
+        .filter((value) => itemTest(value, args[1]!))
+        .map((value) => toNumber(value))
+        .filter((value) => !Number.isNaN(value));
+      return values.length === 0 ? null : Math.max(...values);
+    }
+    case 'empty': {
+      requireArgs(name, args, 1);
+      const value = arg(0);
+      return isBlank(value) || (Array.isArray(value) && value.length === 0);
+    }
+    case 'pulldata': {
+      requireArgs(name, args, 4);
+      return lookupDataset(ctx.datasets, arg(0), arg(1), arg(2), arg(3));
+    }
+    case 'pow': return Math.pow(toNumber(arg(0)), toNumber(arg(1)));
+    case 'sqrt': return Math.sqrt(toNumber(arg(0)));
+    case 'log10': return Math.log10(toNumber(arg(0)));
+    case 'exp': return Math.exp(toNumber(arg(0)));
+    case 'pi': return Math.PI;
+    case 'sin': return Math.sin(toNumber(arg(0)));
+    case 'cos': return Math.cos(toNumber(arg(0)));
+    case 'tan': return Math.tan(toNumber(arg(0)));
+    case 'atan2': return Math.atan2(toNumber(arg(0)), toNumber(arg(1)));
+    case 'floor': return Math.floor(toNumber(arg(0)));
+    case 'ceiling': return Math.ceil(toNumber(arg(0)));
+    case 'random': return Math.random();
     case 'today': { const d = new Date(); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`; }
     case 'now': return new Date().toISOString();
+    case 'date': {
+      const date = toDate(arg(0));
+      return date ? date.toISOString().slice(0, 10) : '';
+    }
+    case 'date-time': {
+      const date = toDate(arg(0));
+      return date ? date.toISOString() : null;
+    }
+    case 'format-date-time': return formatDateTime(arg(0), String(arg(1) ?? ''));
+    case 'decimal-date-time': {
+      const date = toDate(arg(0));
+      return date ? date.getTime() / 86_400_000 : null;
+    }
+    case 'decimal-time': {
+      const date = toDate(arg(0));
+      if (!date) return null;
+      return (date.getUTCHours() * 3600 + date.getUTCMinutes() * 60 + date.getUTCSeconds()) / 86_400;
+    }
+    case 'asin': return Math.asin(toNumber(arg(0)));
+    case 'acos': return Math.acos(toNumber(arg(0)));
+    case 'atan': return Math.atan(toNumber(arg(0)));
+    case 'count-items': {
+      const separator = String(arg(0) ?? '');
+      const value = String(arg(1) ?? '');
+      if (separator === '' || value === '') return 0;
+      return value.split(separator).length;
+    }
+    case 'item-at': {
+      const separator = String(arg(0) ?? '');
+      const value = String(arg(1) ?? '');
+      const index = Math.trunc(toNumber(arg(2)));
+      if (separator === '' || index < 0) return null;
+      const items = value === '' ? [] : value.split(separator);
+      return index < items.length ? items[index] : null;
+    }
+    case 'item-index': {
+      const separator = String(arg(0) ?? '');
+      const value = String(arg(1) ?? '');
+      const needle = String(arg(2) ?? '');
+      if (separator === '') return -1;
+      return (value === '' ? [] : value.split(separator)).findIndex((item) => item === needle);
+    }
+    case 'item-present': {
+      const separator = String(arg(0) ?? '');
+      const value = String(arg(1) ?? '');
+      const needle = String(arg(2) ?? '');
+      if (separator === '') return false;
+      return (value === '' ? [] : value.split(separator)).some((item) => item === needle);
+    }
+    case 'de-duplicate': {
+      const separator = String(arg(0) ?? '');
+      const value = String(arg(1) ?? '');
+      if (separator === '' || value === '') return value;
+      return [...new Set(value.split(separator))].join(separator);
+    }
+    case 'rank-value': {
+      const target = toNumber(arg(0));
+      const values = list(1).map(toNumber).filter((value) => !Number.isNaN(value)).sort((a, b) => b - a);
+      const rank = values.indexOf(target);
+      return rank < 0 ? null : rank + 1;
+    }
+    case 'short-geopoint': {
+      const point = arg(0);
+      const parts = Array.isArray(point) ? point.map(String) : String(point ?? '').split(/[ ,]+/).filter(Boolean);
+      return parts.length >= 2 ? `${parts[1]} ${parts[0]}` : null;
+    }
     default: throw new ExpressionError(`Unknown function ${name}()`);
   }
 }
@@ -396,7 +617,7 @@ export function runExpression(source: string, ctx: EvalContext = {}): unknown {
 }
 
 /** All question names referenced by `${name}` in an expression. */
-/** Bare identifiers in an expression — choice-attribute names in a `choice_filter`. */
+/** Bare identifiers in an expression - choice-attribute names in a `choice_filter`. */
 export function collectBareNames(expr: Expr): string[] {
   const out = new Set<string>();
   const walk = (e: Expr): void => {

@@ -1365,7 +1365,7 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
   box-shadow: 0 0 12px color-mix(in srgb, var(--ok) 70%, transparent);
 }
 
-/* A survey sheet is seventeen columns wide and must not stretch the page. */
+/* A survey sheet is twenty columns wide and must not stretch the page. */
 .sheet-scroll {
   overflow-x: auto;
   border: 1px solid var(--line);
@@ -1401,6 +1401,12 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
 }
 
 .sheet tbody tr:last-child td { border-bottom: 0; }
+
+/* A formula cell shows its cached value, with a quiet mark that it is live. */
+.sheet td.formula-cell::after {
+  content: ' ƒ';
+  color: var(--muted);
+}
 
 .notes {
   display: flex;

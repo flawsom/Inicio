@@ -178,6 +178,34 @@ describe('xlsform import', () => {
     expect(def).toEqual(importXlsForm(exportXlsForm(importXlsForm(workbookBytes()).definition).bytes).definition);
   });
 
+  it('keeps a pulldata calculation through the workbook and reports what it needs', () => {
+    const definition: FormDefinition = {
+      title: 'Case visit',
+      defaultLanguage: 'en',
+      languages: ['en'],
+      groups: [],
+      questions: [
+        { id: 'q_case', name: 'caseid', type: 'calculate', label: { en: 'Case' } },
+        {
+          id: 'q_head',
+          name: 'head_name',
+          type: 'calculate',
+          label: { en: 'Head' },
+          rules: { calculate: "pulldata('cases', 'head_name', 'id', ${caseid})" },
+        },
+        { id: 'q_note', name: 'note', type: 'text', label: { en: 'Note' } },
+      ],
+      choiceLists: {},
+    };
+    const imported = importXlsForm(exportXlsForm(definition).bytes);
+    expect(imported.definition.questions.find((question) => question.name === 'head_name')?.rules?.calculate)
+      .toBe("pulldata('cases', 'head_name', 'id', ${caseid})");
+    expect(imported.notes.some((note) => note.message.includes('attached dataset'))).toBe(true);
+    // A second trip is the same form: the phrase is data, not a one-way comment.
+    const again = importXlsForm(exportXlsForm(imported.definition).bytes).definition;
+    expect(again).toEqual(imported.definition);
+  });
+
   /**
    * A trailing empty cell is not a thing a spreadsheet can store, so a sheet that
    * round-tripped through the file comes back one cell narrower on some rows. It
@@ -187,9 +215,15 @@ describe('xlsform import', () => {
     sheets.map((sheet) => ({
       name: sheet.name,
       rows: sheet.rows.map((row) => {
-        const trimmed = [...row];
-        while (trimmed.length > 0 && trimmed[trimmed.length - 1] === '') trimmed.pop();
-        return trimmed;
+        // A formula cell and its cached value are two representations of one
+        // value: the viewer shows the cache, and a reader that does not evaluate
+        // formulas reads the same cache. Flattening them is not a weakened check,
+        // it is comparing the same thing across that boundary.
+        const flattened = row.map((cell) =>
+          typeof cell === 'object' && cell !== null && 'cached' in cell ? cell.cached : cell,
+        );
+        while (flattened.length > 0 && flattened[flattened.length - 1] === '') flattened.pop();
+        return flattened;
       }),
     }));
 
@@ -202,7 +236,9 @@ describe('xlsform import', () => {
     // minus the zip. Comparing it against the parsed file is what keeps that true —
     // a screen that agreed with the download by coincidence would eventually stop.
     expect(withoutTrailingBlanks(readWorkbook(exported.bytes).sheets)).toEqual(withoutTrailingBlanks(sheets));
-    expect(sheets.map((sheet) => sheet.name)).toEqual(['survey', 'choices', 'settings']);
+    expect(sheets.map((sheet) => sheet.name)).toEqual([
+      'survey', 'choices', 'settings', 'help-survey', 'help-choices', 'help-settings',
+    ]);
     expect(notes).toEqual(exported.notes);
 
     // And the rows are the form's own questions, not a placeholder table.

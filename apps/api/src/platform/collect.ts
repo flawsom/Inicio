@@ -2,7 +2,20 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { createHash, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { z } from 'zod';
-import { evaluateForm, runExpression, truthy, type FormDefinition } from '@inicio/engine';
+import {
+  datasetContext,
+  evaluateForm,
+  evaluateSpeed,
+  findCase,
+  parseSpeedSpec,
+  runExpression,
+  truthy,
+  type DatasetContext,
+  type FieldTiming,
+  type FormDefinition,
+  type SpeedOptions,
+} from '@inicio/engine';
+import { applyDatasetPublish, loadCollectDatasets } from './datasets.js';
 import { pool } from '../db/pool.js';
 import { sha256Hex } from '../lib/crypto.js';
 import { HttpError, withCollector, type ResolvedLink } from './db.js';
@@ -49,13 +62,27 @@ const startSchema = z.object({
   answers: answersSchema.default({}),
   /** The last server-confirmed answers the device saw, for conflict detection. */
   base: answersSchema.optional(),
+  /** A case selected from a case list, or `?caseid=` on the link. */
+  caseid: z.string().trim().min(1).max(200).optional(),
   /** Panel links carry an opaque id/ticket from the query string. */
   embedded: z.record(z.string(), z.unknown()).optional(),
+});
+const timingSchema = z.object({
+  question: z.string().min(1).max(120),
+  /** Milliseconds since the interview began. */
+  shownAt: z.number().finite().min(0).max(86_400_000),
+  answeredAt: z.number().finite().min(0).max(86_400_000),
+  visits: z.number().int().min(1).max(1_000).optional(),
+});
+const paradataSchema = z.object({
+  timings: z.array(timingSchema).max(500).default([]),
 });
 const saveSchema = z.object({
   answers: answersSchema.default({}),
   base: answersSchema.optional(),
   embedded: z.record(z.string(), z.unknown()).optional(),
+  /** Per-field timings, written as they arrive so review sees them live. */
+  paradata: paradataSchema.optional(),
 });
 
 /**
@@ -75,6 +102,17 @@ const attachmentSchema = z.object({
   filename: z.string().min(1).max(255),
   mime: z.string().min(3).max(120),
   sizeBytes: z.coerce.number().int().positive(),
+  /**
+   * Present only for an `audio audit` segment. The start is the device's wall
+   * clock, not the upload's: a clip that began six minutes into the interview and
+   * arrived a minute later is still a clip of minute six.
+   */
+  audit: z
+    .object({
+      startedAt: z.string().datetime(),
+      durationSeconds: z.number().finite().min(0).max(3600).optional(),
+    })
+    .optional(),
 });
 
 /**
@@ -193,8 +231,9 @@ export function planSync(
   incoming: Record<string, unknown>,
   base: Record<string, unknown> | undefined,
   current: Map<string, unknown>,
+  datasets?: DatasetContext,
 ): SyncPlan {
-  const evaluation = evaluateForm(definition, incoming);
+  const evaluation = evaluateForm(definition, incoming, { datasets });
   const entries: SyncEntry[] = [];
   const values: Record<string, unknown> = {};
   let conflicts = 0;
@@ -292,6 +331,117 @@ async function writeAnswers(client: PoolClient, orgId: string, responseId: strin
   }
 }
 
+interface TimingRow {
+  field_name: string;
+  total_seconds: number;
+  first_seen_seconds: number;
+  visits: number;
+}
+
+/**
+ * Turn device timings into rows, dropping anything the form does not ask.
+ *
+ * A timing is paradata, not an answer: it can never create a field, never change
+ * a value, and never exceed a day. Names not in the published definition are
+ * ignored, so a modified client cannot write arbitrary rows into the table.
+ */
+function timingRows(definition: FormDefinition, paradata: z.infer<typeof paradataSchema> | undefined): TimingRow[] {
+  const known = new Set(definition.questions.map((question) => question.name));
+  const seen = new Set<string>();
+  const rows: TimingRow[] = [];
+  for (const timing of paradata?.timings ?? []) {
+    if (!known.has(timing.question) || seen.has(timing.question)) continue;
+    seen.add(timing.question);
+    const total = Math.min(86_400, Math.max(0, (timing.answeredAt - timing.shownAt) / 1000));
+    rows.push({
+      field_name: timing.question,
+      total_seconds: Math.round(total * 1000) / 1000,
+      first_seen_seconds: Math.round(Math.max(0, timing.shownAt)) / 1000,
+      visits: timing.visits ?? 1,
+    });
+  }
+  return rows;
+}
+
+async function writeFieldTimings(
+  client: PoolClient,
+  orgId: string,
+  responseId: string,
+  definition: FormDefinition,
+  paradata: z.infer<typeof paradataSchema> | undefined,
+): Promise<void> {
+  const rows = timingRows(definition, paradata);
+  if (rows.length === 0) return;
+  await client.query(
+    `INSERT INTO response_field_timing (org_id, response_id, field_name, total_seconds, first_seen_seconds, visits)
+     SELECT $1, $2, x.field_name, x.total_seconds, x.first_seen_seconds, x.visits
+       FROM jsonb_to_recordset($3::jsonb) AS x(field_name text, total_seconds numeric, first_seen_seconds numeric, visits integer)
+     ON CONFLICT (response_id, field_name) DO UPDATE
+        SET total_seconds = EXCLUDED.total_seconds,
+            first_seen_seconds = LEAST(response_field_timing.first_seen_seconds, EXCLUDED.first_seen_seconds),
+            visits = GREATEST(response_field_timing.visits, EXCLUDED.visits),
+            updated_at = now()`,
+    [orgId, responseId, JSON.stringify(rows)],
+  );
+}
+
+/**
+ * The server's own speed verdict, from the device's timings and the server's answers.
+ *
+ * The device computes the same thing for its own copy, but a value that lands in a
+ * dataset is written here: answers are canonical on the server, so the timing of
+ * an answer the server rejected must not lower a violation count.
+ */
+function speedReportFor(
+  definition: FormDefinition,
+  paradata: z.infer<typeof paradataSchema> | undefined,
+  answers: Record<string, unknown>,
+): ReturnType<typeof evaluateSpeed> {
+  const options: SpeedOptions = { thresholds: {} };
+  for (const question of definition.questions) {
+    if (question.audit?.kind !== 'speed_violations' || !question.audit.spec) continue;
+    const parsed = parseSpeedSpec(question.audit.spec);
+    if ('error' in parsed) continue;
+    Object.assign(options.thresholds ?? {}, parsed.thresholds);
+    if (parsed.minimumFormSeconds !== undefined) options.minimumFormSeconds = parsed.minimumFormSeconds;
+  }
+
+  const byName = new Map(definition.questions.map((question) => [question.name, question]));
+  const timings: FieldTiming[] = [];
+  for (const timing of paradata?.timings ?? []) {
+    const question = byName.get(timing.question);
+    if (!question) continue;
+    const value = answers[timing.question];
+    timings.push({
+      question: timing.question,
+      type: question.type,
+      shownAt: timing.shownAt,
+      answeredAt: timing.answeredAt,
+      answer: value === undefined || value === null ? '' : typeof value === 'string' ? value : String(value),
+    });
+  }
+  return evaluateSpeed(timings, options);
+}
+
+/** Write the three speed audit fields from the server's verdict. */
+function applySpeedAuditValues(definition: FormDefinition, plan: SyncPlan, report: ReturnType<typeof evaluateSpeed>): void {
+  for (const question of definition.questions) {
+    if (!question.audit) continue;
+    const key =
+      question.audit.kind === 'speed_violations' || question.audit.kind === 'speed_violations_count'
+        ? 'speed_violations_count'
+        : question.audit.kind === 'speed_violations_list'
+          ? 'speed_violations_list'
+          : null;
+    if (key === null) continue;
+    const value = report.values[key] ?? (key === 'speed_violations_list' ? '' : 0);
+    plan.values[question.name] = value;
+    const entry = plan.entries.find((candidate) => candidate.questionId === question.name);
+    if (entry) entry.value = value;
+    else plan.entries.push({ questionId: question.name, value, conflict: null });
+  }
+}
+
 /** Quotas count on submission, and are allowed to overshoot under concurrency. */
 async function applyQuotas(
   client: PoolClient,
@@ -360,9 +510,11 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
     const link = await requireLink(req.params.token);
     const payload = await withCollector(link.org_id, null, async (client) => {
       const version = await publishedVersionOf(client, link);
+      const datasets = await loadCollectDatasets(client, version.id);
       return {
         link: { kind: link.kind, id: link.id },
         form: { id: link.form_id, title: version.title, version: version.version, definition: version.definition },
+        datasets,
         attachments: attachmentCapability(),
       };
     });
@@ -390,23 +542,30 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
       const payload = await withCollector(link.org_id, responseId, async (client) => {
         const version = await publishedVersionOf(client, link);
         const form = { title: version.title, version: version.version, definition: version.definition };
+        const datasets = await loadCollectDatasets(client, version.id);
+        const context = datasetContext(datasets);
+        const requestedCase = body.data.caseid ?? (typeof body.data.embedded?.['caseid'] === 'string' ? body.data.embedded['caseid'] : undefined);
+        const caseId = requestedCase?.trim() || null;
+        if (caseId && Object.values(context).some((table) => table.kind === 'cases') && !findCase(context, caseId)) {
+          throw new HttpError(422, 'unknown_case', 'That case is not in this form\'s case list. Check the case id and try again.');
+        }
 
         // `app.response_id` is already this id, so the collector policy lets the
         // lookup see exactly the one row that could be ours.
-        const { rows: existing } = await client.query<{ id: string; form_id: string; status: string }>(
-          `SELECT id, form_id, status FROM response WHERE id = $1`,
+        const { rows: existing } = await client.query<{ id: string; form_id: string; status: string; caseid: string | null }>(
+          `SELECT id, form_id, status, caseid FROM response WHERE id = $1`,
           [responseId],
         );
         if (existing[0]) {
           if (existing[0].form_id !== link.form_id) {
             throw new HttpError(409, 'client_id_conflict', 'That device reference belongs to a different survey.');
           }
-          return { responseId, created: false, status: existing[0].status, form };
+          return { responseId, created: false, status: existing[0].status, caseid: existing[0].caseid, form, datasets };
         }
 
         const { rows: inserted } = await client.query<{ id: string }>(
-          `INSERT INTO response (id, org_id, form_id, form_version_id, status, meta, respondent_ref, client_uuid)
-           VALUES ($1, $2, $3, $4, 'in_progress', $5::jsonb, $6, $7)
+          `INSERT INTO response (id, org_id, form_id, form_version_id, status, meta, respondent_ref, client_uuid, caseid)
+           VALUES ($1, $2, $3, $4, 'in_progress', $5::jsonb, $6, $7, $8)
            ON CONFLICT (id) DO NOTHING
            RETURNING id`,
           [
@@ -417,27 +576,35 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
             JSON.stringify(body.data.embedded ?? {}),
             typeof body.data.embedded?.['pid'] === 'string' ? String(body.data.embedded['pid']) : null,
             clientId ?? null,
+            caseId,
           ],
         );
 
         if (inserted.length === 0) {
           // Lost a race with a concurrent start for the same client id: the other
           // one won, which is the same outcome this call wanted.
-          const { rows: again } = await client.query<{ id: string; form_id: string; status: string }>(
-            `SELECT id, form_id, status FROM response WHERE id = $1`,
+          const { rows: again } = await client.query<{ id: string; form_id: string; status: string; caseid: string | null }>(
+            `SELECT id, form_id, status, caseid FROM response WHERE id = $1`,
             [responseId],
           );
           if (!again[0] || again[0].form_id !== link.form_id) {
             throw new HttpError(409, 'client_id_conflict', 'That device reference belongs to a different survey.');
           }
-          return { responseId, created: false, status: again[0].status, form };
+          return { responseId, created: false, status: again[0].status, caseid: again[0].caseid, form, datasets };
         }
 
-        if (Object.keys(body.data.answers).length > 0) {
-          const plan = planSync(version.definition, body.data.answers, body.data.base, new Map());
+        const seeded: Record<string, unknown> = { ...body.data.answers };
+        // SurveyCTO's `caseid` metadata field is imported as a calculate with no
+        // expression. Seeding it makes the familiar `pulldata('cases', ..., ${caseid})`
+        // pattern work without asking the enumerator to type the id twice.
+        if (caseId && version.definition.questions.some((question) => question.name === 'caseid')) {
+          seeded.caseid = caseId;
+        }
+        if (Object.keys(seeded).length > 0) {
+          const plan = planSync(version.definition, seeded, body.data.base, new Map(), context);
           await writeAnswers(client, link.org_id, responseId, plan);
         }
-        return { responseId, created: true, status: 'in_progress', form };
+        return { responseId, created: true, status: 'in_progress', caseid: caseId, form, datasets };
       });
       reply.header('cache-control', 'no-store');
       return reply.code(payload.created ? 201 : 200).send(payload);
@@ -451,8 +618,9 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
       const link = await requireLink(req.params.token);
       const payload = await withCollector(link.org_id, req.params.responseId, async (client) => {
         const version = await publishedVersionOf(client, link);
-        const { rows: response } = await client.query<{ status: string; started_at: Date; submitted_at: Date | null }>(
-          `SELECT status, started_at, submitted_at FROM response WHERE id = $1`,
+        const datasets = await loadCollectDatasets(client, version.id);
+        const { rows: response } = await client.query<{ status: string; started_at: Date; submitted_at: Date | null; caseid: string | null }>(
+          `SELECT status, started_at, submitted_at, caseid FROM response WHERE id = $1`,
           [req.params.responseId],
         );
         if (!response[0]) throw new HttpError(404, 'not_found');
@@ -463,10 +631,12 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
         return {
           responseId: req.params.responseId,
           status: response[0].status,
+          caseid: response[0].caseid,
           startedAt: response[0].started_at,
           submittedAt: response[0].submitted_at,
           answers: Object.fromEntries(answers.map((a) => [a.question_id, a.value])),
           form: { title: version.title, version: version.version, definition: version.definition },
+          datasets,
         };
       });
       reply.header('cache-control', 'no-store');
@@ -484,15 +654,29 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
 
       const payload = await withCollector(link.org_id, req.params.responseId, async (client) => {
         const version = await publishedVersionOf(client, link);
-        const { rows } = await client.query<{ status: string }>(
-          `SELECT status FROM response WHERE id = $1`,
+        const { rows } = await client.query<{ status: string; caseid: string | null }>(
+          `SELECT status, caseid FROM response WHERE id = $1`,
           [req.params.responseId],
         );
         if (!rows[0]) throw new HttpError(404, 'not_found');
         if (rows[0].status !== 'in_progress') throw new HttpError(409, 'already_submitted');
 
-        const plan = planSync(version.definition, body.data.answers, body.data.base, await readCurrent(client, req.params.responseId));
+        const datasets = await loadCollectDatasets(client, version.id);
+        const incoming = { ...body.data.answers };
+        // The case id is on the response, not in every keystroke. Re-seed it so a
+        // later save or submit cannot null the field that makes pulldata() work.
+        if (rows[0].caseid && version.definition.questions.some((question) => question.name === 'caseid')) {
+          incoming.caseid = rows[0].caseid;
+        }
+        const plan = planSync(
+          version.definition,
+          incoming,
+          body.data.base,
+          await readCurrent(client, req.params.responseId),
+          datasetContext(datasets),
+        );
         await writeAnswers(client, link.org_id, req.params.responseId, plan);
+        await writeFieldTimings(client, link.org_id, req.params.responseId, version.definition, body.data.paradata);
         // `answers` is what the server actually holds: the device adopts it as its
         // new baseline, so the next sync compares against reality rather than hope.
         return { saved: plan.entries.length, missing: plan.missing, invalid: plan.invalid, answers: plan.values, conflicts: plan.conflicts };
@@ -513,14 +697,29 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
       const payload = await withCollector(link.org_id, req.params.responseId, async (client) => {
         const version = await publishedVersionOf(client, link);
         // Lock the response so a double-submit cannot run the quota path twice.
-        const { rows: locked } = await client.query<{ status: string }>(
-          `SELECT status FROM response WHERE id = $1 FOR UPDATE`,
+        const { rows: locked } = await client.query<{ status: string; caseid: string | null }>(
+          `SELECT status, caseid FROM response WHERE id = $1 FOR UPDATE`,
           [req.params.responseId],
         );
         if (!locked[0]) throw new HttpError(404, 'not_found');
         if (locked[0].status !== 'in_progress') throw new HttpError(409, 'already_submitted');
 
-        const plan = planSync(version.definition, body.data.answers, body.data.base, await readCurrent(client, req.params.responseId));
+        const datasets = await loadCollectDatasets(client, version.id);
+        const incoming = { ...body.data.answers };
+        if (locked[0].caseid && version.definition.questions.some((question) => question.name === 'caseid')) {
+          incoming.caseid = locked[0].caseid;
+        }
+        const plan = planSync(
+          version.definition,
+          incoming,
+          body.data.base,
+          await readCurrent(client, req.params.responseId),
+          datasetContext(datasets),
+        );
+        // Timings are the text audit and the raw material for speed violations. The
+        // verdict is written into the audit fields here, so it is the server's and
+        // not a number a device could choose.
+        applySpeedAuditValues(version.definition, plan, speedReportFor(version.definition, body.data.paradata, plan.values));
 
         // An answer that names a file is only as good as the file. A device can
         // hold a reference for a question whose bytes never arrived, were refused
@@ -574,6 +773,7 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
         }
 
         await writeAnswers(client, link.org_id, req.params.responseId, plan);
+        await writeFieldTimings(client, link.org_id, req.params.responseId, version.definition, body.data.paradata);
 
         const quotaStatus = await applyQuotas(client, link.form_id, plan.values);
         const status = quotaStatus ?? (screenedOut(version.definition, plan.values) ? 'screened_out' : 'submitted');
@@ -585,6 +785,26 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
         if (updated[0]?.uses === null || updated[0]?.uses === undefined) {
           // The link was exhausted between the check above and here.
           throw new HttpError(410, 'link_exhausted');
+        }
+
+        const caseid = locked[0].caseid
+          ?? (typeof plan.values.caseid === 'string' && plan.values.caseid.trim() !== '' ? plan.values.caseid.trim() : null);
+        if (caseid && !locked[0].caseid) {
+          await client.query(`UPDATE response SET caseid = $2 WHERE id = $1`, [req.params.responseId, caseid]);
+        }
+
+        // A case write-back is part of the submission, not a job after it: if the
+        // row cannot be updated, the response must not commit claiming that it was.
+        let caseUpdated = 0;
+        if (status === 'submitted') {
+          const written = await applyDatasetPublish(client, {
+            orgId: link.org_id,
+            versionId: version.id,
+            values: plan.values,
+            responseId: req.params.responseId,
+            caseid,
+          });
+          caseUpdated = written.updated;
         }
 
         const { rows: stamped } = await client.query<{ started_at: Date; submitted_at: Date }>(
@@ -616,7 +836,7 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
             conflicts: plan.conflicts,
           });
         }
-        return { responseId: req.params.responseId, status, answered: plan.entries.length, conflicts: plan.conflicts };
+        return { responseId: req.params.responseId, status, answered: plan.entries.length, conflicts: plan.conflicts, caseUpdated };
       });
 
       // Delivery happens after the response has been written and the respondent is
@@ -695,16 +915,25 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
           if (!question) {
             throw new HttpError(404, 'unknown_question', 'That question is not on this survey. Please reload the page.');
           }
-          if (!isUploadQuestion(question.type)) {
+          // An audio audit field is a calculate, but its clip travels the same
+          // verified path as a media answer: authorise, upload, HEAD, hash, scan.
+          // Treating it as an audio upload is what keeps the guard a type guard
+          // rather than an exemption.
+          const isAudioAudit = question.audit?.kind === 'audio_audit';
+          if (!isUploadQuestion(question.type) && !isAudioAudit) {
             throw new HttpError(400, 'not_an_upload_question', 'That question does not take a file.');
           }
+          if (isAudioAudit && !body.data.audit) {
+            throw new HttpError(422, 'audit_metadata_required', 'That audio audit needs the time its recording began.');
+          }
+          const uploadType = isAudioAudit ? 'audio' : question.type;
 
           const mime = normaliseMime(body.data.mime);
-          if (!mimeAllowed(question.type, mime)) {
+          if (!mimeAllowed(uploadType, mime)) {
             throw new HttpError(
               422,
               'type_not_allowed',
-              `That kind of file cannot be attached to this question. Accepted: ${allowedMimes(question.type).join(', ')}.`,
+              `That kind of file cannot be attached to this question. Accepted: ${allowedMimes(uploadType).join(', ')}.`,
             );
           }
           const max = uploadMaxBytes();
@@ -753,6 +982,34 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
               storageKey,
             ],
           );
+          if (isAudioAudit && body.data.audit) {
+            // The clip row exists before the bytes do, exactly like the attachment:
+            // a reviewer never sees a clip that was not verified, and a failed
+            // upload leaves a pending row rather than a dangling file.
+            await client.query(
+              `INSERT INTO response_audit_clip
+                 (org_id, response_id, field_name, storage_key, mime, size_bytes, duration_seconds, scan_status, started_at)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8::timestamptz)
+               ON CONFLICT (response_id, field_name) DO UPDATE
+                  SET storage_key = EXCLUDED.storage_key,
+                      mime = EXCLUDED.mime,
+                      size_bytes = EXCLUDED.size_bytes,
+                      duration_seconds = EXCLUDED.duration_seconds,
+                      scan_status = 'pending',
+                      sha256 = NULL,
+                      started_at = EXCLUDED.started_at`,
+              [
+                link.org_id,
+                req.params.responseId,
+                body.data.questionId,
+                storageKey,
+                mime,
+                body.data.sizeBytes,
+                body.data.audit.durationSeconds ?? null,
+                body.data.audit.startedAt,
+              ],
+            );
+          }
 
           return {
             kind: 'authorised',
@@ -914,6 +1171,10 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
               `UPDATE response_attachment SET status = 'deleted', scan_status = 'infected' WHERE id = $1`,
               [attachment.id],
             );
+            await client.query(
+              `UPDATE response_audit_clip SET scan_status = 'infected' WHERE response_id = $1 AND storage_key = $2`,
+              [req.params.responseId, attachment.storage_key],
+            );
             return {
               kind: 'rejected',
               status: 422,
@@ -927,6 +1188,14 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
                 SET status = 'uploaded', scan_status = $2, sha256 = $3, size_bytes = $4, uploaded_at = now()
               WHERE id = $1`,
             [attachment.id, scan.status, digest, head.sizeBytes],
+          );
+          // An audio audit clip shares the attachment's bytes and verification
+          // status; this update finds the clip by the storage key both rows share.
+          await client.query(
+            `UPDATE response_audit_clip
+                SET scan_status = $3, sha256 = $4, size_bytes = $5
+              WHERE response_id = $1 AND storage_key = $2`,
+            [req.params.responseId, attachment.storage_key, scan.status, digest, head.sizeBytes],
           );
 
           return {

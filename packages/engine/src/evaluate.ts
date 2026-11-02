@@ -22,6 +22,27 @@ export interface FormEvaluation {
 
 export interface EvaluateOptions {
   variables?: Record<string, unknown>;
+  /** A snapshot of the datasets attached to this form version. */
+  datasets?: import('./datasets.js').DatasetContext;
+  /** Optional override for `choice-label()`, mostly useful in tests. */
+  choiceLabels?: Record<string, Record<string, string>>;
+}
+
+/** Build the static label map `choice-label()` reads, once per evaluation. */
+function choiceLabelsFor(def: FormDefinition): Record<string, Record<string, string>> {
+  const out: Record<string, Record<string, string>> = {};
+  for (const question of def.questions) {
+    const list = question.choices?.listName
+      ? def.choiceLists[question.choices.listName]
+      : question.choices?.inline;
+    if (!list) continue;
+    const labels: Record<string, string> = {};
+    for (const choice of list) {
+      labels[choice.value] = choice.label?.[def.defaultLanguage] ?? Object.values(choice.label ?? {})[0] ?? choice.value;
+    }
+    out[question.name] = labels;
+  }
+  return out;
 }
 
 function safeEval(source: string, ctx: Parameters<typeof evaluate>[1], fallback: unknown): unknown {
@@ -50,8 +71,15 @@ export function evaluateForm(
 ): FormEvaluation {
   const hiddenGroups = new Set<string>();
   const effective: Record<string, unknown> = { ...answers };
+  const choiceLabels = options.choiceLabels ?? choiceLabelsFor(def);
 
-  const ctx = (current?: unknown) => ({ answers: effective, variables: options.variables, current });
+  const ctx = (current?: unknown) => ({
+    answers: effective,
+    variables: options.variables,
+    datasets: options.datasets,
+    choiceLabels,
+    current,
+  });
 
   // Resolve calculations and visibility together, to a fixed point.
   const maxPasses = Math.min(def.questions.length + 2, 12);
@@ -190,6 +218,17 @@ export function filterChoices(
   for (const [name, state] of Object.entries(evaluated.states)) effective[name] = state.value;
 
   return list.filter((choice) =>
-    truthy(safeEval(source, { answers: effective, variables: options.variables, attributes: choice.extra ?? {} }, true)),
+    truthy(
+      safeEval(
+        source,
+        {
+          answers: effective,
+          variables: options.variables,
+          datasets: options.datasets,
+          attributes: choice.extra ?? {},
+        },
+        true,
+      ),
+    ),
   );
 }

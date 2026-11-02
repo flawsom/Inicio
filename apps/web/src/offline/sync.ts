@@ -103,11 +103,24 @@ export async function mutateDraft(
  * response started before this device kept a local copy, so an upgrade does not
  * abandon work in progress.
  */
-export async function ensureDraft(store: OfflineStore, token: string, existingResponseId: string | null = null): Promise<StoredDraft> {
+export async function ensureDraft(
+  store: OfflineStore,
+  token: string,
+  existingResponseId: string | null = null,
+  caseid?: string,
+): Promise<StoredDraft> {
   const found = await store.getDraft(token);
-  if (found) return found;
+  if (found) {
+    if (caseid && found.caseid !== caseid) {
+      const next = { ...found, caseid };
+      await store.putDraft(next);
+      return next;
+    }
+    return found;
+  }
   const draft: StoredDraft = {
     token,
+    ...(caseid ? { caseid } : {}),
     clientId: existingResponseId ?? newClientId(),
     responseId: existingResponseId,
     answers: {},
@@ -128,14 +141,20 @@ export async function recordAnswers(
   token: string,
   answers: Record<string, unknown>,
   dirty: string[],
+  paradata?: StoredDraft['paradata'],
 ): Promise<StoredDraft> {
-  return mutateDraft(store, token, (draft) => ({
-    ...draft,
-    answers,
-    dirty: [...new Set([...draft.dirty, ...dirty])],
-    updatedAt: new Date().toISOString(),
-    outbox: enqueueSave(draft.outbox, { answers, base: draft.base }),
-  }));
+  return mutateDraft(store, token, (draft) => {
+    // A keystroke does not carry timings, so the draft's last timings are kept.
+    const next = paradata ?? draft.paradata;
+    return {
+      ...draft,
+      answers,
+      dirty: [...new Set([...draft.dirty, ...dirty])],
+      ...(next ? { paradata: next } : {}),
+      updatedAt: new Date().toISOString(),
+      outbox: enqueueSave(draft.outbox, { answers, base: draft.base, ...(next ? { paradata: next } : {}) }),
+    };
+  });
 }
 
 export async function requestSubmit(
@@ -143,22 +162,32 @@ export async function requestSubmit(
   token: string,
   answers: Record<string, unknown>,
   dirty: string[],
+  paradata?: StoredDraft['paradata'],
 ): Promise<StoredDraft> {
-  return mutateDraft(store, token, (draft) => ({
-    ...draft,
-    answers,
-    dirty: [...new Set([...draft.dirty, ...dirty])],
-    updatedAt: new Date().toISOString(),
-    outbox: enqueueSubmit(draft.outbox, { answers, base: draft.base }),
-  }));
+  return mutateDraft(store, token, (draft) => {
+    const next = paradata ?? draft.paradata;
+    return {
+      ...draft,
+      answers,
+      dirty: [...new Set([...draft.dirty, ...dirty])],
+      ...(next ? { paradata: next } : {}),
+      updatedAt: new Date().toISOString(),
+      outbox: enqueueSubmit(draft.outbox, { answers, base: draft.base, ...(next ? { paradata: next } : {}) }),
+    };
+  });
 }
 
-export async function adoptDefinition(store: OfflineStore, token: string, form: { title: string; version: number; definition: unknown; linkKind?: string }): Promise<void> {
+export async function adoptDefinition(
+  store: OfflineStore,
+  token: string,
+  form: { title: string; version: number; definition: unknown; linkKind?: string; datasets?: import('@inicio/engine').DatasetTable[] },
+): Promise<void> {
   await store.putCachedForm({
     token,
     title: form.title,
     version: form.version,
     definition: form.definition,
+    ...(form.datasets ? { datasets: form.datasets } : {}),
     linkKind: form.linkKind ?? 'anonymous',
     cachedAt: new Date().toISOString(),
   });
@@ -207,7 +236,11 @@ export async function runSync(store: OfflineStore, token: string, transport: Tra
 
   if (working.outbox.create || !working.responseId) {
     try {
-      const started = await transport.start(token, working.clientId, { answers: working.answers, base: working.base });
+      const started = await transport.start(token, working.clientId, {
+        answers: working.answers,
+        base: working.base,
+        ...(working.caseid ? { caseid: working.caseid } : {}),
+      });
       working = { ...working, responseId: started.responseId, status: started.status, outbox: markSynced(working.outbox, 'create') };
       await store.putDraft(working);
     } catch (err) {

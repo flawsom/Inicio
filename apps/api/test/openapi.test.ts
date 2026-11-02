@@ -47,6 +47,7 @@ const SOURCES: Array<{ file: string; prefix: string }> = [
   { file: 'apps/api/src/platform/keys.ts', prefix: '/api/v1' },
   { file: 'apps/api/src/platform/webhooks/routes.ts', prefix: '/api/v1' },
   { file: 'apps/api/src/platform/flags.ts', prefix: '/api/v1' },
+  { file: 'apps/api/src/platform/datasets.ts', prefix: '/api/v1' },
   { file: 'apps/api/src/platform/public.ts', prefix: '/api/v1' },
   { file: 'apps/api/src/platform/attachments.ts', prefix: '/api/v1' },
 ];

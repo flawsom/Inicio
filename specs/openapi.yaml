@@ -54,9 +54,9 @@ info:
     | `401` | `unauthenticated`, `invalid_api_key`, `invalid_otp` (`expired`, `mismatch`, `attempts_exceeded`) |
     | `403` | `forbidden`, `read_only_role`, `terms_required`, `key_not_permitted`, `insufficient_scope`, `key_org_mismatch` |
     | `404` | `not_found`, `link_not_found`, `unknown_template`, `unknown_question`, `attachment_not_found` — a non-member gets `404`, not `403`, because whether an organisation exists is not a member's business to probe |
-    | `409` | `already_submitted`, `client_id_conflict`, `not_published`, `version_immutable`, `version_archived`, `last_owner`, `terms_version_changed`, `upload_missing` (an authorised file whose bytes never arrived), `attachment_not_uploaded` (a file that is not ready to download) |
+    | `409` | `already_submitted`, `client_id_conflict`, `not_published`, `version_immutable`, `version_archived`, `last_owner`, `terms_version_changed`, `upload_missing` (an authorised file whose bytes never arrived), `attachment_not_uploaded` (a file that is not ready to download), `dataset_code_taken`, `duplicate_key` |
     | `410` | `link_expired`, `link_already_used`, `link_exhausted`, `link_inactive` |
-    | `422` | `incomplete` (required or invalid answers block submission), `invalid_definition` (a bad publish), `type_not_allowed` / `type_mismatch` / `attachment_infected` / `attachment_rejected` (a file question), `attachment_not_ready` (an answer naming a file the server never accepted) |
+    | `422` | `incomplete` (required or invalid answers block submission), `invalid_definition` (a bad publish), `unknown_case` (a case link naming a row that is not in the attached case list), `type_not_allowed` / `type_mismatch` / `attachment_infected` / `attachment_rejected` (a file question), `attachment_not_ready` (an answer naming a file the server never accepted) |
     | `501` | `format_not_available` (`.sav`/`.dta`), returned **with a reason** rather than a file that is quietly wrong; `storage_not_configured` when the deployment has no object store |
     | `413` | `too_large` — a file above the survey's ceiling, judged by the store's own HEAD rather than by the client's declaration |
     | `502` | `storage_unavailable` — the object store did not answer, so nothing is recorded as accepted |
@@ -86,6 +86,7 @@ tags:
   - name: Exports
   - name: Integrations
   - name: Quality
+  - name: Program data
   - name: Attachments
   - name: Public
 
@@ -2136,6 +2137,256 @@ paths:
         '503': { $ref: '#/components/responses/Error' }
 
   # ---------------------------------------------------------------------------
+  # Program data. A server dataset is an organisation table attached to a form
+  # version. The collector reads a bounded snapshot through the public link; only a
+  # member can create, import, attach or archive one.
+  # ---------------------------------------------------------------------------
+  /api/v1/orgs/{orgId}/datasets:
+    get:
+      tags: [Program data]
+      operationId: listDatasets
+      summary: The organisation's datasets
+      description: 'Session-only: case lists can contain personal data, and they are not yet part of the scoped machine API.'
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      responses:
+        '200':
+          description: Active datasets with their row counts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  datasets:
+                    type: array
+                    items: { $ref: '#/components/schemas/Dataset' }
+        '404': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Program data]
+      operationId: createDataset
+      summary: Create a dataset
+      description: |
+        Session-only. The code is the name `pulldata()` uses. A duplicate code in
+        the same organisation is `409 dataset_code_taken`.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code: { type: string, maxLength: 60, example: cases }
+                name: { type: string, maxLength: 200 }
+                kind: { type: string, enum: [data, cases], default: data }
+                uniqueField: { type: string, default: id }
+              required: [code, name]
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { dataset: { $ref: '#/components/schemas/Dataset' } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/datasets/{datasetId}:
+    get:
+      tags: [Program data]
+      operationId: readDataset
+      summary: One dataset and a page of its rows
+      description: 'Session-only: case lists can contain personal data, and they are not yet part of the scoped machine API.'
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: datasetId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: The dataset, its ordered rows and the total.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dataset: { $ref: '#/components/schemas/Dataset' }
+                  rows:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        key: { type: string }
+                        data: { type: object, additionalProperties: true }
+                        updatedAt: { type: string, format: date-time }
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+        '404': { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [Program data]
+      operationId: archiveDataset
+      summary: Archive a dataset
+      description: Session-only. Archiving hides it from collection and the catalog; it does not delete the rows.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: datasetId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Archived. }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/datasets/{datasetId}/rows:
+    put:
+      tags: [Program data]
+      operationId: importDatasetRows
+      summary: Replace, append or merge rows
+      description: |
+        Session-only. `replace` clears the dataset, `append` refuses an existing key,
+        and `merge` upserts. Every row is validated, the key must be non-empty and
+        unique within the upload, and the columns are inferred and stored once.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - name: datasetId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode: { type: string, enum: [replace, append, merge], default: merge }
+                rows:
+                  type: array
+                  maxItems: 5000
+                  items: { type: object, additionalProperties: true }
+              required: [rows]
+      responses:
+        '200':
+          description: What was imported and what the dataset holds now.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mode: { type: string }
+                  imported: { type: integer }
+                  total: { type: integer }
+                  columns: { type: array, items: { type: string } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/forms/{formId}/versions/{versionId}/datasets:
+    get:
+      tags: [Program data]
+      operationId: listFormDatasets
+      summary: Datasets attached to one version
+      description: 'Session-only: the attachment reveals which case list an instrument reads.'
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/FormId'
+        - name: versionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Attachments with their mapping and write-back state.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  datasets:
+                    type: array
+                    items: { $ref: '#/components/schemas/DatasetAttachment' }
+        '404': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Program data]
+      operationId: attachDataset
+      summary: Attach a dataset to a version
+      description: |
+        Session-only. Attaching to a version, rather than a form, keeps an old
+        published instrument reading the data it was published with. Columns whose
+        names match question names are mapped automatically; a supplied mapping is
+        validated against both sides.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/FormId'
+        - name: versionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                datasetId: { type: string, format: uuid }
+                keyQuestion: { type: string, nullable: true }
+                publish: { type: boolean, default: false }
+                mapping:
+                  type: object
+                  additionalProperties: { type: string }
+              required: [datasetId]
+      responses:
+        '201':
+          description: Attached.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { dataset: { $ref: '#/components/schemas/DatasetAttachment' } }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/forms/{formId}/versions/{versionId}/datasets/{attachmentId}:
+    delete:
+      tags: [Program data]
+      operationId: detachDataset
+      summary: Detach a dataset from a version
+      description: Session-only. The dataset and its rows are unchanged.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/FormId'
+        - name: versionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Detached. }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------------------
   # Quality. The whole machine surface of this feature is scoped, which is what a
   # QC pipeline needs: pull the queue, close what it has reviewed, raise what only a
   # person would notice.
@@ -2694,6 +2945,36 @@ components:
         delivered_at: { type: [string, 'null'], format: date-time }
         next_attempt_at: { type: string, format: date-time }
         payload: { type: object, description: The signed body, as sent. }
+
+    Dataset:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, description: The name pulldata() uses. }
+        name: { type: string }
+        kind: { type: string, enum: [data, cases] }
+        uniqueField: { type: string }
+        columns: { type: array, items: { type: string } }
+        rowCount: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        archivedAt: { type: [string, 'null'], format: date-time }
+
+    DatasetAttachment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        datasetId: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [data, cases] }
+        uniqueField: { type: string }
+        columns: { type: array, items: { type: string } }
+        keyQuestion: { type: [string, 'null'] }
+        mapping: { type: object, additionalProperties: { type: string } }
+        publish: { type: boolean }
+        rowCount: { type: integer }
+        createdAt: { type: string, format: date-time }
 
     FlagKind:
       type: string

@@ -11,6 +11,7 @@
  * preserved in `source` (adapter-specific passthrough) or reported as a note.
  */
 import {
+  type AuditKind,
   type Choice,
   type FormDefinition,
   type Group,
@@ -19,7 +20,8 @@ import {
   type Question,
   type QuestionType,
 } from '../types.js';
-import { readWorkbook, writeWorkbook, type OutSheet, type Sheet } from './xlsx.js';
+import { readWorkbook, writeWorkbook, type CellValue, type OutSheet, type Sheet, type StyleBook } from './xlsx.js';
+import { applyXlsFormStyles } from './xlsform-book.js';
 
 export interface AdapterNote {
   kind: 'dropped' | 'normalised' | 'unsupported' | 'lossy' | 'preserved';
@@ -39,11 +41,42 @@ export interface XlsFormExport {
   notes: AdapterNote[];
 }
 
+/** The styled book before it becomes a file: what the studio viewer renders. */
+export interface XlsFormBook {
+  sheets: OutSheet[];
+  styles: StyleBook;
+  notes: AdapterNote[];
+}
+
 interface XlsFormSettings {
   formId?: string;
   version?: string;
   instanceName?: string;
+  publicKey?: string;
+  submissionUrl?: string;
   extra?: Record<string, string>;
+}
+
+/**
+ * The version cell is a formula on purpose: a scripter who edits a workbook and
+ * presses Save gets a new YYMMDDHHmm revision without remembering to bump it, and
+ * the server's monotonic guard then has something honest to compare. The cached
+ * value written beside it is what a reader that does not evaluate formulas (ours,
+ * and every importer) sees.
+ */
+export const XLSFORM_VERSION_FORMULA =
+  'RIGHT(YEAR(NOW()),2)&TEXT(MONTH(NOW()),"00")&TEXT(DAY(NOW()),"00")&TEXT(HOUR(NOW()),"00")&TEXT(MINUTE(NOW()),"00")';
+
+/** Local time, because that is what Excel's NOW() returns in the file's timezone. */
+export function versionStamp(now: Date): string {
+  const two = (n: number): string => String(n).padStart(2, '0');
+  return (
+    two(now.getFullYear() % 100) +
+    two(now.getMonth() + 1) +
+    two(now.getDate()) +
+    two(now.getHours()) +
+    two(now.getMinutes())
+  );
 }
 
 /* ------------------------------------------------------------ type mapping */
@@ -66,7 +99,37 @@ const DIRECT: Record<string, QuestionType> = {
 const METADATA: Record<string, string | null> = {
   start: 'now()', end: 'now()', today: 'today()',
   deviceid: null, username: null, phonenumber: null, simserial: null, subscriberid: null,
+  caseid: null,
   audit: null, 'background-audio': null, 'background-geopoint': null, 'start-geopoint': null,
+};
+
+/**
+ * The invisible audit types, keyed by the phrase a workbook writes.
+ *
+ * Matched against the *whole* type cell before the head is split on whitespace,
+ * because `text audit` would otherwise read as the ordinary `text` type and the
+ * field would arrive on the device as a visible question.
+ */
+const AUDIT_PHRASES: Record<string, AuditKind> = {
+  'text audit': 'text_audit',
+  'audio audit': 'audio_audit',
+  'speed violations': 'speed_violations',
+  'speed violations count': 'speed_violations_count',
+  'speed violations list': 'speed_violations_list',
+  'sensor_stream': 'sensor_stream',
+  'sensor_stream conversation': 'sensor_stream',
+  'sensor_statistic': 'sensor_statistic',
+};
+
+/** The reverse map, so an audit field built in code still writes its own phrase. */
+const AUDIT_TYPE_PHRASE: Record<AuditKind, string> = {
+  text_audit: 'text audit',
+  audio_audit: 'audio audit',
+  speed_violations: 'speed violations',
+  speed_violations_count: 'speed violations count',
+  speed_violations_list: 'speed violations list',
+  sensor_stream: 'sensor_stream',
+  sensor_statistic: 'sensor_statistic',
 };
 
 const ALIAS_NOTES: Record<string, string> = {
@@ -187,8 +250,13 @@ function parseTypeCell(raw: string): {
   listName?: string;
   fromFile?: boolean;
   aliasNote?: string;
+  audit?: AuditKind;
 } {
   const trimmed = raw.trim();
+  const phrase = trimmed.toLowerCase().replace(/\s+/g, ' ');
+  const audit = AUDIT_PHRASES[phrase];
+  if (audit) return { kind: 'question', type: 'calculate', audit };
+
   const space = trimmed.search(/\s/);
   const head = space === -1 ? trimmed : trimmed.slice(0, space);
   const rest = space === -1 ? '' : trimmed.slice(space + 1).trim();
@@ -234,14 +302,41 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
     notes.push({ kind: 'normalised', message: 'no `choices` sheet : options must be inline or added later' });
   }
 
-  const settingsRaw: Record<string, string> = {};
-  if (settingsSheet) {
-    settingsSheet.rows.forEach((row, i) => {
-      const key = (row[0] ?? '').trim().toLowerCase();
-      if (key === '' || (i === 0 && (key === 'key' || key === 'setting'))) return;
-      settingsRaw[key] = (row[1] ?? '').trim();
+/**
+ * Read a settings sheet in either of the two layouts in the wild.
+ *
+ * SurveyCTO writes a header row (`form_title`, `form_id`, ...) with the values on
+ * row 2. ODK's older templates and every workbook written before this build use a
+ * two-column key/value list. Accepting both costs four lines and means an existing
+ * form's file does not become unreadable because the writer changed.
+ */
+function readSettings(sheet: Sheet | undefined): Record<string, string> {
+  const raw: Record<string, string> = {};
+  const rows = sheet?.rows ?? [];
+  if (rows.length === 0) return raw;
+  const head = (rows[0] ?? []).map((cell) => cell.trim().toLowerCase());
+  // Two recognised keys side by side means a header row. One means a key/value
+  // list whose first row happens to start with `form_title` and whose second cell
+  // is the title. Counting avoids mistaking that first value for a column name.
+  const known = ['form_title', 'form_id', 'version', 'default_language', 'instance_name', 'public_key', 'submission_url'];
+  const headerRow = head.filter((cell) => known.includes(cell));
+  if (headerRow.length >= 2) {
+    const values = rows[1] ?? [];
+    head.forEach((key, i) => {
+      if (key !== '') raw[key] = (values[i] ?? '').trim();
     });
-  } else {
+    return raw;
+  }
+  rows.forEach((row, i) => {
+    const key = (row[0] ?? '').trim().toLowerCase();
+    if (key === '' || (i === 0 && (key === 'key' || key === 'setting'))) return;
+    raw[key] = (row[1] ?? '').trim();
+  });
+  return raw;
+}
+
+  const settingsRaw: Record<string, string> = readSettings(settingsSheet);
+  if (!settingsSheet) {
     notes.push({ kind: 'normalised', message: 'no `settings` sheet : title and form id cannot be recovered from the file' });
   }
 
@@ -259,8 +354,13 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
   const known = new Set([
     'type', 'name', 'label', 'hint', 'required', 'required_message', 'relevant', 'constraint',
     'constraint_message', 'calculation', 'choice_filter', 'appearance', 'default', 'read_only',
-    'readonly', 'repeat_count', 'guidance_hint',
+    'read only', 'readonly', 'repeat_count', 'guidance_hint',
   ]);
+  // XLSForm's own header is `read only` with a space; `read_only` is the alias
+  // most writers use. Both mean the same thing, so both are read.
+  if (index['read_only'] === undefined && index['read only'] !== undefined) {
+    index['read_only'] = index['read only'];
+  }
   const unknownColumns = header
     .map((col, i) => ({ col, i }))
     .filter(({ col }) => !known.has(col.base));
@@ -424,14 +524,21 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
 
     const head = row.typeCell.trim().split(/\s+/)[0] ?? '';
     const recognised =
-      head in DIRECT || head in METADATA || head === 'select_one' || head === 'select_multiple' ||
-      head === 'rank' || head === 'select_one_from_file' || head === 'select_multiple_from_file';
+      Boolean(parsed.audit) || head in DIRECT || head in METADATA || head === 'select_one' ||
+      head === 'select_multiple' || head === 'rank' ||
+      head === 'select_one_from_file' || head === 'select_multiple_from_file';
 
     let type = (parsed.type ?? 'text') as QuestionType;
     let listName = parsed.listName;
     let calculate: string | null = null;
 
-    if (head in METADATA) {
+    if (parsed.audit) {
+      notes.push({
+        kind: 'preserved',
+        message: `type "${row.typeCell.trim()}" is an invisible audit field: it is collected here and exported verbatim, and the runner evaluates it`,
+        where,
+      });
+    } else if (head in METADATA) {
       const mapped = METADATA[head] ?? null;
       calculate = mapped;
       notes.push({
@@ -479,7 +586,7 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
       if (/\bpulldata\s*\(/.test(calculationCell)) {
         notes.push({
           kind: 'lossy',
-          message: 'pulldata() reads an external CSV that is not in the workbook. It is mapped to search(), and the dataset must be uploaded',
+          message: 'pulldata() reads an attached dataset, not the workbook. Attach the dataset to the form version; the runtime evaluates the calculation.',
           where,
         });
       }
@@ -526,6 +633,7 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
     if (Object.keys(rules).length > 0) question.rules = rules;
     if (appearance !== '') question.appearance = appearance;
     if (defaultRaw !== '') question.defaultValue = parseDefaultValue(defaultRaw);
+    if (parsed.audit) question.audit = { kind: parsed.audit, spec: appearance };
 
     questions.push(question);
   }
@@ -545,9 +653,13 @@ export function importXlsForm(bytes: Uint8Array): XlsFormImport {
   if (settingsRaw['form_id']) settings.formId = settingsRaw['form_id'];
   if (settingsRaw['version']) settings.version = settingsRaw['version'];
   if (settingsRaw['instance_name']) settings.instanceName = settingsRaw['instance_name'];
+  if (settingsRaw['public_key']) settings.publicKey = settingsRaw['public_key'];
+  if (settingsRaw['submission_url']) settings.submissionUrl = settingsRaw['submission_url'];
   const extra: Record<string, string> = {};
   for (const [key, value] of Object.entries(settingsRaw)) {
-    if (!['form_title', 'form_id', 'version', 'default_language', 'instance_name'].includes(key)) extra[key] = value;
+    if (!['form_title', 'form_id', 'version', 'default_language', 'instance_name', 'public_key', 'submission_url'].includes(key)) {
+      extra[key] = value;
+    }
   }
   if (Object.keys(extra).length > 0) settings.extra = extra;
 
@@ -588,6 +700,91 @@ export interface XlsFormSheets {
   notes: AdapterNote[];
 }
 
+export interface XlsFormBookOptions {
+  /**
+   * The instant the version formula's cached value is rendered for. Tests pass a
+   * fixed date; a download leaves it out and gets the minute it was written.
+   */
+  now?: Date;
+  /** Write the live version formula into `settings` C2 (default: true). */
+  versionFormula?: boolean;
+}
+
+/**
+ * The offline documentation tabs.
+ *
+ * These are not decoration. A scripter working in Excel away from any network is
+ * the person who needs the column rules most, and a workbook that carries its own
+ * reference is a workbook that can be handed to a new team member. The text is a
+ * constant rather than generated from the model because it documents the format,
+ * not this particular form.
+ */
+const SURVEY_HELP: Record<string, [what: string, rule: string, example: string]> = {
+  type: ['What this row is.', 'begin_group, end_group, begin_repeat, end_repeat, or a question type. select_one and select_multiple name a list from the choices sheet.', 'select_one cities'],
+  name: ['The variable name.', 'Letters, digits and underscore, starting with a letter or underscore. Unique in the form. This is the name `${...}` refers to.', 'household_size'],
+  label: ['The question text.', 'Plain text. `label::<language>` holds another language.', 'How many people live here?'],
+  hint: ['Guidance under the question.', 'Optional. `hint::<language>` for another language.', 'Include everyone who slept here last night.'],
+  default: ['A starting answer.', 'A literal or an expression. A default is a suggestion, not a validation.', '0'],
+  appearance: ['How the control renders.', 'A space separated list, for example `minimal`, `field-list`, `quick`, `horizontal`.', 'minimal'],
+  constraint: ['A validity rule.', 'An XPath expression; `.` is the answer being checked. A failing answer blocks submission and is reported against this question.', '. > 0 and . < 60'],
+  constraint_message: ['What to say when the constraint fails.', 'Plain language that names the question and the fix. `constraint_message::<language>` for another language.', 'Enter a number between 1 and 59.'],
+  relevant: ['When the question is asked.', 'An XPath expression. When it is false the question is hidden and its answer is stored as null, not as the last value typed.', '${has_children} = 1'],
+  disabled: ['Marks a field as not collected.', 'Preserved through import and export. It is not interpreted as visibility here; use `relevant` for that.', 'yes'],
+  required: ['Whether an answer is needed.', '`yes`, `no`, or an expression for a conditional requirement.', 'yes'],
+  required_message: ['What to say when a required answer is missing.', 'Name the question and the next action. Localise with required_message::<language>.', 'Enter the household size before continuing.'],
+  'read only': ['Shows the answer without allowing an edit.', '`yes` or `no`. A calculated field is read only by nature; this is for a value the enumerator must see.', 'yes'],
+  calculation: ['A value computed from other answers.', 'XPath. Re-evaluated whenever a dependency changes, on the device and again on the server.', '${price} * ${quantity}'],
+  repeat_count: ['How many times a repeat repeats.', 'A number or an expression. Only meaningful on begin_repeat.', '${household_size}'],
+  'media:image': ['An image shown with the question.', 'A filename inside the form media zip. Preserved through import and export.', 'consent.png'],
+  'media:audio': ['Audio played with the question.', 'A filename inside the form media zip.', 'prompt.mp3'],
+  'media:video': ['Video shown with the question.', 'A filename inside the form media zip.', 'howto.mp4'],
+  choice_filter: ['Narrows the options of a select.', 'An XPath expression evaluated per choice; a bare name reads that column on the choices sheet.', 'district = ${state}'],
+  note: ['A note for the person reading the spreadsheet.', 'Never sent to a device and never interpreted.', 'Client approved 2026-10-01.'],
+};
+
+const CHOICES_HELP: Record<string, [what: string, rule: string, example: string]> = {
+  list_name: ['The list this option belongs to.', 'Referenced by select_one and select_multiple in the survey sheet.', 'cities'],
+  name: ['The value that is stored.', 'Not the label: this is what lands in the dataset and what a constraint compares against. Unique within the list.', 'blr'],
+  label: ['What the respondent sees.', '`label::<language>` for another language.', 'Bengaluru'],
+  filter_column: ['A column used by choice_filter.', 'Any extra column on this sheet is readable by name inside a choice_filter expression.', 'state'],
+};
+
+const SETTINGS_HELP: Record<string, [what: string, rule: string, example: string]> = {
+  form_title: ['The name a respondent sees.', 'Required before publish. Plain text.', 'Household Health Survey 2026'],
+  form_id: ['The instrument identity.', 'Unique inside the organisation. Uploading a new form with an existing form_id is refused; upload a new version of that form instead.', 'household_health_2026'],
+  version: ['The revision.', 'The cell contains a live formula that writes YYMMDDHHmm when the workbook is saved. An upload must be greater than the deployed version.', '=RIGHT(YEAR(NOW()),2)&TEXT(MONTH(NOW()),"00")'],
+  public_key: ['An RSA public key.', 'When present, submissions are encrypted on the device and can only be decrypted with the matching private key at export.', '(optional)'],
+  submission_url: ['Where this workbook was collected from.', 'Informational; the platform uses its own distribution links.', '(optional)'],
+  default_language: ['The language of the plain `label` column.', 'Other languages use `label::<code>`.', 'en'],
+};
+
+function helpSheet(
+  sheet: 'survey' | 'choices' | 'settings',
+  what: string,
+  columns: string[],
+  docs: Record<string, [what: string, rule: string, example: string]>,
+  highlights: string,
+): OutSheet {
+  const rows: string[][] = [
+    [`Inicio XLSForm reference · ${sheet}`, '', '', ''],
+    ['Format', 'XLSForm (ODK, SurveyCTO and Kobo all read this workbook)', '', ''],
+    ['What it is', what, '', ''],
+    [],
+    ['Column', 'What it does', 'Rule', 'Example'],
+  ];
+  for (const column of columns) {
+    const doc = docs[column] ?? docs[column.split('::')[0] ?? ''] ?? [
+      'A preserved column.',
+      'Not interpreted by this platform. Its values are carried through import and export unchanged.',
+      '',
+    ];
+    rows.push([column, doc[0], doc[1], doc[2]]);
+  }
+  rows.push([]);
+  rows.push(['Highlighted cells', highlights, '', '']);
+  return { name: `help-${sheet}`, rows };
+}
+
 /**
  * The three sheets the export writes, before they are zipped.
  *
@@ -598,7 +795,7 @@ export interface XlsFormSheets {
  * table — a viewer should not drag a zip implementation onto a screen that never
  * writes a byte.
  */
-export function xlsFormSheets(def: FormDefinition): XlsFormSheets {
+export function xlsFormSheets(def: FormDefinition, options: XlsFormBookOptions = {}): XlsFormSheets {
   const notes: AdapterNote[] = [];
   const defaultLanguage = def.defaultLanguage || 'en';
   const languages: string[] = [];
@@ -636,20 +833,34 @@ export function xlsFormSheets(def: FormDefinition): XlsFormSheets {
   for (const q of def.questions) collect(q.source);
   for (const g of def.groups) collect(g.source);
 
+  // The twenty columns a SurveyCTO style workbook always has, in the order a
+  // scripter reads them. A few are inert here (`disabled`, `media:*`, `note`) and
+  // exist so a workbook this platform writes opens in that ecosystem with the
+  // shape its authors expect; values for them survive through `source.columns`.
+  const standardBase = new Set([
+    'type', 'name', 'label', 'hint', 'default', 'appearance', 'constraint', 'constraint_message',
+    'relevant', 'disabled', 'required', 'required_message', 'read only', 'calculation',
+    'repeat_count', 'media:image', 'media:audio', 'media:video', 'choice_filter', 'note',
+  ]);
   const columns: OutColumn[] = [
     { base: 'type' },
     { base: 'name' },
     ...labelFamily,
-    { base: 'required' },
-    { base: 'relevant' },
-    { base: 'constraint' },
-    { base: 'calculation' },
-    { base: 'choice_filter' },
-    { base: 'appearance' },
     { base: 'default' },
-    { base: 'read_only' },
+    { base: 'appearance' },
+    { base: 'constraint' },
+    { base: 'relevant' },
+    { base: 'disabled' },
+    { base: 'required' },
+    { base: 'read only' },
+    { base: 'calculation' },
     { base: 'repeat_count' },
-    ...passthrough.map((base) => ({ base })),
+    { base: 'media:image' },
+    { base: 'media:audio' },
+    { base: 'media:video' },
+    { base: 'choice_filter' },
+    { base: 'note' },
+    ...passthrough.filter((base) => !standardBase.has(base)).map((base) => ({ base })),
   ];
 
   const surveyRows: string[][] = [columns.map(columnLabel)];
@@ -686,8 +897,11 @@ export function xlsFormSheets(def: FormDefinition): XlsFormSheets {
   const emitQuestion = (q: Question): void => {
     const values: Record<string, string> = {};
     const preserved = q.source?.adapter === 'xlsform' ? q.source.type : undefined;
+    const auditPhrase = q.audit ? AUDIT_TYPE_PHRASE[q.audit.kind] : undefined;
     if (preserved) {
       values['type'] = preserved;
+    } else if (auditPhrase) {
+      values['type'] = auditPhrase;
     } else if (q.type === 'yesno') {
       values['type'] = `select_one ${listForQuestion(q) ?? YESNO_LIST}`;
     } else if (q.type === 'select_one' || q.type === 'select_multiple' || q.type === 'rank') {
@@ -713,9 +927,12 @@ export function xlsFormSheets(def: FormDefinition): XlsFormSheets {
     if (q.validation?.constraint) values['constraint'] = q.validation.constraint;
     if (q.rules?.calculate) values['calculation'] = q.rules.calculate;
     if (q.rules?.choiceFilter) values['choice_filter'] = q.rules.choiceFilter;
-    if (q.appearance) values['appearance'] = q.appearance;
+    // The audit parameters live in `appearance`, which is where every XLSForm
+    // tool that understands these types reads them.
+    const appearance = q.audit?.spec ? q.audit.spec : q.appearance;
+    if (appearance) values['appearance'] = appearance;
     if (q.defaultValue !== undefined && q.defaultValue !== null) values['default'] = stringifyDefaultValue(q.defaultValue);
-    if (q.rules?.enableIf === 'false') values['read_only'] = 'yes';
+    if (q.rules?.enableIf === 'false') values['read only'] = 'yes';
     for (const [key, value] of Object.entries(q.source?.columns ?? {})) values[key] = value;
     pushRow(values);
   };
@@ -766,15 +983,37 @@ export function xlsFormSheets(def: FormDefinition): XlsFormSheets {
   }
 
   /* -- settings sheet -- */
+  // One header row and one value row, which is the shape SurveyCTO writes and the
+  // shape a person reading the sheet expects. The alternative (a key/value list)
+  // makes the file easy to parse and hard to scan, and this is the one sheet a
+  // scripter edits by hand.
   const xf = (def.settings?.['xlsform'] ?? {}) as XlsFormSettings;
-  const settingsRows: string[][] = [
-    ['form_title', def.title],
-    ['form_id', xf.formId ?? slug(def.title)],
-    ['version', xf.version ?? '1'],
-    ['default_language', defaultLanguage],
+  const settingsColumns = ['form_title', 'form_id', 'version', 'public_key', 'submission_url', 'default_language'];
+  const settingsValues: CellValue[] = [
+    def.title,
+    xf.formId ?? slug(def.title),
+    // The cached value is what every non-Excel reader sees. It is the existing
+    // version when the form has one; when it does not, it is empty, so importing
+    // a workbook the platform just exported does not invent a version. Excel
+    // evaluates the formula when the file is opened or saved, which is exactly
+    // when a new stamp should appear.
+    options.versionFormula === false
+      ? (xf.version ?? '')
+      : { formula: XLSFORM_VERSION_FORMULA, cached: xf.version ?? '' },
+    xf.publicKey ?? xf.extra?.['public_key'] ?? '',
+    xf.submissionUrl ?? xf.extra?.['submission_url'] ?? '',
+    defaultLanguage,
   ];
-  if (xf.instanceName) settingsRows.push(['instance_name', xf.instanceName]);
-  for (const [key, value] of Object.entries(xf.extra ?? {})) settingsRows.push([key, value]);
+  if (xf.instanceName) {
+    settingsColumns.push('instance_name');
+    settingsValues.push(xf.instanceName);
+  }
+  for (const [key, value] of Object.entries(xf.extra ?? {})) {
+    if (['public_key', 'submission_url', 'instance_name'].includes(key)) continue;
+    settingsColumns.push(key);
+    settingsValues.push(value);
+  }
+  const settingsRows: CellValue[][] = [settingsColumns, settingsValues];
 
   if (passthrough.length > 0) {
     notes.push({
@@ -788,13 +1027,44 @@ export function xlsFormSheets(def: FormDefinition): XlsFormSheets {
       { name: 'survey', rows: surveyRows },
       { name: 'choices', rows: choiceRows },
       { name: 'settings', rows: settingsRows },
+      helpSheet(
+        'survey',
+        'One row per question, group, repeat or note. Rows are read top to bottom; a group or repeat is a begin/end pair and everything between them belongs to it.',
+        columns.map(columnLabel),
+        SURVEY_HELP,
+        'name, constraint_message, relevant and choice_filter. They are the columns an upload is judged by, so they are filled in yellow.',
+      ),
+      helpSheet(
+        'choices',
+        'One row per option. A list is the set of rows sharing a list_name, and the order of the rows is the order the respondent sees unless the question rotates them.',
+        choiceColumns.map(columnLabel),
+        CHOICES_HELP,
+        'list_name and name. Together they are the identity of an option, and a duplicate is a refused upload.',
+      ),
+      helpSheet(
+        'settings',
+        'One header row, one value row. These cells describe the instrument as a whole rather than any question in it.',
+        settingsColumns,
+        SETTINGS_HELP,
+        'form_id and version. The upload guard reads them: a duplicate form_id is refused, and a version that is not newer than the deployed one is refused.',
+      ),
     ],
     notes,
   };
 }
 
+/**
+ * The workbook with its visual grammar applied: the same data, plus the fills,
+ * widths and frozen panes the studio viewer and the downloaded file share.
+ */
+export function xlsFormWorkbook(def: FormDefinition, options: XlsFormBookOptions = {}): XlsFormBook {
+  const { sheets, notes } = xlsFormSheets(def, options);
+  const styled = applyXlsFormStyles(sheets);
+  return { sheets: styled.sheets, styles: styled.styles, notes };
+}
+
 /** The workbook as a file: the same sheets, zipped. */
-export function exportXlsForm(def: FormDefinition): XlsFormExport {
-  const { sheets, notes } = xlsFormSheets(def);
-  return { bytes: writeWorkbook({ sheets }), notes };
+export function exportXlsForm(def: FormDefinition, options: XlsFormBookOptions = {}): XlsFormExport {
+  const book = xlsFormWorkbook(def, options);
+  return { bytes: writeWorkbook({ sheets: book.sheets, styles: book.styles }), notes: book.notes };
 }

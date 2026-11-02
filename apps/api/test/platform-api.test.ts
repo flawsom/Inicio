@@ -6,7 +6,7 @@ import { env } from '../src/env.js';
 import { PRIVACY, TERMS } from '../src/legal/documents.js';
 import { Client } from 'pg';
 import { readLiveOtp, uniqueEmail } from './helpers/fixtures.js';
-import type { FormDefinition } from '@inicio/engine';
+import { exportXlsForm, type FormDefinition } from '@inicio/engine';
 
 /**
  * End-to-end through the real HTTP surface and the real database, as a
@@ -512,6 +512,54 @@ describe('authoring, publishing and the XLSForm round trip', () => {
     // the passthrough. Normalisation notes (yes/no encoding, say) are expected.
     const notes = (imported.json() as { notes: Array<{ kind: string; message: string }> }).notes;
     expect(notes.filter((n) => n.kind === 'dropped')).toEqual([]);
+  });
+
+  it('refuses a duplicate form id and a version that is not newer, in the promised words', async () => {
+    const owner = await signIn(`guards-${Date.now()}@example.com`);
+    const orgId = await createOrg(owner, 'Guard org');
+    const guarded: FormDefinition = {
+      ...validDefinition,
+      settings: { xlsform: { formId: 'guarded_instrument', version: '2611011200' } },
+    };
+    const file = Buffer.from(exportXlsForm(guarded).bytes).toString('base64');
+
+    const first = await app.inject({
+      method: 'POST',
+      url: '/api/v1/forms',
+      headers: { cookie: owner.cookie },
+      payload: { orgId, name: 'Guarded', xlsformBase64: file },
+    });
+    expect(first.statusCode, first.body).toBe(201);
+    const formId = (first.json() as { form: { id: string } }).form.id;
+
+    // A second form in the same organisation cannot claim the same instrument id.
+    const duplicate = await app.inject({
+      method: 'POST',
+      url: '/api/v1/forms',
+      headers: { cookie: owner.cookie },
+      payload: { orgId, name: 'Guarded again', xlsformBase64: file },
+    });
+    expect(duplicate.statusCode, duplicate.body).toBe(409);
+    expect((duplicate.json() as { message: string }).message).toBe(
+      'Your form definition specifies a form ID (guarded_instrument) that already exists. ' +
+        "If you would like to update that existing form, please use the 'Upload' option for that form.",
+    );
+
+    // The same instrument may be updated, but only with a newer version.
+    const older = Buffer.from(
+      exportXlsForm({ ...guarded, settings: { xlsform: { formId: 'guarded_instrument', version: '2611011100' } } }).bytes,
+    ).toString('base64');
+    const stale = await app.inject({
+      method: 'POST',
+      url: `/api/v1/forms/${formId}/import`,
+      headers: { cookie: owner.cookie },
+      payload: { xlsformBase64: older, versionId: null },
+    });
+    expect(stale.statusCode, stale.body).toBe(409);
+    expect((stale.json() as { message: string }).message).toBe(
+      'Your uploaded form version (2611011100) is not newer than existing form version (2611011200). ' +
+        'Update the form version and resubmit.',
+    );
   });
 });
 

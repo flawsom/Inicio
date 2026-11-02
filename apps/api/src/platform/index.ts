@@ -11,6 +11,7 @@ import { platformPublicRoutes } from './public.js';
 import { platformKeyRoutes } from './keys.js';
 import { platformWebhookRoutes } from './webhooks/routes.js';
 import { platformFlagRoutes } from './flags.js';
+import { platformDatasetRoutes } from './datasets.js';
 import { platformAttachmentRoutes } from './attachments.js';
 
 /**
@@ -39,6 +40,9 @@ export const platformRoutes: FastifyPluginAsync = async (app) => {
   await app.register(platformKeyRoutes);
   await app.register(platformWebhookRoutes);
   await app.register(platformFlagRoutes);
+  // Server datasets and their version attachments: the case list an instrument
+  // reads and the row it updates when the interview is submitted.
+  await app.register(platformDatasetRoutes);
   // The files people attach to answers: metadata plus a signed, short-lived read
   // URL, so the bytes never travel through this function (see attachments.ts).
   await app.register(platformAttachmentRoutes);

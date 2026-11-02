@@ -9,6 +9,8 @@ import {
   type Definition,
 } from './api';
 import { RespondentForm } from './respondent';
+import { AuditRecorder } from './audit';
+import type { DatasetTable, FormDefinition } from '@inicio/engine';
 import { attachmentOutcome, deviceState, resolveResume, retryText, storageHealth, timeOf, type StorageHealth } from './offline/core';
 import { buildBackup, fileNameFor, restoreBackup } from './offline/backup';
 import { openStore, type OfflineStore } from './offline/store';
@@ -141,6 +143,13 @@ function attachFailure(err: unknown, maxBytes: number): string {
 
 export function Collect({ token }: { token: string }): JSX.Element {
   const [definition, setDefinition] = useState<Definition | null>(null);
+  // The attached dataset snapshot. It is cached with the definition so pulldata()
+  // keeps working on a device that has not seen the network since the form opened.
+  const [datasets, setDatasets] = useState<DatasetTable[]>([]);
+  const caseid = useMemo(() => {
+    if (typeof window === 'undefined') return undefined;
+    return new URLSearchParams(window.location.search).get('caseid')?.trim() || undefined;
+  }, []);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [draft, setDraft] = useState<StoredDraft | null>(null);
   const [status, setStatus] = useState<string>('in_progress');
@@ -186,6 +195,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
    */
   const pendingAttachments = useRef<Map<string, File>>(new Map());
   const attachFileRef = useRef<((questionName: string, file: File) => Promise<void>) | null>(null);
+  const recorderRef = useRef<AuditRecorder | null>(null);
 
   draftRef.current = draft;
   answersRef.current = answers;
@@ -193,17 +203,17 @@ export function Collect({ token }: { token: string }): JSX.Element {
   const transport = useMemo<Transport>(
     () => ({
       async start(t, clientId, payload) {
-        const res = await api.startResponse(t, clientId, payload.answers, payload.base);
+        const res = await api.startResponse(t, clientId, payload.answers, payload.base, payload.caseid);
         setOnline(true);
         return { responseId: res.responseId, status: res.status as StoredDraft['status'] };
       },
       async save(t, responseId, payload) {
-        const res = await api.saveResponse(t, responseId, payload.answers, payload.base);
+        const res = await api.saveResponse(t, responseId, payload.answers, payload.base, payload.paradata);
         setOnline(true);
         return res;
       },
       async submit(t, responseId, payload) {
-        const res = await api.submitResponse(t, responseId, payload.answers, payload.base);
+        const res = await api.submitResponse(t, responseId, payload.answers, payload.base, payload.paradata);
         setOnline(true);
         return { status: res.status as StoredDraft['status'] };
       },
@@ -302,7 +312,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
       // A response id kept by an older build in localStorage is adopted, so an
       // upgrade mid-interview does not abandon work already in progress.
       const legacy = window.localStorage.getItem(storageKey(token));
-      let local = await ensureDraft(store, token, legacy);
+      let local = await ensureDraft(store, token, legacy, caseid);
       if (cancelled) return;
       setDraft(local);
       setAnswers(local.answers);
@@ -313,6 +323,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
       const cached = await store.getCachedForm(token);
       if (cached && !cancelled) {
         setDefinition(cached.definition as Definition);
+        setDatasets(cached.datasets ?? []);
         setFormMeta({ title: cached.title, version: cached.version });
       }
 
@@ -320,6 +331,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
         const loaded = await api.collectForm(token);
         if (cancelled) return;
         setDefinition(loaded.form.definition);
+        setDatasets(loaded.datasets ?? []);
         setAttachments(loaded.attachments ?? null);
         setFormMeta({ title: loaded.form.title, version: loaded.form.version });
         setOnline(true);
@@ -327,12 +339,15 @@ export function Collect({ token }: { token: string }): JSX.Element {
           title: loaded.form.title,
           version: loaded.form.version,
           definition: loaded.form.definition,
+          datasets: loaded.datasets ?? [],
           linkKind: loaded.link?.kind ?? 'anonymous',
         });
         if (local.responseId) {
           const server = await api.resumeResponse(token, local.responseId);
           if (!cancelled && server.status) {
             local = resolveResume(local, { answers: server.answers ?? {}, status: server.status as StoredDraft['status'] });
+            if (server.caseid && local.caseid !== server.caseid) local = { ...local, caseid: server.caseid };
+            if (server.datasets) setDatasets(server.datasets);
             await store.putDraft(local);
             setDraft(local);
             setAnswers(local.answers);
@@ -360,7 +375,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
       cancelled = true;
       if (timer.current) window.clearTimeout(timer.current);
     };
-  }, [token, flush]);
+  }, [token, flush, caseid]);
 
   useEffect(() => {
     const onOnline = (): void => {
@@ -390,29 +405,89 @@ export function Collect({ token }: { token: string }): JSX.Element {
     };
   }, [flush, refreshStorage, retryAttachments]);
 
+  /**
+   * The recorder is created once the first definition exists and is *not* recreated
+   * when the server copy replaces the cached one. It did not become a different
+   * interview; recreating it would throw away the timings collected while the
+   * network answered.
+   *
+   * Its seed is the device's stable response id, so retries, reloads and a sync
+   * replay all sample the same fields; it is never a fresh coin flip.
+   */
+  const hasDefinition = definition !== null;
+  const definitionRef = useRef<FormDefinition | null>(null);
+  definitionRef.current = definition as unknown as FormDefinition | null;
+  useEffect(() => {
+    const form = definitionRef.current;
+    if (!hasDefinition || !form) return;
+    const recorder = new AuditRecorder(form, draft?.clientId ?? token, () => answersRef.current);
+    recorderRef.current = recorder;
+    void recorder.startAudio();
+    return () => {
+      recorder.dispose();
+      recorderRef.current = null;
+    };
+  }, [hasDefinition, draft?.clientId, token]);
+
+  const noteFieldVisible = useCallback((name: string) => {
+    recorderRef.current?.noteVisible(name);
+  }, []);
+
+  /**
+   * Send whatever audio the recorder has produced. Clips are best effort: a
+   * refused microphone, an unsupported codec or a missing bucket produces no clip
+   * and no interruption. They are uploaded as attachments on the audit field so
+   * they travel the same verified path as any other file, and the server links
+   * the accepted ones to `response_audit_clip` at submission.
+   */
+  const uploadAuditClips = useCallback(async () => {
+    const recorder = recorderRef.current;
+    const responseId = draftRef.current?.responseId;
+    if (!recorder || !responseId) return;
+    for (const clip of recorder.takeClips()) {
+      try {
+        const filename = `${clip.field}.webm`;
+        const authorisation = await authoriseAttachment(token, responseId, {
+          questionId: clip.field,
+          filename,
+          mime: clip.mime,
+          sizeBytes: clip.blob.size,
+          audit: { startedAt: clip.startedAt, durationSeconds: clip.durationSeconds },
+        });
+        await uploadAttachment(authorisation, new File([clip.blob], filename, { type: clip.mime }));
+        await completeAttachment(token, responseId, authorisation.attachmentId);
+      } catch {
+        // Keep collecting. The clip is gone, the interview is not.
+      }
+    }
+  }, [token]);
+
   // Autosave on a timer as well as on change, so a respondent who types one
   // answer and then thinks for ten minutes still has it on the server. The same
   // tick re-reads the storage estimate, because a device that filled up during
   // the day is exactly the case the warning exists for.
   useEffect(() => {
     void refreshStorage();
+    void uploadAuditClips();
     const id = window.setInterval(() => {
       void flush();
       void refreshStorage();
+      void uploadAuditClips();
     }, AUTOSAVE_MS);
     return () => window.clearInterval(id);
-  }, [flush, refreshStorage]);
+  }, [flush, refreshStorage, uploadAuditClips]);
 
   /* ------------------------------------------------------------------- writing */
 
   const update = (name: string, value: unknown): void => {
     const next = { ...answers, [name]: value };
     setAnswers(next);
+    recorderRef.current?.noteAnswer(name, value);
     const store = storeRef.current;
     if (!store) return;
     // Persist before anything else: the device is the only copy until the server
     // acknowledges, and that must not depend on a timer or a network.
-    void recordAnswers(store, token, next, [name]).then((saved) => {
+    void recordAnswers(store, token, next, [name], recorderRef.current?.paradata()).then((saved) => {
       setDraft(saved);
     });
     scheduleFlush(1200);
@@ -565,7 +640,8 @@ export function Collect({ token }: { token: string }): JSX.Element {
     setError(null);
     setProblems({ missing: [], invalid: [] });
     try {
-      await requestSubmit(store, token, answers, Object.keys(answers));
+      await uploadAuditClips();
+      await requestSubmit(store, token, answers, Object.keys(answers), recorderRef.current?.paradata());
       const result = await flush();
       if (result && result.missing.length === 0 && result.invalid.length === 0) {
         setStatus(result.status);
@@ -632,14 +708,17 @@ export function Collect({ token }: { token: string }): JSX.Element {
   return (
     <RespondentForm
       definition={definition}
+      datasets={datasets}
       answers={answers}
       onChange={update}
+      onFieldVisible={noteFieldVisible}
       attachments={attachments ?? undefined}
       onAttachFile={attachFile}
       onFlush={() => void flush()}
       problems={problems}
       subtitle={
         <>
+          {caseid && <>Case {caseid}. </>}
           {storage?.warning && <><strong>{storage.warning}</strong>{' '}</>}
           {savedAt && <>Saved on this device at {savedAt}. </>}
           {syncedAt ? <>The server has everything up to {syncedAt}.</> : <>Not sent to the server yet.</>}

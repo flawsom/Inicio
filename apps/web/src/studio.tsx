@@ -24,7 +24,7 @@ import { RespondentForm } from './respondent';
  *      edited; the analyser under it runs on every keystroke, not on save, because
  *      "publish-blocking" is only useful as a warning at the moment you are typing
  *      the mistake.
- *   2. **XLSForm** — the three sheets the export writes, from `xlsFormSheets`, which
+ *   2. **XLSForm** — the six tabs the export writes, from `xlsFormSheets`, which
  *      is the function `exportXlsForm` zips. The panel and the downloaded file are
  *      therefore the same rows by construction; a viewer built on a second
  *      implementation of the export would eventually show something the file does not
@@ -107,6 +107,13 @@ const PANEL = {
   preview: 'Preview',
 } as const;
 
+/** Formula cells carry both the formula and its last value; the tab shows the value. */
+function cellText(cell: OutSheet['rows'][number][number]): string {
+  if (cell === null || cell === undefined) return '';
+  if (typeof cell === 'object') return String(cell.cached);
+  return String(cell);
+}
+
 function SheetTable({ sheet }: { sheet: OutSheet }): JSX.Element {
   const [header, ...rows] = sheet.rows;
   const columns = header ?? [];
@@ -119,8 +126,8 @@ function SheetTable({ sheet }: { sheet: OutSheet }): JSX.Element {
         <thead>
           <tr>
             {columns.map((cell, index) => (
-              <th key={`${cell}-${index}`} scope="col">
-                {cell === '' ? <span className="muted">·</span> : cell}
+              <th key={index} scope="col">
+                {cellText(cell) === '' ? <span className="muted">·</span> : cellText(cell)}
               </th>
             ))}
           </tr>
@@ -128,9 +135,15 @@ function SheetTable({ sheet }: { sheet: OutSheet }): JSX.Element {
         <tbody>
           {rows.map((row, rowIndex) => (
             <tr key={rowIndex}>
-              {columns.map((_, columnIndex) => (
-                <td key={columnIndex}>{row[columnIndex] ?? ''}</td>
-              ))}
+              {columns.map((_, columnIndex) => {
+                const cell = row[columnIndex];
+                const isFormula = typeof cell === 'object' && cell !== null && 'formula' in cell;
+                return (
+                  <td key={columnIndex} className={isFormula ? 'formula-cell' : undefined}>
+                    {cellText(cell)}
+                  </td>
+                );
+              })}
             </tr>
           ))}
         </tbody>

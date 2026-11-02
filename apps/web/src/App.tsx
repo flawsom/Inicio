@@ -14,6 +14,7 @@ import {
   type WebhookDelivery,
 } from './api';
 import { Collect } from './collect';
+import { CasesTab } from './cases';
 import { AdminView } from './admin';
 import { InvitePage, LegalPage, TermsGate } from './legal';
 import { useFormStream, type Aggregate, type StreamStatus } from './realtime';
@@ -1008,7 +1009,7 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
     fallbackMs: 60_000,
     deps: [form.id],
   });
-  const [tab, setTab] = useState<'builder' | 'data' | 'quality' | 'distribute'>('builder');
+  const [tab, setTab] = useState<'builder' | 'data' | 'cases' | 'quality' | 'distribute'>('builder');
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Bumped whenever the server rewrites the selected version in place, so the
@@ -1044,11 +1045,23 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
     reload();
   };
 
+  interface ValidationDiagnostic {
+    severity: string;
+    message: string;
+    sheet: string;
+    row: number;
+    cell?: string;
+  }
+
   interface ImportResult {
     notes?: Array<{ kind: string; message: string }>;
     error?: string;
+    /** The server's sentence for a refusal, e.g. the exact upload-guard message. */
+    message?: string;
     versionId?: string;
     definition?: { questions?: unknown[] };
+    /** The workbook's own diagnostics, addressed by sheet and cell. */
+    validation?: { errors: number; warnings: number; diagnostics: ValidationDiagnostic[] };
   }
 
   const importFile = async (file: File): Promise<void> => {
@@ -1069,7 +1082,7 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
       });
       const body = (await res.json().catch(() => null)) as ImportResult | null;
       if (!res.ok) {
-        setNotice(body?.error ?? `Import failed (${res.status}).`);
+        setNotice(body?.message ?? body?.error ?? `Import failed (${res.status}).`);
         return;
       }
       const questions = body?.definition?.questions?.length ?? 0;
@@ -1088,10 +1101,22 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
         return;
       }
       const summary = `Imported ${questions} question(s).`;
+      // A workbook can import and still be wrong in ways the canonical model
+      // repairs only on the next export. The validator's addresses are the part
+      // that makes those fixable: a sheet, a row and a cell, not a paragraph.
+      const problems = (body?.validation?.diagnostics ?? []).filter((item) => item.severity === 'error');
+      const where = (item: ValidationDiagnostic): string =>
+        `${item.sheet}${item.cell ? ` ${item.cell}` : ` row ${item.row}`}`;
+      const validation = problems.length > 0
+        ? ` ${problems.length} workbook error(s) to fix: ${problems
+            .slice(0, 3)
+            .map((item) => `${item.message} (${where(item)})`)
+            .join(' · ')}${problems.length > 3 ? ` and ${problems.length - 3} more` : ''}.`
+        : '';
       setNotice(
         notes.length === 0
-          ? `${summary} Nothing needed adjusting.`
-          : `${summary} ${notes.length} note(s): ${notes.map((n) => `${n.kind}: ${n.message}`).join(' · ')}`,
+          ? `${summary} Nothing needed adjusting.${validation}`
+          : `${summary} ${notes.length} note(s): ${notes.map((n) => `${n.kind}: ${n.message}`).join(' · ')}.${validation}`,
       );
     } catch (err) {
       setNotice(err instanceof Error ? `Import failed: ${err.message}` : 'Import failed.');
@@ -1119,15 +1144,17 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
       </div>
 
       <nav className="tabs">
-        {(['builder', 'data', 'quality', 'distribute'] as const).map((name) => (
+        {(['builder', 'data', 'cases', 'quality', 'distribute'] as const).map((name) => (
           <button key={name} type="button" className={tab === name ? 'tab active' : 'tab'} onClick={() => setTab(name)}>
             {name === 'builder'
               ? 'Builder'
               : name === 'data'
                 ? 'Responses & exports'
-                : name === 'quality'
-                  ? 'Quality'
-                  : 'Distribute'}
+                : name === 'cases'
+                  ? 'Cases & data'
+                  : name === 'quality'
+                    ? 'Quality'
+                    : 'Distribute'}
           </button>
         ))}
       </nav>
@@ -1189,6 +1216,15 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
 
       {tab === 'data' && (
         <DataTab formId={form.id} orgId={form.org_id} publishedVersion={published?.version ?? null} />
+      )}
+      {tab === 'cases' && (
+        <CasesTab
+          orgId={form.org_id}
+          formId={form.id}
+          versions={versions}
+          selectedVersionId={selected?.id ?? null}
+          publishedVersionId={published?.id ?? null}
+        />
       )}
       {tab === 'quality' && <QualityTab formId={form.id} orgId={form.org_id} />}
       {tab === 'distribute' && <DistributeTab formId={form.id} publishedVersion={published?.version ?? null} />}

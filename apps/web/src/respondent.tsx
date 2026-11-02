@@ -1,5 +1,12 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { evaluateForm, filterChoices, type FormDefinition, type Question } from '@inicio/engine';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  datasetContext,
+  evaluateForm,
+  filterChoices,
+  type DatasetTable,
+  type FormDefinition,
+  type Question,
+} from '@inicio/engine';
 import type { AttachmentCapability, Definition } from './api';
 
 /**
@@ -64,11 +71,19 @@ export interface RespondentSubmit {
 
 export interface RespondentFormProps {
   definition: Definition;
+  /** Attached server datasets, so pulldata() works on the device as it does on the server. */
+  datasets?: DatasetTable[];
   answers: Record<string, unknown>;
   /** Called on every edit. Whether that is persisted is the caller's business. */
   onChange: (name: string, value: unknown) => void;
   /** Called when a control loses focus: the collection app flushes its queue here. */
   onFlush?: () => void;
+  /**
+   * Called the first time a visible question is rendered. The collection page uses
+   * it to start that field's clock for the audit timings; the studio preview does
+   * not pass it, because a preview is not an interview.
+   */
+  onFieldVisible?: (name: string) => void;
   /** Names that block submission, from the server's own answer. */
   problems?: RespondentProblems;
   /** The line under the title: device state in the app, an explanation in the studio. */
@@ -100,9 +115,11 @@ export interface RespondentFormProps {
 
 export function RespondentForm({
   definition,
+  datasets,
   answers,
   onChange,
   onFlush,
+  onFieldVisible,
   problems,
   subtitle,
   status,
@@ -113,7 +130,26 @@ export function RespondentForm({
   onAttachFile,
 }: RespondentFormProps): JSX.Element {
   const form = definition as unknown as FormDefinition;
-  const evaluation = useMemo(() => evaluateForm(form, answers), [form, answers]);
+  const datasetSnapshot = useMemo(() => (datasets ? datasetContext(datasets) : undefined), [datasets]);
+  const evaluation = useMemo(
+    () => evaluateForm(form, answers, { datasets: datasetSnapshot }),
+    [form, answers, datasetSnapshot],
+  );
+  // One effect for every visible question, not a hook per question: hooks cannot be
+  // called in a loop, and the signature is what makes "newly visible" cheap to spot.
+  // Audit fields are calculates with no control of their own. They must not
+  // produce an empty output row, and they must not start a timing clock: they are
+  // instrumentation, not questions.
+  const rendered = (question: Question): boolean =>
+    evaluation.states[question.name]?.visible === true && !question.audit;
+  const visibleSignature = form.questions
+    .filter(rendered)
+    .map((question) => question.name)
+    .join('\n');
+  useEffect(() => {
+    if (!onFieldVisible) return;
+    for (const name of visibleSignature.split('\n')) if (name !== '') onFieldVisible(name);
+  }, [visibleSignature, onFieldVisible]);
   // Per question, because two file questions on one screen are two transfers, and a
   // single flag would make one of them claim the other's progress.
   const [uploads, setUploads] = useState<Record<string, AttachmentProgress>>({});
@@ -275,7 +311,7 @@ export function RespondentForm({
       const options =
         question.type === 'yesno'
           ? [{ value: 'yes', label: { en: 'Yes' } }, { value: 'no', label: { en: 'No' } }]
-          : filterChoices(form, question, answers).map((c) => ({ value: c.value, label: c.label }));
+          : filterChoices(form, question, answers, { datasets: datasetSnapshot }).map((c) => ({ value: c.value, label: c.label }));
       return (
         <select
           value={typeof value === 'string' ? value : ''}
@@ -294,7 +330,7 @@ export function RespondentForm({
     }
 
     if (question.type === 'select_multiple' || question.type === 'rank') {
-      const options = filterChoices(form, question, answers);
+      const options = filterChoices(form, question, answers, { datasets: datasetSnapshot });
       const selected = Array.isArray(value) ? value.map(String) : [];
       return (
         <div className="choices">
@@ -333,11 +369,11 @@ export function RespondentForm({
 
   const sections: Array<{ key: string; title: string; questions: Question[] }> = [];
   for (const group of form.groups ?? []) {
-    const questions = form.questions.filter((q) => q.groupId === group.id && evaluation.states[q.name]?.visible);
+    const questions = form.questions.filter((q) => q.groupId === group.id && rendered(q));
     if (questions.length === 0) continue;
     sections.push({ key: group.id, title: group.label?.[definition.defaultLanguage] ?? group.name, questions });
   }
-  const topLevel = form.questions.filter((q) => !q.groupId && evaluation.states[q.name]?.visible);
+  const topLevel = form.questions.filter((q) => !q.groupId && rendered(q));
   if (topLevel.length > 0) sections.push({ key: 'ungrouped', title: definition.title, questions: topLevel });
 
   return (

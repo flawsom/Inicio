@@ -15,6 +15,35 @@ export const MULTI_TYPES: ReadonlySet<QuestionType> = new Set(['select_multiple'
 /** Types with no user input (never required, never blank-validated). */
 export const DISPLAY_TYPES: ReadonlySet<QuestionType> = new Set(['note']);
 
+/**
+ * The invisible field types a market research instrument uses to audit itself.
+ *
+ * They are represented as `calculate` questions carrying an `audit` descriptor,
+ * not as new members of `QuestionType`. That is deliberate: every consumer of the
+ * canonical model (the renderer, the evaluator, the exporter) already knows that a
+ * calculate has no control and no required state, so an audit field is invisible
+ * on the device by construction rather than by remembering to special-case it in
+ * four places. The workbook's own `type` cell is preserved in `source.type`, so a
+ * round trip still writes `text audit`, `audio audit` and friends back out.
+ */
+export type AuditKind =
+  | 'text_audit'
+  | 'audio_audit'
+  | 'speed_violations'
+  | 'speed_violations_count'
+  | 'speed_violations_list'
+  | 'sensor_stream'
+  | 'sensor_statistic';
+
+export interface AuditField {
+  kind: AuditKind;
+  /**
+   * The raw parameter text from the workbook's `appearance` column, e.g.
+   * `p=50; s=300-600; d=45`. Parsed by `auditPlan`, never interpreted here.
+   */
+  spec: string;
+}
+
 export interface Choice {
   value: string;
   label: LocalizedText;
@@ -64,6 +93,8 @@ export interface Question {
   appearance?: string | null;
   defaultValue?: unknown;
   upload?: { accept?: string[]; maxFiles?: number; maxSizeMb?: number } | null;
+  /** Present only on an invisible audit field. See `AuditKind`. */
+  audit?: AuditField | null;
   source?: PreservedSource | null;
 }
 

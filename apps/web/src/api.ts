@@ -6,6 +6,9 @@
  * export and download endpoints return bytes, so they are fetched as blobs rather
  * than parsed as JSON.
  */
+import type { DatasetTable } from '@inicio/engine';
+import type { Paradata } from './offline/types';
+
 export const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 const ROOT = `${API_BASE}/api/v1`;
 
@@ -319,6 +322,41 @@ export interface FlagQueue {
   summary: { byStatus: Record<string, number>; byKind: Record<string, number>; open: number };
 }
 
+/** An organisation-level table an instrument can read before and write after. */
+export interface DatasetSummary {
+  id: string;
+  code: string;
+  name: string;
+  kind: 'data' | 'cases';
+  uniqueField: string;
+  columns: string[];
+  rowCount: number;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt: string | null;
+}
+
+export interface DatasetRowRecord {
+  key: string;
+  data: Record<string, unknown>;
+  updatedAt: string;
+}
+
+export interface DatasetAttachment {
+  id: string;
+  datasetId: string;
+  code: string;
+  name: string;
+  kind: string;
+  uniqueField: string;
+  columns: string[];
+  keyQuestion: string | null;
+  mapping: Record<string, string>;
+  publish: boolean;
+  rowCount: number;
+  createdAt: string;
+}
+
 /**
  * Attachments: a file a respondent sends, and the three calls that move it.
  *
@@ -498,30 +536,61 @@ export const api = {
     request<{
       form: { id: string; title: string; version: number; definition: Definition };
       link: { kind: string };
+      /** The datasets attached to this published version, with a bounded snapshot. */
+      datasets?: DatasetTable[];
       /** What this deployment can do with files, or that it cannot yet. */
       attachments: AttachmentCapability;
     }>('GET', `/collect/${token}`),
   resumeResponse: (token: string, responseId: string) =>
-    request<{ responseId: string; status: string; answers: Record<string, unknown> }>(
-      'GET',
-      `/collect/${token}/responses/${responseId}`,
-    ),
-  startResponse: (token: string, clientId?: string, answers: Record<string, unknown> = {}, base: Record<string, unknown> = {}) =>
-    request<{ responseId: string; created: boolean; status: string }>('POST', `/collect/${token}/responses`, {
+    request<{
+      responseId: string;
+      status: string;
+      caseid?: string | null;
+      answers: Record<string, unknown>;
+      datasets?: DatasetTable[];
+    }>('GET', `/collect/${token}/responses/${responseId}`),
+  startResponse: (
+    token: string,
+    clientId?: string,
+    answers: Record<string, unknown> = {},
+    base: Record<string, unknown> = {},
+    caseid?: string,
+  ) =>
+    request<{
+      responseId: string;
+      created: boolean;
+      status: string;
+      caseid?: string | null;
+      datasets?: DatasetTable[];
+    }>('POST', `/collect/${token}/responses`, {
       clientId,
       answers,
       base,
+      ...(caseid ? { caseid } : {}),
     }),
-  saveResponse: (token: string, responseId: string, answers: Record<string, unknown>, base: Record<string, unknown> = {}) =>
+  saveResponse: (
+    token: string,
+    responseId: string,
+    answers: Record<string, unknown>,
+    base: Record<string, unknown> = {},
+    paradata?: Paradata,
+  ) =>
     request<{ missing: string[]; invalid: string[]; answers: Record<string, unknown>; conflicts: number }>(
       'PATCH',
       `/collect/${token}/responses/${responseId}`,
-      { answers, base },
+      { answers, base, ...(paradata ? { paradata } : {}) },
     ),
-  submitResponse: (token: string, responseId: string, answers: Record<string, unknown>, base: Record<string, unknown> = {}) =>
+  submitResponse: (
+    token: string,
+    responseId: string,
+    answers: Record<string, unknown>,
+    base: Record<string, unknown> = {},
+    paradata?: Paradata,
+  ) =>
     request<{ status: string; conflicts: number }>('POST', `/collect/${token}/responses/${responseId}/submit`, {
       answers,
       base,
+      ...(paradata ? { paradata } : {}),
     }),
 
   // ---------------------------------------------------------------- integrations
@@ -591,6 +660,62 @@ export const api = {
   /** The whole-form detector: exact duplicate submissions. Idempotent. */
   scanFlags: (orgId: string, formId: string) =>
     request<{ flagged: number }>('POST', `/orgs/${orgId}/forms/${formId}/flags/scan`),
+
+  // -------------------------------------------------------------- datasets
+
+  datasets: (orgId: string) =>
+    request<{ datasets: DatasetSummary[] }>('GET', `/orgs/${orgId}/datasets`),
+  createDataset: (orgId: string, payload: { code: string; name: string; kind: 'data' | 'cases'; uniqueField?: string }) =>
+    request<{ dataset: DatasetSummary }>('POST', `/orgs/${orgId}/datasets`, payload),
+  dataset: (orgId: string, datasetId: string, options: { limit?: number; offset?: number } = {}) =>
+    request<{
+      dataset: DatasetSummary;
+      rows: DatasetRowRecord[];
+      total: number;
+      limit: number;
+      offset: number;
+    }>(
+      'GET',
+      `/orgs/${orgId}/datasets/${datasetId}?limit=${options.limit ?? 100}&offset=${options.offset ?? 0}`,
+    ),
+  importDatasetRows: (
+    orgId: string,
+    datasetId: string,
+    payload: { mode: 'replace' | 'append' | 'merge'; rows: Array<Record<string, unknown>> },
+  ) =>
+    request<{ mode: string; imported: number; total: number; columns: string[] }>(
+      'PUT',
+      `/orgs/${orgId}/datasets/${datasetId}/rows`,
+      payload,
+    ),
+  archiveDataset: (orgId: string, datasetId: string) =>
+    request<void>('DELETE', `/orgs/${orgId}/datasets/${datasetId}`),
+  datasetAttachments: (orgId: string, formId: string, versionId: string) =>
+    request<{ datasets: DatasetAttachment[] }>(
+      'GET',
+      `/orgs/${orgId}/forms/${formId}/versions/${versionId}/datasets`,
+    ),
+  attachDataset: (
+    orgId: string,
+    formId: string,
+    versionId: string,
+    payload: {
+      datasetId: string;
+      keyQuestion?: string | null;
+      publish?: boolean;
+      mapping?: Record<string, string>;
+    },
+  ) =>
+    request<{ dataset: DatasetAttachment }>(
+      'POST',
+      `/orgs/${orgId}/forms/${formId}/versions/${versionId}/datasets`,
+      payload,
+    ),
+  detachDataset: (orgId: string, formId: string, versionId: string, attachmentId: string) =>
+    request<void>(
+      'DELETE',
+      `/orgs/${orgId}/forms/${formId}/versions/${versionId}/datasets/${attachmentId}`,
+    ),
   raiseFlag: (
     orgId: string,
     formId: string,
@@ -637,7 +762,14 @@ export async function download(path: string, fallbackName: string): Promise<void
 export async function authoriseAttachment(
   token: string,
   responseId: string,
-  input: { questionId: string; filename: string; mime: string; sizeBytes: number },
+  input: {
+    questionId: string;
+    filename: string;
+    mime: string;
+    sizeBytes: number;
+    /** Only for an `audio audit` field: when the recording actually began. */
+    audit?: { startedAt: string; durationSeconds?: number };
+  },
 ): Promise<AttachmentAuthorisation> {
   return attachmentRequest<AttachmentAuthorisation>(
     'POST',

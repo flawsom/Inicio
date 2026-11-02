@@ -8,8 +8,10 @@
  * is cheaper than owning a dependency we cannot verify against openpyxl/ODK.
  *
  * Scope: shared strings (read+write), inline strings (read), numbers, booleans,
- * sparse rows, multiple sheets, sheet-order preservation. No styles beyond a
- * minimal stub, no formulas, no formatting.
+ * sparse rows, multiple sheets, sheet-order preservation, named cell styles,
+ * column widths, frozen panes and formula cells with a cached value. No charting,
+ * conditional formatting or pivot tables: those are what a spreadsheet library is
+ * for, and none of them survive an XLSForm import anyway.
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
@@ -20,15 +22,62 @@ export interface Sheet {
 }
 
 /**
+ * A formula cell and the value it last evaluated to.
+ *
+ * SpreadsheetML stores both, and both are load-bearing: the `<f>` is what Excel
+ * recalculates when the file is opened, and the `<v>` is what any reader that
+ * does not evaluate formulas (including ours, and every importer of an XLSForm)
+ * sees. Writing only the formula leaves the cell blank to those readers; writing
+ * only the value makes it a number somebody has to remember to change.
+ */
+export interface FormulaCell {
+  formula: string;
+  cached: string | number;
+}
+
+/**
  * What a cell may be when writing. Numbers and booleans are written as real typed
  * cells (not text), so a data export does not arrive full of "number stored as text"
  * warnings — and so `SUM()` works.
  */
-export type CellValue = string | number | boolean | null;
+export type CellValue = string | number | boolean | FormulaCell | null;
+
+/**
+ * A named cell format. Only the properties a data-collection workbook actually
+ * needs: bold, a solid fill, a font colour, wrapping, a thin border and an
+ * alignment. Anything more (conditional formatting, themes, rich text) would be a
+ * spreadsheet library, which is the dependency this file exists to avoid.
+ *
+ * Colours are ARGB, e.g. `FFFFF2CC`, because that is the only form SpreadsheetML
+ * accepts without a theme part.
+ */
+export interface CellStyle {
+  bold?: boolean;
+  fill?: string;
+  color?: string;
+  wrap?: boolean;
+  border?: boolean;
+  horizontal?: 'left' | 'center' | 'right';
+  vertical?: 'top' | 'center';
+  size?: number;
+}
+
+export type StyleBook = Record<string, CellStyle>;
 
 export interface OutSheet {
   name: string;
   rows: CellValue[][];
+  /**
+   * Per-cell style names, parallel to `rows` (shorter rows are fine). A null or
+   * missing entry is the default style. Styles are named rather than inline so a
+   * reader of the compiler can say *why* a row is peach instead of carrying a
+   * colour constant around.
+   */
+  styles?: Array<Array<string | null | undefined>>;
+  /** Column widths in characters, by zero-based column. Excel's default is 8.43. */
+  widths?: number[];
+  /** Freeze this many rows and columns. The survey header should not scroll away. */
+  freeze?: { rows?: number; columns?: number };
 }
 
 export interface Workbook {
@@ -209,46 +258,190 @@ export function readWorkbook(bytes: Uint8Array): Workbook {
 
 const XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 
-const MINIMAL_STYLES =
-  `${XML_HEAD}<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
-  '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>' +
-  '<fills count="2"><fill><patternFill patternType="none"/></fill>' +
-  '<fill><patternFill patternType="gray125"/></fill></fills>' +
-  '<borders count="1"><border/></borders>' +
-  '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-  '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>' +
-  '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
-  '</styleSheet>';
+/** Style names are resolved once per workbook into font/fill/border/xf indexes. */
+interface StyleTable {
+  fonts: string[];
+  fills: string[];
+  borders: string[];
+  xfs: string[];
+  /** Style name to the cellXfs index a `<c>` should carry. */
+  index: Map<string, number>;
+}
 
-function sheetToXml(sheet: OutSheet, intern: (s: string) => number): string {
+function fontXml(style: CellStyle): string {
+  return (
+    '<font>' +
+    (style.bold ? '<b/>' : '') +
+    `<sz val="${style.size ?? 11}"/>` +
+    (style.color ? `<color rgb="${style.color}"/>` : '') +
+    '<name val="Calibri"/>' +
+    '</font>'
+  );
+}
+
+function fillXml(style: CellStyle): string {
+  return (
+    '<fill><patternFill patternType="solid">' +
+    `<fgColor rgb="${style.fill ?? 'FFFFFFFF'}"/>` +
+    '<bgColor indexed="64"/></patternFill></fill>'
+  );
+}
+
+function borderXml(): string {
+  const edge = (tag: string): string => `<${tag} style="thin"><color rgb="FFD4D4D8"/></${tag}>`;
+  return (
+    '<border>' + edge('left') + edge('right') + edge('top') + edge('bottom') + '<diagonal/></border>'
+  );
+}
+
+function xfXml(style: CellStyle, fontId: number, fillId: number, borderId: number): string {
+  const alignment: string[] = [];
+  if (style.horizontal) alignment.push(`horizontal="${style.horizontal}"`);
+  if (style.vertical) alignment.push(`vertical="${style.vertical}"`);
+  if (style.wrap) alignment.push('wrapText="1"');
+  const applyAlignment = alignment.length > 0 ? ' applyAlignment="1"' : '';
+  const inner = alignment.length > 0 ? `<alignment ${alignment.join(' ')}/>` : '';
+  return (
+    `<xf numFmtId="0" fontId="${fontId}" fillId="${fillId}" borderId="${borderId}" xfId="0" ` +
+    `applyFont="1" applyFill="1" applyBorder="1"${applyAlignment}>${inner}</xf>`
+  );
+}
+
+/**
+ * Build a stylesheet from the named styles actually used.
+ *
+ * The default style is always index 0, so a cell without a style needs no `s`
+ * attribute at all. Fills and borders are de-duplicated by their XML: a survey
+ * repeats three or four formats across a thousand rows, and a workbook that
+ * declares one fill per cell is both larger and slower to open.
+ */
+function buildStyleTable(book: StyleBook, used: Set<string>): StyleTable {
+  const fonts = ['<font><sz val="11"/><name val="Calibri"/></font>'];
+  const fills = [
+    '<fill><patternFill patternType="none"/></fill>',
+    '<fill><patternFill patternType="gray125"/></fill>',
+  ];
+  const borders = ['<border><left/><right/><top/><bottom/><diagonal/></border>'];
+  const xfs = ['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'];
+  const index = new Map<string, number>();
+
+  const remember = (list: string[], xml: string): number => {
+    const at = list.indexOf(xml);
+    if (at !== -1) return at;
+    list.push(xml);
+    return list.length - 1;
+  };
+
+  for (const name of [...used].sort()) {
+    const style = book[name];
+    if (!style) continue;
+    const fontId = remember(fonts, fontXml(style));
+    const fillId = style.fill ? remember(fills, fillXml(style)) : 0;
+    const borderId = style.border ? remember(borders, borderXml()) : 0;
+    index.set(name, xfs.length);
+    xfs.push(xfXml(style, fontId, fillId, borderId));
+  }
+
+  return { fonts, fills, borders, xfs, index };
+}
+
+function stylesheetXml(table: StyleTable): string {
+  return (
+    `${XML_HEAD}<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+    `<fonts count="${table.fonts.length}">${table.fonts.join('')}</fonts>` +
+    `<fills count="${table.fills.length}">${table.fills.join('')}</fills>` +
+    `<borders count="${table.borders.length}">${table.borders.join('')}</borders>` +
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+    `<cellXfs count="${table.xfs.length}">${table.xfs.join('')}</cellXfs>` +
+    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
+    '</styleSheet>'
+  );
+}
+
+function isFormula(value: CellValue): value is FormulaCell {
+  return typeof value === 'object' && value !== null && 'formula' in value;
+}
+
+function sheetViewXml(freeze: OutSheet['freeze']): string {
+  if (!freeze || (!freeze.rows && !freeze.columns)) return '';
+  const rows = freeze.rows ?? 0;
+  const cols = freeze.columns ?? 0;
+  const topLeft = `${colName(cols)}${rows + 1}`;
+  const activePane = rows > 0 && cols > 0 ? 'bottomRight' : rows > 0 ? 'bottomLeft' : 'topRight';
+  const splits =
+    (cols > 0 ? `xSplit="${cols}" ` : '') +
+    (rows > 0 ? `ySplit="${rows}" ` : '') +
+    `topLeftCell="${topLeft}" activePane="${activePane}" state="frozen"`;
+  return `<sheetViews><sheetView workbookViewId="0"><pane ${splits}/></sheetView></sheetViews>`;
+}
+
+function colsXml(widths: number[] | undefined): string {
+  if (!widths || widths.length === 0) return '';
+  const cols = widths
+    .map((width, i) =>
+      width > 0
+        ? `<col min="${i + 1}" max="${i + 1}" width="${width}" customWidth="1"/>`
+        : '',
+    )
+    .join('');
+  return cols === '' ? '' : `<cols>${cols}</cols>`;
+}
+
+function sheetToXml(sheet: OutSheet, intern: (s: string) => number, styles: StyleTable): string {
   const rows: string[] = [];
   sheet.rows.forEach((row, r) => {
-    if (row.every((c) => c === '' || c === null || c === undefined)) return;
+    const rowStyles = sheet.styles?.[r] ?? [];
+    const hasStyle = rowStyles.some((name) => typeof name === 'string' && styles.index.has(name));
+    const hasValue = row.some((c) => c !== '' && c !== null && c !== undefined);
+    if (!hasValue && !hasStyle) return;
+
     const cells: string[] = [];
-    row.forEach((value, c) => {
-      if (value === '' || value === null || value === undefined) return;
+    const width = Math.max(row.length, hasStyle ? rowStyles.length : 0);
+    for (let c = 0; c < width; c++) {
+      const value = row[c];
+      const styleName = rowStyles[c];
+      const styleIndex = styleName ? styles.index.get(styleName) : undefined;
+      const styleAttr = styleIndex === undefined ? '' : ` s="${styleIndex}"`;
       const ref = `${colName(c)}${r + 1}`;
+      const empty = value === '' || value === null || value === undefined;
+      // An empty cell carrying a fill is how a column highlight survives rows that
+      // have not been filled in yet.
+      if (empty) {
+        if (styleIndex !== undefined) cells.push(`<c r="${ref}"${styleAttr}/>`);
+        continue;
+      }
+      if (isFormula(value)) {
+        const formula = escapeXml(value.formula.replace(/^=/, ''));
+        if (typeof value.cached === 'number' && Number.isFinite(value.cached)) {
+          cells.push(`<c r="${ref}"${styleAttr}><f>${formula}</f><v>${value.cached}</v></c>`);
+        } else {
+          cells.push(`<c r="${ref}"${styleAttr} t="str"><f>${formula}</f><v>${escapeXml(String(value.cached))}</v></c>`);
+        }
+        continue;
+      }
       if (typeof value === 'number') {
-        if (!Number.isFinite(value)) return;
-        cells.push(`<c r="${ref}"><v>${value}</v></c>`);
-        return;
+        if (!Number.isFinite(value)) continue;
+        cells.push(`<c r="${ref}"${styleAttr}><v>${value}</v></c>`);
+        continue;
       }
       if (typeof value === 'boolean') {
-        cells.push(`<c r="${ref}" t="b"><v>${value ? 1 : 0}</v></c>`);
-        return;
+        cells.push(`<c r="${ref}"${styleAttr} t="b"><v>${value ? 1 : 0}</v></c>`);
+        continue;
       }
-      cells.push(`<c r="${ref}" t="s"><v>${intern(value)}</v></c>`);
-    });
+      cells.push(`<c r="${ref}"${styleAttr} t="s"><v>${intern(value)}</v></c>`);
+    }
     if (cells.length === 0) return;
     rows.push(`<row r="${r + 1}">${cells.join('')}</row>`);
   });
   return (
     `${XML_HEAD}<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+    sheetViewXml(sheet.freeze) +
+    colsXml(sheet.widths) +
     `<sheetData>${rows.join('')}</sheetData></worksheet>`
   );
 }
 
-export function writeWorkbook(wb: { sheets: OutSheet[] }): Uint8Array {
+export function writeWorkbook(wb: { sheets: OutSheet[]; styles?: StyleBook }): Uint8Array {
   const shared: string[] = [];
   const index = new Map<string, number>();
   const intern = (s: string): number => {
@@ -261,7 +454,14 @@ export function writeWorkbook(wb: { sheets: OutSheet[] }): Uint8Array {
   };
 
   const sheets = wb.sheets.length > 0 ? wb.sheets : [{ name: 'Sheet1', rows: [] }];
-  const sheetXml = sheets.map((s) => sheetToXml(s, intern));
+  const used = new Set<string>();
+  for (const sheet of sheets) {
+    for (const row of sheet.styles ?? []) {
+      for (const name of row) if (typeof name === 'string') used.add(name);
+    }
+  }
+  const styleTable = buildStyleTable(wb.styles ?? {}, used);
+  const sheetXml = sheets.map((s) => sheetToXml(s, intern, styleTable));
 
   const overrides = sheets
     .map(
@@ -319,7 +519,7 @@ export function writeWorkbook(wb: { sheets: OutSheet[] }): Uint8Array {
     'xl/workbook.xml': strToU8(workbook),
     'xl/_rels/workbook.xml.rels': strToU8(workbookRels),
     'xl/sharedStrings.xml': strToU8(sharedStrings),
-    'xl/styles.xml': strToU8(MINIMAL_STYLES),
+    'xl/styles.xml': strToU8(stylesheetXml(styleTable)),
   };
   sheetXml.forEach((xml, i) => {
     entries[`xl/worksheets/sheet${i + 1}.xml`] = strToU8(xml);

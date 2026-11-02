@@ -286,6 +286,45 @@ describe('offline-first collection sync', () => {
     expect(rows[0]!.status).toBe('in_progress');
   });
 
+  it('writes per-field timings and the server speed verdict, not a device claim', async () => {
+    const audited: FormDefinition = {
+      ...definition,
+      questions: [
+        ...definition.questions,
+        { id: 'q_text_audit', name: 'typing', type: 'calculate', label: {}, audit: { kind: 'text_audit', spec: 'p=100' } },
+        { id: 'q_speed', name: 'too_fast', type: 'calculate', label: {}, audit: { kind: 'speed_violations', spec: 'total=60' } },
+      ],
+    };
+    const { token } = await published('audit', audited);
+    const clientId = crypto.randomUUID();
+    const started = await app.inject({ method: 'POST', url: `/api/v1/collect/${token}/responses`, payload: { clientId } });
+    expect(started.statusCode, started.body).toBe(201);
+
+    // One integer answer after 300 ms: under the 1.2 s floor, so a violation.
+    const submitted = await app.inject({
+      method: 'POST',
+      url: `/api/v1/collect/${token}/responses/${clientId}/submit`,
+      payload: {
+        answers: { consent: 'yes', score: 4 },
+        base: {},
+        paradata: { timings: [{ question: 'score', shownAt: 0, answeredAt: 300, visits: 1 }] },
+      },
+    });
+    expect(submitted.statusCode, submitted.body).toBe(200);
+
+    const timings = await adminQuery<{ field_name: string; total_seconds: string; visits: number }>(
+      `SELECT field_name, total_seconds::text, visits FROM response_field_timing WHERE response_id = $1`,
+      [clientId],
+    );
+    expect(timings).toEqual([{ field_name: 'score', total_seconds: '0.300', visits: 1 }]);
+
+    const answers = await adminQuery<{ question_id: string; value: unknown }>(
+      `SELECT question_id, value FROM response_answer WHERE response_id = $1 AND question_id = 'too_fast'`,
+      [clientId],
+    );
+    expect(answers[0]?.value).toBe(1);
+  });
+
   it('refuses a client UUID that belongs to a different survey', async () => {
     const a = await published('cross-a');
     const b = await published('cross-b');

@@ -4,14 +4,19 @@ import type { PoolClient } from 'pg';
 import { z } from 'zod';
 import {
   buildExportBundle,
+  checkUpload,
+  compareVersions,
   csvBundle,
   diffDefinitions,
   exportXlsForm,
   importXlsForm,
+  readWorkbook,
   validateForm,
+  validateXlsFormSheets,
   zipFiles,
   type ExportFormat,
   type FormDefinition,
+  type WorkbookValidationReport,
 } from '@inicio/engine';
 import { sha256Hex } from '../lib/crypto.js';
 import { HttpError, withUser } from './db.js';
@@ -84,9 +89,58 @@ export interface FormRow {
   project_id: string | null;
   name: string;
   slug: string;
+  xlsform_form_id?: string | null;
+  default_language?: string | null;
   archived_at: Date | null;
   created_at: Date;
   updated_at: Date;
+}
+
+interface XlsformMeta {
+  /** The id the workbook actually declares, empty when it declares none. */
+  declared: string;
+  /** The id to store: the declared one, or one derived from the title. */
+  formId: string;
+  version: string;
+}
+
+/**
+ * Read the three settings cells the upload guards care about.
+ *
+ * The form id is not invented here; `xlsform_form_id` is an identity, and a
+ * derived one exists only so a workbook that never declared an id still has
+ * something to key versions against. The duplicate guard looks at `declared`,
+ * because that is the id the scripter actually wrote down.
+ */
+function xlsformMeta(definition: FormDefinition): XlsformMeta {
+  const settings = (definition.settings?.['xlsform'] ?? {}) as { formId?: string; version?: string };
+  const declared = (settings.formId ?? '').trim();
+  const derived = definition.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'form';
+  return { declared, formId: declared || derived, version: (settings.version ?? '').trim() };
+}
+
+function validateWorkbook(bytes: Uint8Array): WorkbookValidationReport | null {
+  try {
+    return validateXlsFormSheets(readWorkbook(bytes).sheets);
+  } catch {
+    // A file that cannot even be unzipped is reported by the importer, which has
+    // the more specific message. Validation is an additional view, not the blocker.
+    return null;
+  }
+}
+
+/** The greatest XLSForm stamp already stored for this form, if any. */
+function newestXlsformVersion(rows: Array<{ xlsform_version: string | null }>): string | null {
+  let newest: string | null = null;
+  for (const row of rows) {
+    const value = row.xlsform_version?.trim();
+    if (!value) continue;
+    if (newest === null || compareVersions(value, newest) > 0) newest = value;
+  }
+  return newest;
 }
 
 export interface VersionRow {
@@ -212,21 +266,37 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_request', issues: parsed.error.issues });
 
     const created = await withUser(identity.userId, async (client) => {
-      const { rows: forms } = await client.query<{ id: string }>(
-        `INSERT INTO form (org_id, project_id, name, slug) VALUES ($1, $2, $3, $4)
-         RETURNING id, org_id, name, slug, project_id, created_at`,
-        [parsed.data.orgId, parsed.data.projectId ?? null, parsed.data.name, parsed.data.slug ?? slugify(parsed.data.name)],
-      );
-      const form = forms[0];
-      if (!form) throw new HttpError(500, 'create_failed');
-
       // Import at creation, so "new form from a spreadsheet" is a single call.
       let definition: FormDefinition;
       let notes: unknown[] = [];
+      let meta: XlsformMeta | null = null;
+      let validation: WorkbookValidationReport | null = null;
       if (parsed.data.xlsformBase64) {
-        const imported = importXlsForm(new Uint8Array(Buffer.from(parsed.data.xlsformBase64, 'base64')));
+        const bytes = new Uint8Array(Buffer.from(parsed.data.xlsformBase64, 'base64'));
+        validation = validateWorkbook(bytes);
+        const imported = importXlsForm(bytes);
         definition = imported.definition;
         notes = imported.notes;
+        meta = xlsformMeta(definition);
+
+        // A new form may share a title, but it may not claim a form id another
+        // instrument in this organisation already owns. The version is free to
+        // start anywhere: there is nothing yet for it to be newer than.
+        if (meta.declared !== '') {
+          const { rows: conflicts } = await client.query<{ id: string }>(
+            `SELECT id FROM form WHERE org_id = $1 AND xlsform_form_id = $2 LIMIT 1`,
+            [parsed.data.orgId, meta.declared],
+          );
+          const guard = checkUpload({
+            formId: meta.declared,
+            version: meta.version,
+            // The guard compares ids, not row uuids: a row found here means this
+            // declared id already belongs to another instrument.
+            conflictingFormId: conflicts[0] ? meta.declared : null,
+            requireVersion: false,
+          });
+          if (!guard.ok) throw new HttpError(409, 'upload_refused', guard.errors.join(' '));
+        }
       } else if (parsed.data.definition !== undefined) {
         definition = asDefinition(parsed.data.definition);
       } else if (parsed.data.templateId) {
@@ -246,13 +316,36 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
         });
       }
 
-      const { rows: versions } = await client.query(
-        `INSERT INTO form_version (org_id, form_id, version, status, title, definition, created_by)
-         VALUES ($1, $2, 1, 'draft', $3, $4::jsonb, $5)
-         RETURNING id, version, status, title, definition, created_at`,
-        [parsed.data.orgId, form.id, definition.title, JSON.stringify(definition), identity.userId],
+      const { rows: forms } = await client.query<{ id: string }>(
+        `INSERT INTO form (org_id, project_id, name, slug, xlsform_form_id, default_language)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, org_id, name, slug, project_id, xlsform_form_id, default_language, created_at`,
+        [
+          parsed.data.orgId,
+          parsed.data.projectId ?? null,
+          parsed.data.name,
+          parsed.data.slug ?? slugify(parsed.data.name),
+          meta?.formId ?? null,
+          definition.defaultLanguage ?? 'en',
+        ],
       );
-      return { form, version: versions[0], notes };
+      const form = forms[0];
+      if (!form) throw new HttpError(500, 'create_failed');
+
+      const { rows: versions } = await client.query(
+        `INSERT INTO form_version (org_id, form_id, version, status, title, definition, created_by, xlsform_version)
+         VALUES ($1, $2, 1, 'draft', $3, $4::jsonb, $5, $6)
+         RETURNING id, version, status, title, definition, created_at`,
+        [
+          parsed.data.orgId,
+          form.id,
+          definition.title,
+          JSON.stringify(definition),
+          identity.userId,
+          meta?.version || null,
+        ],
+      );
+      return { form, version: versions[0], notes, validation };
     });
 
     await audit(req, `user:${identity.userId}`, 'form.created', (created.form as { id: string }).id, {
@@ -584,7 +677,55 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
 
     const result = await withUser(identity.userId, async (client) => {
       const form = await loadForm(client, req.params.formId);
-      const imported = importXlsForm(new Uint8Array(Buffer.from(parsed.data.xlsformBase64, 'base64')));
+      const bytes = new Uint8Array(Buffer.from(parsed.data.xlsformBase64, 'base64'));
+      const validation = validateWorkbook(bytes);
+      const imported = importXlsForm(bytes);
+      const meta = xlsformMeta(imported.definition);
+
+      // One upload at a time per form: the version comparison and the deletion of
+      // the previous draft are only correct if they see the whole sequence.
+      await client.query(`SELECT id FROM form WHERE id = $1 FOR UPDATE`, [form.id]);
+
+      const { rows: conflicts } = await client.query<{ id: string }>(
+        `SELECT id FROM form WHERE org_id = $1 AND xlsform_form_id = $2 AND id <> $3 LIMIT 1`,
+        [form.org_id, meta.formId, form.id],
+      );
+      const { rows: versionRows } = await client.query<{ xlsform_version: string | null }>(
+        `SELECT xlsform_version FROM form_version WHERE form_id = $1`,
+        [form.id],
+      );
+      const guard = checkUpload({
+        formId: meta.declared || meta.formId,
+        version: meta.version,
+        // Only an id the workbook actually declares can belong to another form.
+        conflictingFormId: meta.declared && conflicts[0] ? meta.declared : null,
+        currentVersion: newestXlsformVersion(versionRows),
+      });
+      if (!guard.ok) throw new HttpError(409, 'upload_refused', guard.errors.join(' '));
+
+      const storedFormId = (form.xlsform_form_id ?? '').trim();
+      if (meta.declared !== '' && storedFormId !== '' && storedFormId.toLowerCase() !== meta.declared.toLowerCase()) {
+        throw new HttpError(
+          409,
+          'upload_refused',
+          `This workbook declares form ID (${meta.declared}), but this form is (${storedFormId}). ` +
+            'Upload it as a new form, or correct settings.form_id.',
+        );
+      }
+      await client.query(
+        `UPDATE form
+            SET xlsform_form_id = coalesce(xlsform_form_id, $2),
+                default_language = coalesce(default_language, $3)
+          WHERE id = $1`,
+        [
+          form.id,
+          // A derived id is not an identity the scripter declared, so it must not
+          // collide with one another form already owns. A real declared id was
+          // checked above and is safe to adopt.
+          meta.declared === '' && conflicts[0] ? null : meta.formId,
+          imported.definition.defaultLanguage ?? null,
+        ],
+      );
 
       if (parsed.data.versionId) {
         const { rows: existing } = await client.query<{ status: string }>(
@@ -593,24 +734,41 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
         );
         if (!existing[0]) throw new HttpError(404, 'not_found');
         if (existing[0].status !== 'draft') throw new HttpError(409, 'version_immutable', 'import into a draft version');
-        await client.query(`UPDATE form_version SET definition = $3::jsonb, title = $4 WHERE id = $1 AND form_id = $2`, [
-          parsed.data.versionId,
-          form.id,
-          JSON.stringify(imported.definition),
-          imported.definition.title,
-        ]);
-        return { versionId: parsed.data.versionId, definition: imported.definition, notes: imported.notes, sheets: imported.sheets };
+        await client.query(
+          `UPDATE form_version SET definition = $3::jsonb, title = $4, xlsform_version = $5 WHERE id = $1 AND form_id = $2`,
+          [parsed.data.versionId, form.id, JSON.stringify(imported.definition), imported.definition.title, meta.version || null],
+        );
+        return {
+          versionId: parsed.data.versionId,
+          definition: imported.definition,
+          notes: imported.notes,
+          sheets: imported.sheets,
+          validation,
+        };
       }
 
-      await client.query(`SELECT id FROM form WHERE id = $1 FOR UPDATE`, [form.id]);
       const next = await nextVersionNumber(client, form.id);
       await client.query(`DELETE FROM form_version WHERE form_id = $1 AND status = 'draft'`, [form.id]);
       const { rows } = await client.query<{ id: string }>(
-        `INSERT INTO form_version (org_id, form_id, version, status, title, definition, created_by)
-         VALUES ($1, $2, $3, 'draft', $4, $5::jsonb, $6) RETURNING id`,
-        [form.org_id, form.id, next, imported.definition.title, JSON.stringify(imported.definition), identity.userId],
+        `INSERT INTO form_version (org_id, form_id, version, status, title, definition, created_by, xlsform_version)
+         VALUES ($1, $2, $3, 'draft', $4, $5::jsonb, $6, $7) RETURNING id`,
+        [
+          form.org_id,
+          form.id,
+          next,
+          imported.definition.title,
+          JSON.stringify(imported.definition),
+          identity.userId,
+          meta.version || null,
+        ],
       );
-      return { versionId: rows[0]?.id, definition: imported.definition, notes: imported.notes, sheets: imported.sheets };
+      return {
+        versionId: rows[0]?.id,
+        definition: imported.definition,
+        notes: imported.notes,
+        sheets: imported.sheets,
+        validation,
+      };
     });
 
     await audit(req, `user:${identity.userId}`, 'form.imported', req.params.formId, {

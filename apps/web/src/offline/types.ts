@@ -8,10 +8,31 @@
  * rather than quietly resolved.
  */
 
+/**
+ * Per-field paradata: how long a field was on screen and when it was answered.
+ *
+ * It is deliberately not an answer. It is stored beside the answers so a reload,
+ * an offline submit or a retry does not lose the audit trail, and the server can
+ * compute the same speed verdict from the same numbers.
+ */
+export interface ParadataTiming {
+  question: string;
+  /** Milliseconds since the interview began. */
+  shownAt: number;
+  answeredAt: number;
+  visits?: number;
+}
+
+export interface Paradata {
+  timings: ParadataTiming[];
+}
+
 /** What the device knows about one distribution link's response. */
 export interface StoredDraft {
   /** The distribution token this draft belongs to. */
   token: string;
+  /** The case this interview belongs to, if the link named one. */
+  caseid?: string;
   /**
    * The device's own stable id for this response. It becomes the response id on
    * the server, which is what makes a retried sync idempotent.
@@ -25,6 +46,8 @@ export interface StoredDraft {
   base: Record<string, unknown>;
   /** Question names edited since the last acknowledged sync. */
   dirty: string[];
+  /** Field timings, kept with the draft so they survive a reload. */
+  paradata?: Paradata;
   status: 'in_progress' | 'submitted' | 'screened_out' | 'quota_full';
   updatedAt: string;
   /** When the server last confirmed this draft. */
@@ -56,6 +79,9 @@ export interface Outbox {
 export interface PendingPayload {
   answers: Record<string, unknown>;
   base: Record<string, unknown>;
+  paradata?: Paradata;
+  /** Only the create call uses this; saves and submits already know the response. */
+  caseid?: string;
 }
 
 /** The published definition, cached so the form can open with no network at all. */
@@ -64,6 +90,8 @@ export interface CachedForm {
   title: string;
   version: number;
   definition: unknown;
+  /** The attached dataset snapshot, so `pulldata()` works with no network. */
+  datasets?: import('@inicio/engine').DatasetTable[];
   linkKind: string;
   cachedAt: string;
 }
