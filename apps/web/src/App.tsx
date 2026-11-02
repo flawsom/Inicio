@@ -13,8 +13,6 @@ import {
   type VersionSummary,
   type WebhookDelivery,
 } from './api';
-import { Collect } from './collect';
-import { CasesTab } from './cases';
 import { AdminView } from './admin';
 import { InvitePage, LegalPage, TermsGate } from './legal';
 import { useFormStream, type Aggregate, type StreamStatus } from './realtime';
@@ -39,6 +37,24 @@ const Landing = lazy(() => import('./landing').then((module) => ({ default: modu
  * authoring tool, so it arrives when somebody opens a form instead.
  */
 const Studio = lazy(() => import('./studio').then((module) => ({ default: module.DefinitionStudio })));
+
+/**
+ * The respondent route, in its own chunk.
+ *
+ * A person opening a survey link should not download the console, and a person
+ * reading the console should not download the offline collection runtime and the
+ * audit recorder. The route decides which of those two they need.
+ */
+const Collect = lazy(() => import('./collect').then((module) => ({ default: module.Collect })));
+
+/**
+ * Cases and program data, in its own chunk.
+ *
+ * The CSV reader and the case table are only needed by the person maintaining the
+ * case list. Keeping them out of the critical path leaves the console entry at the
+ * size it was before this tab existed.
+ */
+const CasesTab = lazy(() => import('./cases').then((module) => ({ default: module.CasesTab })));
 
 /**
  * The workspace shell: sign in, pick an organisation, author a form, publish it,
@@ -1218,13 +1234,15 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
         <DataTab formId={form.id} orgId={form.org_id} publishedVersion={published?.version ?? null} />
       )}
       {tab === 'cases' && (
-        <CasesTab
-          orgId={form.org_id}
-          formId={form.id}
-          versions={versions}
-          selectedVersionId={selected?.id ?? null}
-          publishedVersionId={published?.id ?? null}
-        />
+        <Suspense fallback={<p className="muted">Opening cases and program data…</p>}>
+          <CasesTab
+            orgId={form.org_id}
+            formId={form.id}
+            versions={versions}
+            selectedVersionId={selected?.id ?? null}
+            publishedVersionId={published?.id ?? null}
+          />
+        </Suspense>
       )}
       {tab === 'quality' && <QualityTab formId={form.id} orgId={form.org_id} />}
       {tab === 'distribute' && <DistributeTab formId={form.id} publishedVersion={published?.version ?? null} />}
@@ -2450,7 +2468,20 @@ export function App(): JSX.Element {
   let page: JSX.Element;
   if (inviteMatch?.[1]) page = <InvitePage token={decodeURIComponent(inviteMatch[1])} />;
   else if (legalMatch?.[1]) page = <LegalPage id={legalMatch[1] as 'terms' | 'privacy'} />;
-  else if (collectMatch?.[1]) page = <Collect token={decodeURIComponent(collectMatch[1])} />;
+  else if (collectMatch?.[1]) {
+    page = (
+      <Suspense
+        fallback={
+          <div className="boot surface" role="status">
+            <span className="boot-bar" aria-hidden="true" />
+            <p>Opening the survey.</p>
+          </div>
+        }
+      >
+        <Collect token={decodeURIComponent(collectMatch[1])} />
+      </Suspense>
+    );
+  }
   else if (marketing) {
     page = (
       <Suspense
