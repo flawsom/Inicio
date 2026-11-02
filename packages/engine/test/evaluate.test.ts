@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { datasetContext } from '../src/datasets.js';
-import { evaluateForm, filterChoices } from '../src/evaluate.js';
+import { evaluateForm, filterChoices, orderChoices, randomizedAppearance, otherSpecifyCode } from '../src/evaluate.js';
 import type { FormDefinition, Question } from '../src/types.js';
 
 function q(partial: Partial<Question> & Pick<Question, 'name' | 'type'>): Question {
@@ -148,6 +148,56 @@ describe('cascading selects (choice_filter)', () => {
 
   it('returns the whole list when the question has no filter', () => {
     expect(filterChoices(def, def.questions[0]!, {}).map((c) => c.value)).toEqual(['ka', 'mh']);
+  });
+});
+
+describe('SurveyCTO appearances', () => {
+  const question = q({
+    name: 'brands',
+    type: 'select_one',
+    choices: { listName: 'brands' },
+    appearance: "randomized(0,2) custom-specify-other(other='99')",
+  });
+  const choices = [
+    { value: 'a', label: { en: 'Alpha' } },
+    { value: 'b', label: { en: 'Beta' } },
+    { value: 'c', label: { en: 'Gamma' } },
+    { value: '98', label: { en: 'Other' } },
+    { value: '99', label: { en: 'None' } },
+  ];
+
+  it('parses the randomized anchor count and the other code', () => {
+    expect(randomizedAppearance(question)).toEqual({ anchors: 2 });
+    expect(otherSpecifyCode(question)).toBe('99');
+  });
+
+  it('shuffles only the free options and keeps the anchors at the end', () => {
+    const left = orderChoices(choices, question, 7).map((choice) => choice.value);
+    const right = orderChoices(choices, question, 7).map((choice) => choice.value);
+    expect(left).toEqual(right);
+    expect(left.slice(-2)).toEqual(['98', '99']);
+    expect(left.slice(0, 3).sort()).toEqual(['a', 'b', 'c']);
+    expect(orderChoices(choices, question).map((choice) => choice.value)).toEqual(['a', 'b', 'c', '98', '99']);
+  });
+
+  it('applies the shuffle after a choice_filter has narrowed the list', () => {
+    const def = form([
+      q({ name: 'state', type: 'select_one' }),
+      q({ name: 'district', type: 'select_one', choices: { listName: 'districts' }, appearance: 'randomized(0,1)', rules: { choiceFilter: 'state = ${state}' } }),
+    ], {
+      choiceLists: {
+        districts: [
+          { value: 'a', label: { en: 'A' }, extra: { state: 'ka' } },
+          { value: 'b', label: { en: 'B' }, extra: { state: 'ka' } },
+          { value: 'c', label: { en: 'C' }, extra: { state: 'ka' } },
+          { value: 'x', label: { en: 'X' }, extra: { state: 'mh' } },
+          { value: 'z', label: { en: 'Z' }, extra: { state: 'ka' } },
+        ],
+      },
+    });
+    const result = filterChoices(def, def.questions[1]!, { state: 'ka' }, { randomSeed: 3 }).map((choice) => choice.value);
+    expect(result.slice(-1)).toEqual(['z']);
+    expect(result.slice(0, -1).sort()).toEqual(['a', 'b', 'c']);
   });
 });
 

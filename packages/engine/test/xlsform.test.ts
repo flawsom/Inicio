@@ -178,6 +178,53 @@ describe('xlsform import', () => {
     expect(def).toEqual(importXlsForm(exportXlsForm(importXlsForm(workbookBytes()).definition).bytes).definition);
   });
 
+  it('reads the SurveyCTO benchmark spelling: value, single-colon languages and calculate_here', () => {
+    const bytes = writeWorkbook({
+      sheets: [
+        {
+          name: 'survey',
+          rows: [
+            ['type', 'name', 'label', 'constraint message', 'label:Marathi', 'constraint message:Marathi', 'media:image', 'media:image:Marathi'],
+            ['calculate_here', 'total', 'Total', '', '', '', '', ''],
+            ['select_one brands', 'brand', 'Brand', 'Pick a brand', 'ब्रँड', 'ब्रँड निवडा', '', ''],
+          ],
+        },
+        {
+          name: 'choices',
+          rows: [
+            ['list_name', 'label', 'value', 'image', 'filter', 'label:Marathi', 'image:Marathi'],
+            ['brands', 'Alpha', '1', 'alpha.png', '1', 'अल्फा', 'alpha-mr.png'],
+            ['brands', 'Beta', '2', '', '2', 'बीटा', ''],
+          ],
+        },
+        {
+          name: 'settings',
+          rows: [
+            ['form_title', 'form_id', 'version', 'default_language'],
+            ['Bench', 'GDN01605_BENCH', '2611020359', 'english'],
+          ],
+        },
+      ],
+    });
+    const { definition } = importXlsForm(bytes);
+    expect(definition.defaultLanguage).toBe('english');
+    expect(definition.languages).toEqual(['english', 'Marathi']);
+    const brand = definition.questions.find((question) => question.name === 'brand')!;
+    expect(brand.type).toBe('select_one');
+    expect(brand.label['Marathi']).toBe('ब्रँड');
+    expect(brand.validation?.message?.['Marathi']).toBe('ब्रँड निवडा');
+    expect(definition.choiceLists['brands']?.map((choice) => choice.value)).toEqual(['1', '2']);
+    expect(definition.choiceLists['brands']?.[0]).toMatchObject({
+      label: { english: 'Alpha', Marathi: 'अल्फा' },
+      image: 'alpha.png',
+      images: { Marathi: 'alpha-mr.png' },
+      extra: { filter: '1' },
+    });
+    const total = definition.questions.find((question) => question.name === 'total')!;
+    expect(total.type).toBe('calculate');
+    expect(total.source?.type).toBe('calculate_here');
+  });
+
   it('keeps a pulldata calculation through the workbook and reports what it needs', () => {
     const definition: FormDefinition = {
       title: 'Case visit',

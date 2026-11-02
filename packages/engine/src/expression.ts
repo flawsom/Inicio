@@ -61,6 +61,22 @@ export interface EvalContext {
    * place a bare identifier is meaningful, and `validateForm` enforces that.
    */
   attributes?: Record<string, unknown>;
+  /**
+   * SurveyCTO plug-in metadata, keyed by field name. `custom-specify-other`
+   * stores `code|verbatim` here; `plug-in-metadata(${field})` reads it without
+   * overloading the field's own answer value.
+   */
+  pluginMetadata?: Record<string, string>;
+  /** Device metadata supplied by the runtime, returned by `device-info()`. */
+  deviceInfo?: Record<string, unknown> | string;
+  /** The instant the interview started, used by `duration()`. */
+  startedAt?: Date | string | number;
+  /** Clock override for deterministic tests and server re-evaluation. */
+  now?: Date | string | number;
+  /** Per-response values already drawn for top-level `once()` calculations. */
+  onceValues?: Record<string, unknown>;
+  /** Duration in seconds, when the runtime has already measured it. */
+  durationSeconds?: number;
 }
 
 export class ExpressionError extends Error {
@@ -474,6 +490,45 @@ function callFunction(name: string, args: Expr[], ctx: EvalContext): unknown {
       const labels = fieldName ? ctx.choiceLabels?.[fieldName] : undefined;
       const key = String(arg(1) ?? '');
       return labels?.[key] ?? null;
+    }
+    case 'plug-in-metadata': {
+      requireArgs(name, args, 1);
+      const first = args[0];
+      const fieldName = first?.kind === 'ref' ? first.name : isBlank(arg(0)) ? '' : String(arg(0));
+      if (fieldName === '') return '';
+      return ctx.pluginMetadata?.[fieldName] ?? '';
+    }
+    case 'regex': {
+      requireArgs(name, args, 2);
+      const value = String(arg(0) ?? '');
+      const pattern = String(arg(1) ?? '');
+      if (pattern === '') return false;
+      try {
+        return new RegExp(pattern).test(value);
+      } catch {
+        throw new ExpressionError(`regex(): invalid pattern ${pattern}`);
+      }
+    }
+    case 'device-info': {
+      const value = ctx.deviceInfo;
+      if (value === undefined || value === null) return '';
+      return typeof value === 'string' ? value : JSON.stringify(value);
+    }
+    case 'duration': {
+      if (typeof ctx.durationSeconds === 'number' && Number.isFinite(ctx.durationSeconds)) {
+        return Math.max(0, Math.trunc(ctx.durationSeconds));
+      }
+      const end = toDate(ctx.now ?? new Date());
+      const startValue = ctx.startedAt
+        ?? (ctx.answers?.['starttime'] as unknown)
+        ?? (ctx.answers?.['start'] as unknown);
+      const start = toDate(startValue);
+      if (!start || !end) return 0;
+      return Math.max(0, Math.trunc((end.getTime() - start.getTime()) / 1000));
+    }
+    case 'once': {
+      requireArgs(name, args, 1);
+      return evaluate(args[0]!, ctx);
     }
     case 'count-selected': {
       requireArgs(name, args, 1);

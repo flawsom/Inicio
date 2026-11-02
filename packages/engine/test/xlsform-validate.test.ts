@@ -83,6 +83,46 @@ describe('workbook validation', () => {
     expect(report.diagnostics.some((diagnostic) => diagnostic.code === 'mismatched-end')).toBe(false);
   });
 
+  it('finds a spaced constraint message header without treating it as absent', () => {
+    const sheets = validSheets();
+    sheets[0]!.rows[0] = [...surveyHeader, 'constraint', 'constraint message'];
+    sheets[0]!.rows[2] = ['select_one colours', 'color', 'Favourite colour', 'yes', '', '', 'selected(., \'red\')', 'Pick red only'];
+    const report = validateXlsFormSheets(sheets);
+    expect(report.diagnostics.some((diagnostic) => diagnostic.code === 'constraint-without-message')).toBe(false);
+  });
+
+  it('accepts a rank question with a real choice list', () => {
+    const sheets = validSheets();
+    sheets[0]!.rows[2] = ['rank colors', 'ranking', 'Rank these colours', 'yes', '', ''];
+    const report = validateXlsFormSheets(sheets);
+    expect(report.diagnostics.some((diagnostic) => diagnostic.code === 'unknown-type')).toBe(false);
+    expect(report.diagnostics.some((diagnostic) => diagnostic.code === 'unknown-choice-list')).toBe(false);
+  });
+
+  it('does not demand a label on a metadata row', () => {
+    const sheets = validSheets();
+    sheets[0]!.rows.splice(1, 0,
+      ['start', 'starttime', '', '', '', ''],
+      ['deviceid', 'deviceid', '', '', '', ''],
+      ['caseid', 'caseid', '', '', '', ''],
+    );
+    const report = validateXlsFormSheets(sheets);
+    expect(report.diagnostics.some((diagnostic) => diagnostic.code === 'missing-label')).toBe(false);
+  });
+
+  it('keeps underscores in a choice list name while normalising the type keyword', () => {
+    const sheets = validSheets();
+    sheets[0]!.rows[2] = ['select_one favourite_colours', 'color', 'Favourite colour', 'yes', '', ''];
+    sheets[1]!.rows = [
+      ['list_name', 'name', 'label'],
+      ['favourite_colours', 'red', 'Red'],
+      ['favourite_colours', 'blue', 'Blue'],
+    ];
+    const report = validateXlsFormSheets(sheets);
+    expect(report.errors).toBe(0);
+    expect(report.diagnostics.some((diagnostic) => diagnostic.code === 'unknown-choice-list')).toBe(false);
+  });
+
   it('rejects a select that names a list the choices sheet does not have', () => {
     const sheets = validSheets();
     sheets[0]!.rows[2] = ['select_one districts', 'district', 'District', 'yes', '', ''];

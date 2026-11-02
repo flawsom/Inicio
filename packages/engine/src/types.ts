@@ -51,6 +51,15 @@ export interface Choice {
   extra?: Record<string, string>;
   /** An image filename or URL, when a dynamic `search()` list named one. */
   image?: string;
+  /** Images keyed by language name, for the `image:<language>` columns. */
+  images?: LocalizedText;
+}
+
+/** SurveyCTO media columns, localised by the language name on the right of the colon. */
+export interface LocalizedMedia {
+  image?: LocalizedText;
+  audio?: LocalizedText;
+  video?: LocalizedText;
 }
 
 /**
@@ -80,6 +89,8 @@ export interface QuestionRules {
 
 export interface Question {
   id: string;
+  /** Workbook row order, preserved through import and export. */
+  order?: number;
   groupId?: string | null;
   /** Stable export column name. Unique within a form. */
   name: string;
@@ -94,6 +105,18 @@ export interface Question {
   rules?: QuestionRules;
   appearance?: string | null;
   defaultValue?: unknown;
+  /** SurveyCTO `disabled`: saved in the workbook, not a visibility rule. */
+  disabled?: boolean;
+  /** SurveyCTO `response_note`, printed beside the answer area. */
+  responseNote?: string;
+  /** SurveyCTO `publishable`, used by encrypted forms for dataset publishing. */
+  publishable?: boolean;
+  /** SurveyCTO `minimum_seconds`, the field-level speed limit. */
+  minimumSeconds?: number;
+  /** SurveyCTO media columns, keyed by language. */
+  media?: LocalizedMedia;
+  /** A scripter-facing workbook note, distinct from a `note` question. */
+  workbookNote?: string;
   upload?: { accept?: string[]; maxFiles?: number; maxSizeMb?: number } | null;
   /** Present only on an invisible audit field. See `AuditKind`. */
   audit?: AuditField | null;
@@ -102,6 +125,10 @@ export interface Question {
 
 export interface Group {
   id: string;
+  /** Workbook row order of the begin row. */
+  order?: number;
+  /** Workbook row order of the end row, when the source had one. */
+  endOrder?: number;
   name: string;
   label: LocalizedText;
   repeat?: boolean;

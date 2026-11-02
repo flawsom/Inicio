@@ -135,4 +135,27 @@ describe('expression language', () => {
     expect(runExpression("rank-value(3, '4 2 1 9 3 7')")).toBe(4);
     expect(runExpression("short-geopoint('1.23 4.56 0 5')")).toBe('4.56 1.23');
   });
+
+  it('reads SurveyCTO plug-in metadata without overloading the answer', () => {
+    expect(runExpression("plug-in-metadata(${q6})", {
+      answers: { q6: '99' },
+      pluginMetadata: { q6: '99|Groundnut oil' },
+    })).toBe('99|Groundnut oil');
+    expect(runExpression("item-at('|', plug-in-metadata(${q6}), 1)", {
+      pluginMetadata: { q6: '99|Groundnut oil' },
+    })).toBe('Groundnut oil');
+    expect(runExpression("coalesce(plug-in-metadata(${missing}), 'fallback')", {})).toBe('fallback');
+    expect(runExpression("item-at('|', plug-in-metadata(${q6}), 1)", {})).toBeNull();
+  });
+
+  it('supports regex, device-info, duration and once without a hidden clock dependency', () => {
+    expect(runExpression("regex('9876543210', '^[0-9]{10}$')")).toBe(true);
+    expect(runExpression("regex('98765', '^[0-9]{10}$')")).toBe(false);
+    expect(() => runExpression("regex('x', '[')")).toThrow(/invalid pattern/);
+    expect(runExpression("device-info()", { deviceInfo: { brand: 'Test', sdk: 34 } })).toBe('{"brand":"Test","sdk":34}');
+    expect(runExpression("device-info()", { deviceInfo: 'mounted' })).toBe('mounted');
+    expect(runExpression("duration()", { startedAt: '2026-11-02T03:59:00Z', now: '2026-11-02T04:00:05Z' })).toBe(65);
+    expect(runExpression("duration()", { durationSeconds: 12 })).toBe(12);
+    expect(runExpression("once('drawn')")).toBe('drawn');
+  });
 });

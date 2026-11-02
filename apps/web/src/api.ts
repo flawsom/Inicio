@@ -112,6 +112,8 @@ export interface Definition {
     label: Record<string, string>;
     /** Shown under the label, in the respondent's own language. */
     hint?: Record<string, string>;
+    /** XLSForm appearance string, including `custom-*` parameters. */
+    appearance?: string;
     groupId?: string | null;
     required?: boolean | string;
     choices?: { listName?: string; inline?: Array<{ value: string; label: Record<string, string> }> } | null;
@@ -562,7 +564,7 @@ export const api = {
   templates: () =>
     request<{ templates: Array<{ id: string; title: string; description: string; questionCount: number }> }>('GET', '/templates'),
   forms: () => request<{ forms: FormSummary[] }>('GET', '/forms'),
-  createForm: (payload: { orgId: string; name: string; templateId?: string; xlsformBase64?: string }) =>
+  createForm: (payload: { orgId: string; name: string; templateId?: string; xlsformBase64?: string; docxBase64?: string; title?: string }) =>
     request<{ form: { id: string }; version: { id: string } }>('POST', '/forms', payload),
   form: (formId: string) =>
     request<{ form: FormSummary; versions: VersionSummary[]; responsesByStatus: Array<{ status: string; count: number }> }>(
@@ -637,6 +639,8 @@ export const api = {
       status: string;
       caseid?: string | null;
       answers: Record<string, unknown>;
+      /** SurveyCTO plug-in metadata, keyed by field name. */
+      pluginMetadata?: Record<string, string>;
       datasets?: DatasetTable[];
     }>('GET', `/collect/${token}/responses/${responseId}`),
   startResponse: (
@@ -646,6 +650,7 @@ export const api = {
     base: Record<string, unknown> = {},
     caseid?: string,
     enumerator?: string,
+    metadata?: Record<string, string>,
   ) =>
     request<{
       responseId: string;
@@ -659,30 +664,41 @@ export const api = {
       base,
       ...(caseid ? { caseid } : {}),
       ...(enumerator ? { enumerator } : {}),
+      ...(metadata !== undefined ? { metadata } : {}),
     }),
+
   saveResponse: (
     token: string,
     responseId: string,
     answers: Record<string, unknown>,
     base: Record<string, unknown> = {},
     paradata?: Paradata,
+    metadata?: Record<string, string>,
   ) =>
     request<{ missing: string[]; invalid: string[]; answers: Record<string, unknown>; conflicts: number }>(
       'PATCH',
       `/collect/${token}/responses/${responseId}`,
-      { answers, base, ...(paradata ? { paradata } : {}) },
+      {
+        answers,
+        base,
+        ...(paradata ? { paradata } : {}),
+        ...(metadata !== undefined ? { metadata } : {}),
+      },
     ),
+
   submitResponse: (
     token: string,
     responseId: string,
     answers: Record<string, unknown>,
     base: Record<string, unknown> = {},
     paradata?: Paradata,
+    metadata?: Record<string, string>,
   ) =>
     request<{ status: string; conflicts: number }>('POST', `/collect/${token}/responses/${responseId}/submit`, {
       answers,
       base,
       ...(paradata ? { paradata } : {}),
+      ...(metadata !== undefined ? { metadata } : {}),
     }),
 
   // ---------------------------------------------------------------- integrations

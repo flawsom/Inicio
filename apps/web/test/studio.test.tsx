@@ -352,6 +352,51 @@ describe('the definition studio', () => {
     expect(panel('Preview').textContent).toContain('Household visit 2026 (round 2)');
   });
 
+  it('writes every selected choice beside the custom-specify-other text', async () => {
+    const definition: Definition = {
+      title: 'Brands',
+      defaultLanguage: 'en',
+      languages: ['en'],
+      groups: [],
+      questions: [{
+        id: 'q1',
+        name: 'sq3',
+        type: 'select_multiple',
+        label: { en: 'Which brands come to mind?' },
+        appearance: "custom-specify-other(other='99')",
+        choices: {
+          inline: [
+            { value: '1', label: { en: 'Alpha' } },
+            { value: '99', label: { en: 'Other' } },
+          ],
+        },
+      }],
+      choiceLists: {},
+    };
+    const onMetadata = vi.fn();
+    await act(async () => {
+      root.render(
+        <RespondentForm
+          definition={definition}
+          answers={{ sq3: ['1', '99'] }}
+          pluginMetadata={{ sq3: '1 99|old text' }}
+          onChange={noop}
+          onPluginMetadataChange={onMetadata}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    const input = container.querySelector('input[type="text"]') as HTMLInputElement;
+    expect(input.value).toBe('old text');
+    await edit(input, 'new text');
+    expect(onMetadata).toHaveBeenLastCalledWith('sq3', '1 99|new text');
+
+    // Erasing the text clears the metadata instead of leaving a stale prefix.
+    await edit(input, '');
+    expect(onMetadata).toHaveBeenLastCalledWith('sq3', '');
+  });
+
   it('renders the preview with the respondent’s own field markup, not a lookalike', async () => {
     await mount();
     const preview = panel('Preview');

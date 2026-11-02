@@ -44,12 +44,12 @@ const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * unknown `custom-*` appearance is preserved through a round trip and rendered as
  * the underlying control, and no third-party code is fetched or executed.
  */
-export const CUSTOM_APPEARANCE_ALLOWLIST: readonly string[] = [];
+export const CUSTOM_APPEARANCE_ALLOWLIST: readonly string[] = ['custom-specify-other'];
 
 /** Types the platform renders, plus metadata and audit phrases it preserves. */
 const KNOWN_TYPES = new Set<string>([
   'text', 'textarea', 'integer', 'decimal', 'percentage', 'currency', 'date', 'datetime', 'time',
-  'yesno', 'select one', 'select multiple', 'rank', 'geopoint', 'geotrace', 'geoshape',
+  'yesno', 'select one', 'select multiple', 'rank', 'geopoint', 'geotrace', 'geoshape', 'calculate here',
   'image', 'audio', 'video', 'file', 'barcode', 'note', 'calculate',
   'start', 'end', 'today', 'deviceid', 'username', 'simserial', 'subscriberid', 'phonenumber',
   'caseid', 'audit', 'background audio', 'background geopoint', 'start geopoint',
@@ -61,13 +61,26 @@ const KNOWN_TYPES = new Set<string>([
 
 /** A type that arrives from another platform but must not silently pass as known. */
 function normaliseType(raw: string): string {
-  return raw.trim().toLowerCase().replace(/[\s_]+/g, ' ');
+  // Normalise the type keyword only. A list name such as `brand_awareness`
+  // keeps its underscores, because that is the name the choices sheet uses.
+  const value = raw.trim();
+  const head = /^[A-Za-z_]+/.exec(value)?.[0] ?? '';
+  return `${head.toLowerCase().replace(/_/g, ' ')}${value.slice(head.length)}`;
+}
+
+function headerBase(cell: string): string {
+  const raw = cell.trim().toLowerCase();
+  const double = raw.indexOf('::');
+  if (double !== -1) return raw.slice(0, double).trim();
+  const single = raw.lastIndexOf(':');
+  if (single > 0 && !raw.startsWith('media:')) return raw.slice(0, single).trim();
+  return raw.replace(/\s+/g, ' ');
 }
 
 function headerIndex(header: string[]): Map<string, number> {
   const index = new Map<string, number>();
   header.forEach((cell, i) => {
-    const base = cell.trim().toLowerCase().split('::')[0] ?? '';
+    const base = headerBase(cell);
     if (base !== '' && !index.has(base)) index.set(base, i);
   });
   return index;
@@ -79,7 +92,7 @@ function sheetNamed(sheets: Sheet[], name: string): Sheet | undefined {
 }
 
 function cell(sheet: Sheet, row: string[], index: Map<string, number>, base: string): { value: string; column?: number; header?: string } {
-  const i = index.get(base);
+  const i = index.get(base) ?? index.get(base.replace(/_/g, ' '));
   if (i === undefined) return { value: '' };
   return { value: (row[i] ?? '').trim(), column: i, header: (sheet.rows[0]?.[i] ?? base).trim() };
 }
@@ -155,10 +168,12 @@ function readChoiceLists(sheet: Sheet | undefined): Map<string, ChoiceRow[]> {
   if (!sheet) return lists;
   const index = headerIndex(sheet.rows[0] ?? []);
   const listAt = index.get('list_name');
-  const nameAt = index.get('name');
+  const nameAt = index.get('name') ?? index.get('value');
   if (listAt === undefined || nameAt === undefined) return lists;
   const extraKeys = new Set(
-    [...index.keys()].filter((key) => key !== 'list_name' && key !== 'name' && key !== 'label'),
+    [...index.keys()].filter((key) => !['list_name', 'name', 'value', 'label', 'image'].includes(key)
+      && !key.startsWith('label:')
+      && !key.startsWith('image:')),
   );
   sheet.rows.slice(1).forEach((row, i) => {
     const listName = (row[listAt] ?? '').trim();
@@ -216,16 +231,18 @@ export function validateXlsFormSheets(sheets: Sheet[]): WorkbookValidationReport
   if (choices) {
     const choiceHeader = choices.rows[0] ?? [];
     const choiceIndex = headerIndex(choiceHeader);
-    for (const required of ['list_name', 'name']) {
-      if (!choiceIndex.has(required)) {
-        report.error('choices-missing-column', 'choices', 1, `The choices sheet has no \`${required}\` column.`);
-      }
+    if (!choiceIndex.has('list_name')) {
+      report.error('choices-missing-column', 'choices', 1, 'The choices sheet has no `list_name` column.');
     }
+    if (!choiceIndex.has('name') && !choiceIndex.has('value')) {
+      report.error('choices-missing-column', 'choices', 1, 'The choices sheet has no `name` or `value` column.');
+    }
+    const choiceValueAt = choiceIndex.get('name') ?? choiceIndex.get('value') ?? -1;
     const seen = new Map<string, number>();
     choices.rows.slice(1).forEach((row, i) => {
       const rowNumber = i + 2;
       const listName = (row[choiceIndex.get('list_name') ?? -1] ?? '').trim();
-      const name = (row[choiceIndex.get('name') ?? -1] ?? '').trim();
+      const name = (row[choiceValueAt] ?? '').trim();
       if (listName === '' && name === '') return;
       if (listName === '') {
         report.error('choice-without-list', 'choices', rowNumber, `Choice "${name}" has no list_name, so no question can select it.`, {
@@ -234,9 +251,9 @@ export function validateXlsFormSheets(sheets: Sheet[]): WorkbookValidationReport
         });
       }
       if (name === '') {
-        report.error('choice-without-name', 'choices', rowNumber, `A choice in list "${listName}" has no name, so its stored value would be blank.`, {
-          column: choiceIndex.get('name'),
-          header: 'name',
+        report.error('choice-without-name', 'choices', rowNumber, `A choice in list "${listName}" has no name or value, so its stored value would be blank.`, {
+          column: choiceValueAt,
+          header: choiceIndex.has('name') ? 'name' : 'value',
         });
       }
       if (listName && name) {
@@ -244,8 +261,8 @@ export function validateXlsFormSheets(sheets: Sheet[]): WorkbookValidationReport
         const previous = seen.get(key);
         if (previous !== undefined) {
           report.error('duplicate-choice', 'choices', rowNumber, `List "${listName}" already has a choice named "${name}" (row ${previous}).`, {
-            column: choiceIndex.get('name'),
-            header: 'name',
+            column: choiceValueAt,
+            header: choiceIndex.has('name') ? 'name' : 'value',
           });
         } else {
           seen.set(key, rowNumber);
@@ -387,12 +404,12 @@ export function validateXlsFormSheets(sheets: Sheet[]): WorkbookValidationReport
       }
     }
 
-    if (!KNOWN_TYPES.has(type) && !/^select (one|multiple) /.test(type)) {
+    if (!KNOWN_TYPES.has(type) && !/^(?:select (one|multiple)|rank) /.test(type)) {
       report.warning('unknown-type', 'survey', rowNumber, `"${type}" is not a type this platform renders. The row is preserved on export, but it will not be collected.`, at('type'));
     }
 
-    const selectMatch = /^select (one|multiple)\s+(.+)$/.exec(type);
-    if (type === 'select one' || type === 'select multiple') {
+    const selectMatch = /^(?:select (one|multiple)|rank)\s+(.+)$/.exec(type);
+    if (type === 'select one' || type === 'select multiple' || type === 'rank') {
       report.error('select-without-list', 'survey', rowNumber, `This ${type} names no choice list. Write "${type} <list_name>".`, at('type'));
     } else if (selectMatch) {
       const listName = (selectMatch[2] ?? '').trim();
@@ -406,7 +423,8 @@ export function validateXlsFormSheets(sheets: Sheet[]): WorkbookValidationReport
     }
 
     const invisible = type === 'note' || type === 'calculate' || type === 'text audit' || type === 'audio audit'
-      || type.startsWith('speed violations') || type.startsWith('sensor ');
+      || type.startsWith('speed violations') || type.startsWith('sensor ')
+      || ['start', 'end', 'deviceid', 'phonenumber', 'username', 'simserial', 'subscriberid', 'caseid', 'today'].includes(type);
     if (!invisible) {
       const label = cell(survey, row, surveyIndex, 'label');
       if (label.value === '') {
@@ -503,7 +521,8 @@ export function validateXlsFormSheets(sheets: Sheet[]): WorkbookValidationReport
 
     const appearance = cell(survey, row, surveyIndex, 'appearance');
     const custom = appearance.value.split(/\s+/).find((token) => token.startsWith('custom-'));
-    if (custom && !CUSTOM_APPEARANCE_ALLOWLIST.includes(custom)) {
+    const customName = custom?.split('(')[0] ?? '';
+    if (custom && !CUSTOM_APPEARANCE_ALLOWLIST.includes(customName)) {
       report.warning(
         'field-plugin-not-supported',
         'survey',

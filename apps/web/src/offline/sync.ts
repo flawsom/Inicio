@@ -144,17 +144,26 @@ export async function recordAnswers(
   answers: Record<string, unknown>,
   dirty: string[],
   paradata?: StoredDraft['paradata'],
+  pluginMetadata?: Record<string, string>,
 ): Promise<StoredDraft> {
   return mutateDraft(store, token, (draft) => {
     // A keystroke does not carry timings, so the draft's last timings are kept.
     const next = paradata ?? draft.paradata;
+    // An empty object is meaningful: it clears a value the server still holds.
+    const metadata = pluginMetadata ?? draft.pluginMetadata;
     return {
       ...draft,
       answers,
       dirty: [...new Set([...draft.dirty, ...dirty])],
       ...(next ? { paradata: next } : {}),
+      ...(metadata !== undefined ? { pluginMetadata: metadata } : {}),
       updatedAt: new Date().toISOString(),
-      outbox: enqueueSave(draft.outbox, { answers, base: draft.base, ...(next ? { paradata: next } : {}) }),
+      outbox: enqueueSave(draft.outbox, {
+        answers,
+        base: draft.base,
+        ...(next ? { paradata: next } : {}),
+        ...(metadata !== undefined ? { pluginMetadata: metadata } : {}),
+      }),
     };
   });
 }
@@ -165,16 +174,24 @@ export async function requestSubmit(
   answers: Record<string, unknown>,
   dirty: string[],
   paradata?: StoredDraft['paradata'],
+  pluginMetadata?: Record<string, string>,
 ): Promise<StoredDraft> {
   return mutateDraft(store, token, (draft) => {
     const next = paradata ?? draft.paradata;
+    const metadata = pluginMetadata ?? draft.pluginMetadata;
     return {
       ...draft,
       answers,
       dirty: [...new Set([...draft.dirty, ...dirty])],
       ...(next ? { paradata: next } : {}),
+      ...(metadata !== undefined ? { pluginMetadata: metadata } : {}),
       updatedAt: new Date().toISOString(),
-      outbox: enqueueSubmit(draft.outbox, { answers, base: draft.base, ...(next ? { paradata: next } : {}) }),
+      outbox: enqueueSubmit(draft.outbox, {
+        answers,
+        base: draft.base,
+        ...(next ? { paradata: next } : {}),
+        ...(metadata !== undefined ? { pluginMetadata: metadata } : {}),
+      }),
     };
   });
 }
@@ -243,6 +260,7 @@ export async function runSync(store: OfflineStore, token: string, transport: Tra
         base: working.base,
         ...(working.caseid ? { caseid: working.caseid } : {}),
         ...(working.enumerator ? { enumerator: working.enumerator } : {}),
+        ...(working.pluginMetadata !== undefined ? { pluginMetadata: working.pluginMetadata } : {}),
       });
       working = { ...working, responseId: started.responseId, status: started.status, outbox: markSynced(working.outbox, 'create') };
       await store.putDraft(working);

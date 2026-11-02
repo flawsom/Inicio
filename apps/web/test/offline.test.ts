@@ -101,6 +101,25 @@ describe('the durable queue', () => {
     expect(resolveResume(clean, { answers: { a: 'server' }, status: 'in_progress' }).answers).toEqual({ a: 'server' });
   });
 
+  it('keeps the local metadata map whole while pending, but lets an empty server map clear it', () => {
+    const local: StoredDraft = {
+      token: TOKEN, clientId: 'c1', responseId: 'r1', answers: {}, base: {}, dirty: [],
+      pluginMetadata: { sq3: '1 99|device', sq1: 'keep' },
+      status: 'in_progress', updatedAt: 'x', syncedAt: null, outbox: outboxForNewDraft(),
+    };
+    const merged = resolveResume(local, {
+      answers: {},
+      status: 'in_progress',
+      pluginMetadata: { sq3: 'server', sq2: 'server' },
+    });
+    expect(merged.pluginMetadata).toEqual({ sq3: '1 99|device', sq1: 'keep' });
+
+    const clean: StoredDraft = { ...local, outbox: emptyOutbox() };
+    expect(resolveResume(clean, { answers: {}, status: 'in_progress', pluginMetadata: {} }).pluginMetadata).toEqual({});
+    // No metadata reported by the server means "unknown", not "cleared".
+    expect(resolveResume(clean, { answers: {}, status: 'in_progress' }).pluginMetadata).toEqual(local.pluginMetadata);
+  });
+
   it('describes the state without leaking developer words to a respondent', () => {
     const draft: StoredDraft = {
       token: TOKEN, clientId: 'c1', responseId: 'r1', answers: {}, base: {}, dirty: [],
@@ -152,6 +171,23 @@ describe('the sync runner', () => {
     // The server's canonical answers became the baseline, including the null the
     // device never sent — so the next comparison is against reality.
     expect(draft?.base).toEqual({ score: 5, hidden: null });
+  });
+
+  it('carries plug-in metadata on create, including an empty map that clears it', async () => {
+    const store = memoryStore();
+    await ensureDraft(store, TOKEN);
+    await recordAnswers(store, TOKEN, { sq3: ['1', '99'] }, ['sq3'], undefined, { sq3: '1 99|verbatim' });
+    const start = vi.fn(async () => ({ responseId: 'srv-1', status: 'in_progress' as const }));
+    await runSync(store, TOKEN, transport({ start }), ctx());
+    expect(start).toHaveBeenCalledWith(
+      TOKEN,
+      expect.any(String),
+      expect.objectContaining({ pluginMetadata: { sq3: '1 99|verbatim' } }),
+    );
+
+    const cleared = await recordAnswers(store, TOKEN, { sq3: ['1'] }, ['sq3'], undefined, {});
+    expect(cleared.pluginMetadata).toEqual({});
+    expect(cleared.outbox.save?.pluginMetadata).toEqual({});
   });
 
   it('does not start a second response when the same draft is flushed twice', async () => {

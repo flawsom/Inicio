@@ -45,7 +45,10 @@ export function validateForm(def: FormDefinition): ValidationReport {
     }
     if (!q.label || Object.keys(q.label).length === 0) warnings.push(`Question "${q.name}" has no label`);
     if (DISPLAY_TYPES.has(q.type) && q.required) {
-      errors.push(`Question "${q.name}" is a note and cannot be required`);
+      // SurveyCTO workbooks commonly set required=yes on a blocking note. The
+      // runtime never treats a note as an answer, so this is a portability
+      // warning rather than a reason to reject the instrument.
+      warnings.push(`Question "${q.name}" is a note with required=yes; the note cannot block submission, but the flag is preserved for workbook compatibility`);
     }
     if ((q.type === 'select_one' || q.type === 'select_multiple' || q.type === 'rank')) {
       const inline = q.choices?.inline;

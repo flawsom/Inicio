@@ -6,6 +6,7 @@ import {
   buildExportBundle,
   checkUpload,
   compareVersions,
+  compileDocx,
   csvBundle,
   diffDefinitions,
   exportXlsForm,
@@ -79,8 +80,12 @@ const createSchema = z.object({
   slug: z.string().trim().min(1).max(60).optional(),
   definition: z.unknown().optional(),
   templateId: z.string().optional(),
-  xlsformBase64: z.string().optional(),
+  xlsformBase64: z.string().min(1).optional(),
+  docxBase64: z.string().min(1).optional(),
   title: z.string().trim().min(1).max(200).optional(),
+}).refine((value) => !(value.xlsformBase64 && value.docxBase64), {
+  message: 'send at most one of xlsformBase64 or docxBase64',
+  path: ['docxBase64'],
 });
 
 export interface FormRow {
@@ -112,6 +117,17 @@ interface XlsformMeta {
  * something to key versions against. The duplicate guard looks at `declared`,
  * because that is the id the scripter actually wrote down.
  */
+function withFallbackTitle(definition: FormDefinition, name: string): FormDefinition {
+  if (definition.title !== 'Untitled form') return definition;
+  const formId = name.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'FORM';
+  const xlsform = (definition.settings?.['xlsform'] ?? {}) as Record<string, unknown>;
+  return {
+    ...definition,
+    title: name,
+    settings: { ...(definition.settings ?? {}), xlsform: { ...xlsform, formId } },
+  };
+}
+
 function xlsformMeta(definition: FormDefinition): XlsformMeta {
   const settings = (definition.settings?.['xlsform'] ?? {}) as { formId?: string; version?: string };
   const declared = (settings.formId ?? '').trim();
@@ -271,7 +287,16 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
       let notes: unknown[] = [];
       let meta: XlsformMeta | null = null;
       let validation: WorkbookValidationReport | null = null;
-      if (parsed.data.xlsformBase64) {
+      let compiler: { rules: unknown[]; diagnostics: unknown[] } | null = null;
+      if (parsed.data.docxBase64) {
+        const bytes = new Uint8Array(Buffer.from(parsed.data.docxBase64, 'base64'));
+        const compiled = compileDocx(bytes, { title: parsed.data.title });
+        definition = withFallbackTitle(compiled.definition, parsed.data.name);
+        notes = compiled.report.diagnostics.map((entry) => ({ kind: entry.severity, message: entry.message }));
+        validation = validateWorkbook(compiled.bytes);
+        compiler = { rules: compiled.report.rules, diagnostics: compiled.report.diagnostics };
+        meta = xlsformMeta(definition);
+      } else if (parsed.data.xlsformBase64) {
         const bytes = new Uint8Array(Buffer.from(parsed.data.xlsformBase64, 'base64'));
         validation = validateWorkbook(bytes);
         const imported = importXlsForm(bytes);
@@ -345,7 +370,7 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
           meta?.version || null,
         ],
       );
-      return { form, version: versions[0], notes, validation };
+      return { form, version: versions[0], notes, validation, ...(compiler ? { compiler } : {}) };
     });
 
     await audit(req, `user:${identity.userId}`, 'form.created', (created.form as { id: string }).id, {
@@ -672,14 +697,25 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
 
   app.post('/forms/:formId/import', async (req: FastifyRequest<{ Params: { formId: string } }>, reply: FastifyReply) => {
     const identity = await requireAcceptedTerms(req);
-    const parsed = z.object({ xlsformBase64: z.string().min(1), versionId: z.string().uuid().nullish() }).safeParse(req.body);
+    const parsed = z.object({
+      xlsformBase64: z.string().min(1).optional(),
+      docxBase64: z.string().min(1).optional(),
+      versionId: z.string().uuid().nullish(),
+    }).refine((value) => Boolean(value.xlsformBase64) !== Boolean(value.docxBase64), {
+      message: 'send exactly one of xlsformBase64 or docxBase64',
+    }).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_request' });
 
     const result = await withUser(identity.userId, async (client) => {
       const form = await loadForm(client, req.params.formId);
-      const bytes = new Uint8Array(Buffer.from(parsed.data.xlsformBase64, 'base64'));
+      const source = parsed.data.docxBase64 ?? parsed.data.xlsformBase64!;
+      const bytes = new Uint8Array(Buffer.from(source, 'base64'));
       const validation = validateWorkbook(bytes);
-      const imported = importXlsForm(bytes);
+      const compiled = parsed.data.docxBase64 ? compileDocx(bytes) : null;
+      const compiledDefinition = compiled ? withFallbackTitle(compiled.definition, form.name) : null;
+      const imported = compiled
+        ? { definition: compiledDefinition!, notes: compiled.report.diagnostics.map((entry) => ({ kind: entry.severity, message: entry.message })), sheets: compiled.book.sheets.map((sheet) => sheet.name) }
+        : importXlsForm(bytes);
       const meta = xlsformMeta(imported.definition);
 
       // One upload at a time per form: the version comparison and the deletion of

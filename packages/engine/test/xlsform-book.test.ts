@@ -76,16 +76,15 @@ describe('the six tab compiler', () => {
     ]);
   });
 
-  it('has the twenty column survey header, including the inert ones', () => {
+  it('has the exact 23 column SurveyCTO survey header', () => {
     const survey = sheet(xlsFormWorkbook(definition), 'survey');
     const headers = (survey.rows[0] ?? []).map(text);
-    for (const required of [
-      'type', 'name', 'label', 'hint', 'default', 'appearance', 'constraint', 'constraint_message',
-      'relevant', 'disabled', 'required', 'required_message', 'read only', 'calculation',
+    expect(headers).toEqual([
+      'type', 'name', 'label', 'hint', 'default', 'appearance', 'constraint', 'constraint message',
+      'relevance', 'disabled', 'required', 'required message', 'read only', 'calculation',
       'repeat_count', 'media:image', 'media:audio', 'media:video', 'choice_filter', 'note',
-    ]) {
-      expect(headers).toContain(required);
-    }
+      'response_note', 'publishable', 'minimum_seconds',
+    ]);
   });
 
   it('colours the key cells yellow, group rows peach and select rows green', () => {
@@ -107,7 +106,7 @@ describe('the six tab compiler', () => {
     // A text row is plain, and its constraint_message cell is yellow.
     const textRow = survey.rows.findIndex((row) => text(row[nameColumn] ?? '') === 'notes');
     expect(styles[textRow]?.[typeColumn]).toBe('body');
-    expect(styles[textRow]?.[column(headers, 'constraint_message')]).toBe('key');
+    expect(styles[textRow]?.[column(headers, 'constraint message')]).toBe('key');
     expect(styles[textRow]?.[column(headers, 'choice_filter')]).toBe('key');
   });
 
@@ -147,7 +146,7 @@ describe('the six tab compiler', () => {
     const settingsHelp = sheet(book, 'help-settings');
     expect(settingsHelp.rows.some((row) => text(row[0] ?? '') === 'version')).toBe(true);
     const surveyHelp = sheet(book, 'help-survey');
-    expect(surveyHelp.rows.some((row) => text(row[0] ?? '') === 'constraint_message')).toBe(true);
+    expect(surveyHelp.rows.some((row) => text(row[0] ?? '') === 'constraint message')).toBe(true);
     expect(surveyHelp.rows.some((row) => text(row[0] ?? '') === 'choice_filter')).toBe(true);
   });
 

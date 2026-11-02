@@ -57,6 +57,8 @@ import { registerDurableLimit } from '../lib/rate-limit.js';
  */
 
 const answersSchema = z.record(z.string(), z.unknown());
+/** `custom-specify-other` writes `code|verbatim`; the key is the field name. */
+const pluginMetadataSchema = z.record(z.string(), z.string().max(4000));
 const startSchema = z.object({
   /** The device's stable id for this response. Retries are idempotent against it. */
   clientId: z.string().uuid().optional(),
@@ -69,6 +71,8 @@ const startSchema = z.object({
   enumerator: z.string().trim().min(1).max(200).optional(),
   /** Panel links carry an opaque id/ticket from the query string. */
   embedded: z.record(z.string(), z.unknown()).optional(),
+  /** SurveyCTO plug-in metadata, keyed by field name. */
+  metadata: pluginMetadataSchema.optional(),
 });
 const timingSchema = z.object({
   question: z.string().min(1).max(120),
@@ -84,6 +88,8 @@ const saveSchema = z.object({
   answers: answersSchema.default({}),
   base: answersSchema.optional(),
   embedded: z.record(z.string(), z.unknown()).optional(),
+  /** SurveyCTO plug-in metadata, keyed by field name. */
+  metadata: pluginMetadataSchema.optional(),
   /** Per-field timings, written as they arrive so review sees them live. */
   paradata: paradataSchema.optional(),
 });
@@ -235,11 +241,12 @@ export function planSync(
   base: Record<string, unknown> | undefined,
   current: Map<string, unknown>,
   datasets?: DatasetContext,
+  pluginMetadata?: Record<string, string>,
 ): SyncPlan {
   // `once()` reads the values the server already stored, so a retried save keeps
   // the first draw instead of computing a new random value on every request.
   const onceValues = Object.fromEntries(current);
-  const evaluation = evaluateForm(definition, incoming, { datasets, onceValues });
+  const evaluation = evaluateForm(definition, incoming, { datasets, onceValues, pluginMetadata });
   const entries: SyncEntry[] = [];
   const values: Record<string, unknown> = {};
   let conflicts = 0;
@@ -307,6 +314,20 @@ async function readCurrent(client: PoolClient, responseId: string): Promise<Map<
     [responseId],
   );
   return new Map(rows.map((row) => [row.question_id, row.value]));
+}
+
+async function writePluginMetadata(
+  client: PoolClient,
+  responseId: string,
+  metadata: Record<string, string> | undefined,
+): Promise<void> {
+  if (metadata === undefined) return;
+  await client.query(
+    `UPDATE response
+        SET meta = coalesce(meta, '{}'::jsonb) || jsonb_build_object('pluginMetadata', $2::jsonb)
+      WHERE id = $1`,
+    [responseId, JSON.stringify(metadata)],
+  );
 }
 
 async function writeAnswers(client: PoolClient, orgId: string, responseId: string, plan: SyncPlan): Promise<void> {
@@ -580,6 +601,7 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
           if (existing[0].form_id !== link.form_id) {
             throw new HttpError(409, 'client_id_conflict', 'That device reference belongs to a different survey.');
           }
+          await writePluginMetadata(client, responseId, body.data.metadata);
           return { responseId, created: false, status: existing[0].status, caseid: existing[0].caseid, form, datasets };
         }
 
@@ -593,7 +615,12 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
             link.org_id,
             link.form_id,
             version.id,
-            JSON.stringify(body.data.embedded ?? {}),
+            JSON.stringify({
+              ...(body.data.embedded ?? {}),
+              ...(body.data.metadata && Object.keys(body.data.metadata).length > 0
+                ? { pluginMetadata: body.data.metadata }
+                : {}),
+            }),
             typeof body.data.embedded?.['pid'] === 'string' ? String(body.data.embedded['pid']) : null,
             clientId ?? null,
             caseId,
@@ -622,7 +649,7 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
           seeded.caseid = caseId;
         }
         if (Object.keys(seeded).length > 0) {
-          const plan = planSync(version.definition, seeded, body.data.base, new Map(), context);
+          const plan = planSync(version.definition, seeded, body.data.base, new Map(), context, body.data.metadata);
           await writeAnswers(client, link.org_id, responseId, plan);
         }
         return { responseId, created: true, status: 'in_progress', caseid: caseId, enumeratorRef, form, datasets };
@@ -640,8 +667,15 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
       const payload = await withCollector(link.org_id, req.params.responseId, async (client) => {
         const version = await publishedVersionOf(client, link);
         const datasets = await loadCollectDatasets(client, version.id);
-        const { rows: response } = await client.query<{ status: string; started_at: Date; submitted_at: Date | null; caseid: string | null; enumerator_ref: string | null }>(
-          `SELECT status, started_at, submitted_at, caseid, enumerator_ref FROM response WHERE id = $1`,
+        const { rows: response } = await client.query<{
+          status: string;
+          started_at: Date;
+          submitted_at: Date | null;
+          caseid: string | null;
+          enumerator_ref: string | null;
+          meta: Record<string, unknown> | null;
+        }>(
+          `SELECT status, started_at, submitted_at, caseid, enumerator_ref, meta FROM response WHERE id = $1`,
           [req.params.responseId],
         );
         if (!response[0]) throw new HttpError(404, 'not_found');
@@ -657,6 +691,11 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
           startedAt: response[0].started_at,
           submittedAt: response[0].submitted_at,
           answers: Object.fromEntries(answers.map((a) => [a.question_id, a.value])),
+          // Omitted when the server has never stored metadata. An empty object is a
+          // value in its own right: it is how the device is told a field was cleared.
+          ...(response[0].meta?.['pluginMetadata'] && typeof response[0].meta['pluginMetadata'] === 'object'
+            ? { pluginMetadata: response[0].meta['pluginMetadata'] as Record<string, string> }
+            : {}),
           form: { title: version.title, version: version.version, definition: version.definition },
           datasets,
         };
@@ -696,7 +735,9 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
           body.data.base,
           await readCurrent(client, req.params.responseId),
           datasetContext(datasets),
+          body.data.metadata,
         );
+        await writePluginMetadata(client, req.params.responseId, body.data.metadata);
         await writeAnswers(client, link.org_id, req.params.responseId, plan);
         const answeredEnumerator = enumeratorAnswer(version.definition, plan.values);
         if (version.definition.questions.some((question) => question.type === 'enumerator')) {
@@ -744,7 +785,9 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
           body.data.base,
           await readCurrent(client, req.params.responseId),
           datasetContext(datasets),
+          body.data.metadata,
         );
+        await writePluginMetadata(client, req.params.responseId, body.data.metadata);
         // Timings are the text audit and the raw material for speed violations. The
         // verdict is written into the audit fields here, so it is the server's and
         // not a number a device could choose.

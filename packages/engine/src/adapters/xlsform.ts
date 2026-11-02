@@ -92,7 +92,7 @@ const DIRECT: Record<string, QuestionType> = {
   image: 'image', photo: 'image', audio: 'audio', video: 'video', file: 'file',
   barcode: 'barcode',
   geopoint: 'geopoint', geotrace: 'geotrace', geoshape: 'geoshape',
-  note: 'note', calculate: 'calculate', enumerator: 'enumerator',
+  note: 'note', calculate: 'calculate', calculate_here: 'calculate', enumerator: 'enumerator',
 };
 
 /** ODK/Enketo metadata types: no user input, often device-supplied. */
@@ -143,6 +143,7 @@ const ALIAS_NOTES: Record<string, string> = {
   date_time: 'type "date_time" normalised to "datetime"',
   multiline: 'type "multiline" normalised to "textarea"',
   photo: 'type "photo" normalised to "image"',
+  calculate_here: 'type "calculate_here" normalised to "calculate" on import and preserved on export',
 };
 
 const YESNO_LIST = 'yesno';
@@ -175,14 +176,41 @@ interface ColumnSpec {
   lang?: string;
 }
 
+function normaliseBase(raw: string): string {
+  const base = raw.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (base === 'constraint message') return 'constraint_message';
+  if (base === 'required message') return 'required_message';
+  if (base === 'read only') return 'read_only';
+  if (base === 'value') return 'value';
+  return base;
+}
+
+const LOCALISABLE_BASES = new Set([
+  'label', 'hint', 'required_message', 'constraint_message', 'guidance_hint',
+  'media:image', 'media:audio', 'media:video', 'image',
+]);
+
 function parseHeader(row: string[]): ColumnSpec[] {
   return row.map((cell) => {
     const raw = cell.trim();
     const at = raw.indexOf('::');
-    if (at === -1) return { raw, base: raw.toLowerCase() };
-    const base = raw.slice(0, at).trim().toLowerCase();
-    const suffix = raw.slice(at + 2);
-    return { raw, base, lang: langCode(suffix, suffix.trim()) };
+    if (at !== -1) {
+      const base = normaliseBase(raw.slice(0, at));
+      const suffix = raw.slice(at + 2);
+      return { raw, base, lang: langCode(suffix, suffix.trim()) };
+    }
+    // SurveyCTO writes a single colon (`label:Marathi`); ODK writes two
+    // (`label::Marathi (mr)`). Accept both, but do not split `media:image`
+    // into media + image.
+    const colon = raw.lastIndexOf(':');
+    if (colon > 0) {
+      const left = normaliseBase(raw.slice(0, colon));
+      const suffix = raw.slice(colon + 1).trim();
+      if (LOCALISABLE_BASES.has(left) && suffix !== '') {
+        return { raw, base: left, lang: langCode(suffix, suffix) };
+      }
+    }
+    return { raw, base: normaliseBase(raw) };
   });
 }
 
@@ -345,21 +373,26 @@ function readSettings(sheet: Sheet | undefined): Record<string, string> {
   const index: Record<string, number | undefined> = {};
   const labelColumns: Array<{ spec: ColumnSpec; index: number }> = [];
   header.forEach((col, i) => {
-    if (['label', 'hint', 'required_message', 'constraint_message', 'guidance_hint'].includes(col.base)) {
+    if ([
+      'label', 'hint', 'required_message', 'constraint_message', 'guidance_hint',
+      'media:image', 'media:audio', 'media:video',
+    ].includes(col.base)) {
       labelColumns.push({ spec: col, index: i });
     }
     if (index[col.base] === undefined) index[col.base] = i;
   });
 
   const known = new Set([
-    'type', 'name', 'label', 'hint', 'required', 'required_message', 'relevant', 'constraint',
-    'constraint_message', 'calculation', 'choice_filter', 'appearance', 'default', 'read_only',
-    'read only', 'readonly', 'repeat_count', 'guidance_hint',
+    'type', 'name', 'label', 'hint', 'required', 'required_message', 'relevant', 'relevance',
+    'constraint', 'constraint_message', 'calculation', 'choice_filter', 'appearance', 'default',
+    'read_only', 'readonly', 'repeat_count', 'guidance_hint', 'disabled', 'media:image',
+    'media:audio', 'media:video', 'note', 'response_note', 'publishable', 'minimum_seconds',
   ]);
-  // XLSForm's own header is `read only` with a space; `read_only` is the alias
-  // most writers use. Both mean the same thing, so both are read.
   if (index['read_only'] === undefined && index['read only'] !== undefined) {
     index['read_only'] = index['read only'];
+  }
+  if (index['relevant'] === undefined && index['relevance'] !== undefined) {
+    index['relevant'] = index['relevance'];
   }
   const unknownColumns = header
     .map((col, i) => ({ col, i }))
@@ -402,14 +435,16 @@ function readSettings(sheet: Sheet | undefined): Record<string, string> {
   if (choicesSheet) {
     const choiceHeader = parseHeader(choicesSheet.rows[0] ?? []);
     const listIdx = choiceHeader.findIndex((c) => c.base === 'list_name');
-    const nameIdx = choiceHeader.findIndex((c) => c.base === 'name');
+    const nameIdx = choiceHeader.findIndex((c) => c.base === 'name' || c.base === 'value');
     const labelCols = choiceHeader.map((c, i) => ({ spec: c, index: i })).filter(({ spec }) => spec.base === 'label');
+    const imageCols = choiceHeader.map((c, i) => ({ spec: c, index: i })).filter(({ spec }) => spec.base === 'image');
     const extraCols = choiceHeader
       .map((c, i) => ({ spec: c, index: i }))
-      .filter(({ spec }) => !['list_name', 'name', 'label'].includes(spec.base));
+      .filter(({ spec }) => !['list_name', 'name', 'value', 'label', 'image'].includes(spec.base)
+        && !spec.base.startsWith('image:'));
 
     if (listIdx < 0 || nameIdx < 0) {
-      notes.push({ kind: 'unsupported', message: '`choices` sheet needs `list_name` and `name` columns, so the sheet was ignored' });
+      notes.push({ kind: 'unsupported', message: '`choices` sheet needs `list_name` and `name` or `value` columns, so the sheet was ignored' });
     } else {
       for (let r = 1; r < choicesSheet.rows.length; r++) {
         const row = choicesSheet.rows[r] ?? [];
@@ -426,8 +461,17 @@ function readSettings(sheet: Sheet | undefined): Record<string, string> {
           const v = (row[i] ?? '').trim();
           if (v !== '') extra[spec.base] = v;
         }
-        const bucket = choiceLists[listName] ?? (choiceLists[listName] = []);
-        bucket.push(Object.keys(extra).length > 0 ? { value, label, extra } : { value, label });
+        const images: LocalizedText = {};
+        for (const { spec, index: i } of imageCols) {
+          const v = (row[i] ?? '').trim();
+          if (v !== '') images[spec.lang ?? defaultLanguage] = v;
+        }
+        const choice: Choice = { value, label };
+        if (Object.keys(extra).length > 0) choice.extra = extra;
+        if (images[defaultLanguage]) choice.image = images[defaultLanguage];
+        const otherImages = Object.fromEntries(Object.entries(images).filter(([lang]) => lang !== defaultLanguage));
+        if (Object.keys(otherImages).length > 0) choice.images = otherImages;
+        (choiceLists[listName] ??= []).push(choice);
       }
     }
   }
@@ -446,6 +490,7 @@ function readSettings(sheet: Sheet | undefined): Record<string, string> {
     if (parsed.kind === 'end_group' || parsed.kind === 'end_repeat') {
       const wantsRepeat = parsed.kind === 'end_repeat';
       const top = stack.pop();
+      if (top) top.endOrder = row.rowNumber;
       if (!top) {
         notes.push({ kind: 'dropped', message: `row ${row.rowNumber}: ${row.typeCell} with no matching begin, so it was ignored` });
       } else if (Boolean(top.repeat) !== wantsRepeat) {
@@ -493,6 +538,7 @@ function readSettings(sheet: Sheet | undefined): Record<string, string> {
       }
       const group: Group = {
         id: `g_${name}`,
+        order: row.rowNumber,
         name,
         label,
         repeat: parsed.kind === 'repeat',
@@ -609,9 +655,21 @@ function readSettings(sheet: Sheet | undefined): Record<string, string> {
     const appearance = cellAt(row.row, index['appearance']);
     const readOnly = truthy(cellAt(row.row, index['read_only']));
     const defaultRaw = cellAt(row.row, index['default']);
+    const disabled = truthy(cellAt(row.row, index['disabled']));
+    const responseNote = cellAt(row.row, index['response_note']);
+    const publishable = truthy(cellAt(row.row, index['publishable']));
+    const minimumRaw = cellAt(row.row, index['minimum_seconds']);
+    const minimumSeconds = minimumRaw === '' ? undefined : Number(minimumRaw);
+    const mediaImage = localized(row.row, labelColumns, 'media:image', defaultLanguage);
+    const mediaAudio = localized(row.row, labelColumns, 'media:audio', defaultLanguage);
+    const mediaVideo = localized(row.row, labelColumns, 'media:video', defaultLanguage);
+    const media = mediaImage || mediaAudio || mediaVideo
+      ? { ...(mediaImage ? { image: mediaImage } : {}), ...(mediaAudio ? { audio: mediaAudio } : {}), ...(mediaVideo ? { video: mediaVideo } : {}) }
+      : undefined;
 
     const question: Question = {
       id: `q_${name}`,
+      order: row.rowNumber,
       groupId: stack.length > 0 ? stack[stack.length - 1]!.id : null,
       name,
       type,
@@ -633,12 +691,20 @@ function readSettings(sheet: Sheet | undefined): Record<string, string> {
     if (Object.keys(rules).length > 0) question.rules = rules;
     if (appearance !== '') question.appearance = appearance;
     if (defaultRaw !== '') question.defaultValue = parseDefaultValue(defaultRaw);
+    if (disabled) question.disabled = true;
+    if (responseNote !== '') question.responseNote = responseNote;
+    if (publishable) question.publishable = true;
+    if (minimumSeconds !== undefined && Number.isFinite(minimumSeconds)) question.minimumSeconds = minimumSeconds;
+    if (media) question.media = media;
+    const workbookNote = cellAt(row.row, index['note']);
+    if (workbookNote !== '') question.workbookNote = workbookNote;
     if (parsed.audit) question.audit = { kind: parsed.audit, spec: appearance };
 
     questions.push(question);
   }
 
   for (const g of stack) {
+    g.endOrder = surveyRows.length;
     notes.push({ kind: 'normalised', message: `group "${g.name}" was never closed: it was closed at the end of the sheet`, where: g.name });
   }
 
@@ -687,12 +753,16 @@ function readSettings(sheet: Sheet | undefined): Record<string, string> {
 /* -------------------------------------------------------------------- write */
 
 interface OutColumn {
+  /** Canonical key used by the writer. */
   base: string;
+  /** Header text, when it differs from the canonical key. */
+  header?: string;
   lang?: string;
 }
 
 function columnLabel(col: OutColumn): string {
-  return col.lang ? `${col.base}::${col.lang}` : col.base;
+  const base = col.header ?? col.base;
+  return col.lang ? `${base}:${col.lang}` : base;
 }
 
 export interface XlsFormSheets {
@@ -740,13 +810,18 @@ const SURVEY_HELP: Record<string, [what: string, rule: string, example: string]>
   'media:video': ['Video shown with the question.', 'A filename inside the form media zip.', 'howto.mp4'],
   choice_filter: ['Narrows the options of a select.', 'An XPath expression evaluated per choice; a bare name reads that column on the choices sheet.', 'district = ${state}'],
   note: ['A note for the person reading the spreadsheet.', 'Never sent to a device and never interpreted.', 'Client approved 2026-10-01.'],
+  response_note: ['Printed text beside the answer area.', 'Carried through import and export; the runner uses it in printable and inspector views.', '|___|___|'],
+  publishable: ['Marks a field publishable on an encrypted form.', 'Only use for non-sensitive fields. The platform carries the flag and never invents a key.', 'yes'],
+  minimum_seconds: ['The field-level speed limit.', 'A whole number of seconds. Violations are measured by the audit runtime, not trusted from the device.', '12'],
 };
 
 const CHOICES_HELP: Record<string, [what: string, rule: string, example: string]> = {
   list_name: ['The list this option belongs to.', 'Referenced by select_one and select_multiple in the survey sheet.', 'cities'],
-  name: ['The value that is stored.', 'Not the label: this is what lands in the dataset and what a constraint compares against. Unique within the list.', 'blr'],
-  label: ['What the respondent sees.', '`label::<language>` for another language.', 'Bengaluru'],
-  filter_column: ['A column used by choice_filter.', 'Any extra column on this sheet is readable by name inside a choice_filter expression.', 'state'],
+  value: ['The value that is stored.', 'Not the label: this is what lands in the dataset and what a constraint compares against. Unique within the list.', 'blr'],
+  name: ['The value that is stored (ODK spelling).', 'Alias for `value`; both are read on import.', 'blr'],
+  label: ['What the respondent sees.', '`label:<language>` for another language.', 'Bengaluru'],
+  image: ['An image filename for the option.', 'Use `image:<language>` for a localised image.', 'blr.png'],
+  filter: ['An attribute used by choice_filter.', 'Any extra column on this sheet is readable by name inside a choice_filter expression.', 'state'],
 };
 
 const SETTINGS_HELP: Record<string, [what: string, rule: string, example: string]> = {
@@ -773,17 +848,49 @@ function helpSheet(
     ['Column', 'What it does', 'Rule', 'Example'],
   ];
   for (const column of columns) {
-    const doc = docs[column] ?? docs[column.split('::')[0] ?? ''] ?? [
+    const base = column.split(':')[0] ?? '';
+    const doc = docs[column] ?? docs[column.replace(/ /g, '_')] ?? docs[base] ?? [
       'A preserved column.',
       'Not interpreted by this platform. Its values are carried through import and export unchanged.',
       '',
     ];
     rows.push([column, doc[0], doc[1], doc[2]]);
   }
+  if (sheet === 'survey') {
+    rows.push([]);
+    rows.push(['Expression quick reference', 'Operator or function', 'Example', 'Result']);
+    for (const entry of EXPRESSION_HELP) rows.push(entry);
+    rows.push([]);
+    rows.push(['Appearance quick reference', 'Appearance', 'What it does', 'Example']);
+    for (const entry of APPEARANCE_HELP) rows.push(entry);
+  }
   rows.push([]);
   rows.push(['Highlighted cells', highlights, '', '']);
   return { name: `help-${sheet}`, rows };
 }
+
+const EXPRESSION_HELP: string[][] = [
+  ['Condition', 'if(condition, when_true, when_false)', "if(selected(${sex}, '1'), 'Male', 'Female')", 'The chosen branch'],
+  ['Fallback', 'coalesce(value, value, ...)', 'coalesce(${a}, ${b}, 0)', 'First non-empty value'],
+  ['Membership', 'selected(list, value)', "selected(${brands}, '14')", 'true or false'],
+  ['Count', 'count-selected(list)', 'count-selected(${brands})', 'Number of selected options'],
+  ['Nth selection', 'selected-at(list, index)', 'selected-at(${brands}, 0)', 'First selected value'],
+  ['Choice label', 'choice-label(field, value)', 'choice-label(${brand}, ${brand})', 'The label for a stored value'],
+  ['Other text', 'plug-in-metadata(field)', "item-at('|', plug-in-metadata(${q6}), 1)", 'The custom-specify-other verbatim'],
+  ['String list', 'item-at(separator, value, index)', "item-at('|', '98|Groundnut oil', 1)", 'Groundnut oil'],
+  ['Pattern', 'regex(value, pattern)', "regex(., '[0-9]{10}')", 'true or false'],
+  ['Device', 'device-info()', 'device-info()', 'The device metadata snapshot'],
+  ['Duration', 'duration()', 'duration()', 'Elapsed seconds'],
+  ['Dataset lookup', 'pulldata(dataset, column, key, value)', "pulldata('cases', 'head', 'id', ${caseid})", 'The matching cell'],
+];
+
+const APPEARANCE_HELP: string[][] = [
+  ['Randomise options', 'randomized(0,k)', 'randomized(0,2)', 'Shuffles options and anchors the last k'],
+  ['Inline other', "custom-specify-other(other='99')", "custom-specify-other(other='99')", 'Adds a mandatory verbatim box for code 99'],
+  ['Page', 'field-list', 'field-list', 'Renders the group as one page'],
+  ['Grid row', 'list-nolabel', 'list-nolabel', 'Hides the repeated option label in a matrix'],
+  ['Auto advance', 'quick', 'quick', 'Advances after a single choice'],
+];
 
 /**
  * The three sheets the export writes, before they are zipped.
@@ -808,19 +915,18 @@ export function xlsFormSheets(def: FormDefinition, options: XlsFormBookOptions =
     for (const map of [q.label, q.hint, q.requiredMessage, q.validation?.message]) {
       for (const l of Object.keys(map ?? {})) addLang(l);
     }
+    for (const map of [q.media?.image, q.media?.audio, q.media?.video]) {
+      for (const l of Object.keys(map ?? {})) addLang(l);
+    }
   }
   for (const g of def.groups) for (const l of Object.keys(g.label ?? {})) addLang(l);
   for (const list of Object.values(def.choiceLists)) {
-    for (const c of list) for (const l of Object.keys(c.label ?? {})) addLang(l);
+    for (const c of list) {
+      for (const l of Object.keys(c.label ?? {})) addLang(l);
+      for (const l of Object.keys(c.images ?? {})) addLang(l);
+    }
   }
   const others = languages.filter((l) => l !== defaultLanguage);
-
-  const labelFamily: OutColumn[] = [{ base: 'label' }, { base: 'hint' }];
-  for (const l of others) labelFamily.push({ base: 'label', lang: l }, { base: 'hint', lang: l });
-  labelFamily.push({ base: 'required_message' });
-  for (const l of others) labelFamily.push({ base: 'required_message', lang: l });
-  labelFamily.push({ base: 'constraint_message' });
-  for (const l of others) labelFamily.push({ base: 'constraint_message', lang: l });
 
   // Preserved passthrough columns are re-emitted, so import → export → import does
   // not quietly lose author data the canonical model has no field for.
@@ -833,26 +939,29 @@ export function xlsFormSheets(def: FormDefinition, options: XlsFormBookOptions =
   for (const q of def.questions) collect(q.source);
   for (const g of def.groups) collect(g.source);
 
-  // The twenty columns a SurveyCTO style workbook always has, in the order a
-  // scripter reads them. A few are inert here (`disabled`, `media:*`, `note`) and
-  // exist so a workbook this platform writes opens in that ecosystem with the
-  // shape its authors expect; values for them survive through `source.columns`.
+  // The 23 base columns every SurveyCTO style workbook has, in the order a
+  // scripter reads them. Regional language columns follow the block exactly as
+  // SurveyCTO writes them: label, constraint message and media:image.
   const standardBase = new Set([
-    'type', 'name', 'label', 'hint', 'default', 'appearance', 'constraint', 'constraint_message',
-    'relevant', 'disabled', 'required', 'required_message', 'read only', 'calculation',
+    'type', 'name', 'label', 'hint', 'default', 'appearance', 'constraint', 'constraint message',
+    'relevance', 'disabled', 'required', 'required message', 'read only', 'calculation',
     'repeat_count', 'media:image', 'media:audio', 'media:video', 'choice_filter', 'note',
+    'response_note', 'publishable', 'minimum_seconds',
   ]);
   const columns: OutColumn[] = [
     { base: 'type' },
     { base: 'name' },
-    ...labelFamily,
+    { base: 'label' },
+    { base: 'hint' },
     { base: 'default' },
     { base: 'appearance' },
     { base: 'constraint' },
-    { base: 'relevant' },
+    { base: 'constraint_message', header: 'constraint message' },
+    { base: 'relevance' },
     { base: 'disabled' },
     { base: 'required' },
-    { base: 'read only' },
+    { base: 'required_message', header: 'required message' },
+    { base: 'read_only', header: 'read only' },
     { base: 'calculation' },
     { base: 'repeat_count' },
     { base: 'media:image' },
@@ -860,17 +969,42 @@ export function xlsFormSheets(def: FormDefinition, options: XlsFormBookOptions =
     { base: 'media:video' },
     { base: 'choice_filter' },
     { base: 'note' },
-    ...passthrough.filter((base) => !standardBase.has(base)).map((base) => ({ base })),
+    { base: 'response_note' },
+    { base: 'publishable' },
+    { base: 'minimum_seconds' },
   ];
+  for (const l of others) {
+    columns.push({ base: 'label', lang: l });
+    columns.push({ base: 'constraint_message', header: 'constraint message', lang: l });
+    columns.push({ base: 'media:image', lang: l });
+  }
+  // Hint, required-message and audio/video translations are not part of the
+  // standard regional block. They are emitted only when a form actually has
+  // them, so the benchmark shape is not widened by columns full of blanks.
+  const extraLocalBases = ['hint', 'required_message', 'media:audio', 'media:video'];
+  for (const base of extraLocalBases) {
+    const hasTranslation = def.questions.some((q) => {
+      const map = base === 'hint' ? q.hint
+        : base === 'required_message' ? q.requiredMessage
+          : base === 'media:audio' ? q.media?.audio
+            : q.media?.video;
+      return Object.keys(map ?? {}).some((lang) => lang !== defaultLanguage);
+    });
+    if (!hasTranslation) continue;
+    for (const l of others) columns.push({ base, lang: l });
+  }
+  for (const base of passthrough) {
+    if (!standardBase.has(base)) columns.push({ base });
+  }
 
   const surveyRows: string[][] = [columns.map(columnLabel)];
   const pushRow = (values: Record<string, string>): void => {
     surveyRows.push(columns.map((col) => values[columnLabel(col)] ?? ''));
   };
-  const setLocalized = (values: Record<string, string>, base: string, map: LocalizedText | undefined): void => {
+  const setLocalized = (values: Record<string, string>, header: string, map: LocalizedText | undefined): void => {
     for (const [lang, text] of Object.entries(map ?? {})) {
       if (text === '') continue;
-      values[lang === defaultLanguage ? base : `${base}::${lang}`] = text;
+      values[lang === defaultLanguage ? header : `${header}:${lang}`] = text;
     }
   };
 
@@ -919,11 +1053,14 @@ export function xlsFormSheets(def: FormDefinition, options: XlsFormBookOptions =
     values['name'] = q.name;
     setLocalized(values, 'label', q.label);
     setLocalized(values, 'hint', q.hint);
-    setLocalized(values, 'required_message', q.requiredMessage);
-    setLocalized(values, 'constraint_message', q.validation?.message);
+    setLocalized(values, 'required message', q.requiredMessage);
+    setLocalized(values, 'constraint message', q.validation?.message);
+    setLocalized(values, 'media:image', q.media?.image);
+    setLocalized(values, 'media:audio', q.media?.audio);
+    setLocalized(values, 'media:video', q.media?.video);
     if (q.required === true) values['required'] = 'yes';
     else if (typeof q.required === 'string') values['required'] = q.required;
-    if (q.rules?.visibleIf) values['relevant'] = q.rules.visibleIf;
+    if (q.rules?.visibleIf) values['relevance'] = q.rules.visibleIf;
     if (q.validation?.constraint) values['constraint'] = q.validation.constraint;
     if (q.rules?.calculate) values['calculation'] = q.rules.calculate;
     if (q.rules?.choiceFilter) values['choice_filter'] = q.rules.choiceFilter;
@@ -933,21 +1070,56 @@ export function xlsFormSheets(def: FormDefinition, options: XlsFormBookOptions =
     if (appearance) values['appearance'] = appearance;
     if (q.defaultValue !== undefined && q.defaultValue !== null) values['default'] = stringifyDefaultValue(q.defaultValue);
     if (q.rules?.enableIf === 'false') values['read only'] = 'yes';
+    if (q.disabled) values['disabled'] = 'yes';
+    if (q.responseNote) values['response_note'] = q.responseNote;
+    if (q.publishable) values['publishable'] = 'yes';
+    if (q.minimumSeconds !== undefined) values['minimum_seconds'] = String(q.minimumSeconds);
+    if (q.workbookNote) values['note'] = q.workbookNote;
     for (const [key, value] of Object.entries(q.source?.columns ?? {})) values[key] = value;
     pushRow(values);
   };
 
-  for (const group of def.groups) {
+  const emitGroupBegin = (group: Group): void => {
     const gvalues: Record<string, string> = { type: group.repeat ? 'begin_repeat' : 'begin_group', name: group.name };
     setLocalized(gvalues, 'label', group.label);
     if (group.appearance) gvalues['appearance'] = group.appearance;
     if (group.repeat && group.repeatCount) gvalues['repeat_count'] = group.repeatCount;
     for (const [key, value] of Object.entries(group.source?.columns ?? {})) gvalues[key] = value;
     pushRow(gvalues);
-    for (const q of byGroup.get(group.id) ?? []) emitQuestion(q);
+  };
+  const emitGroupEnd = (group: Group): void => {
     pushRow({ type: group.repeat ? 'end_repeat' : 'end_group' });
+  };
+
+  const ordered = def.groups.some((group) => group.order !== undefined)
+    || def.questions.some((question) => question.order !== undefined);
+  if (ordered) {
+    interface Event { order: number; rank: number; kind: 'begin' | 'end' | 'question'; group?: Group; question?: Question }
+    const events: Event[] = [];
+    def.groups.forEach((group, index) => {
+      const begin = group.order ?? index + 1;
+      const childOrders = (byGroup.get(group.id) ?? []).map((q) => q.order ?? begin);
+      const end = group.endOrder ?? Math.max(begin, ...childOrders) + 0.5;
+      events.push({ order: begin, rank: 0, kind: 'begin', group });
+      events.push({ order: end, rank: 2, kind: 'end', group });
+    });
+    for (const q of def.questions) {
+      events.push({ order: q.order ?? 1, rank: 1, kind: 'question', question: q });
+    }
+    events.sort((a, b) => a.order - b.order || a.rank - b.rank);
+    for (const event of events) {
+      if (event.kind === 'begin' && event.group) emitGroupBegin(event.group);
+      else if (event.kind === 'end' && event.group) emitGroupEnd(event.group);
+      else if (event.question) emitQuestion(event.question);
+    }
+  } else {
+    for (const group of def.groups) {
+      emitGroupBegin(group);
+      for (const q of byGroup.get(group.id) ?? []) emitQuestion(q);
+      emitGroupEnd(group);
+    }
+    for (const q of byGroup.get('') ?? []) emitQuestion(q);
   }
-  for (const q of byGroup.get('') ?? []) emitQuestion(q);
   for (const key of byGroup.keys()) {
     if (key !== '' && !def.groups.some((g) => g.id === key)) {
       notes.push({ kind: 'dropped', message: `questions referencing unknown group "${key}" were written as top-level questions` });
@@ -961,10 +1133,18 @@ export function xlsFormSheets(def: FormDefinition, options: XlsFormBookOptions =
   for (const list of Object.values(allLists)) {
     for (const c of list) for (const key of Object.keys(c.extra ?? {})) if (!extraKeys.includes(key)) extraKeys.push(key);
   }
+  const filterKeys = ['filter', 'filter2', 'filter3', 'filter4', 'filter5'];
+  const presentFilters = filterKeys.filter((key) => extraKeys.includes(key));
+  const otherExtras = [...extraKeys.filter((key) => !filterKeys.includes(key) && key !== 'image')].sort();
 
-  const choiceColumns: OutColumn[] = [{ base: 'list_name' }, { base: 'name' }, { base: 'label' }];
+  const choiceColumns: OutColumn[] = [
+    { base: 'list_name' }, { base: 'label' }, { base: 'value' }, { base: 'image' },
+  ];
+  if (presentFilters.length === 0) choiceColumns.push({ base: 'filter' });
+  else for (const key of presentFilters) choiceColumns.push({ base: key });
   for (const l of others) choiceColumns.push({ base: 'label', lang: l });
-  for (const key of extraKeys) choiceColumns.push({ base: key });
+  for (const l of others) choiceColumns.push({ base: 'image', lang: l });
+  for (const key of otherExtras) choiceColumns.push({ base: key });
 
   const choiceRows: string[][] = [choiceColumns.map(columnLabel)];
   for (const listName of Object.keys(allLists).sort()) {
@@ -973,9 +1153,13 @@ export function xlsFormSheets(def: FormDefinition, options: XlsFormBookOptions =
         notes.push({ kind: 'dropped', message: `choice with an empty value in list "${listName}" was skipped (XLSForm has no representation for it)` });
         continue;
       }
-      const values: Record<string, string> = { list_name: listName, name: choice.value };
+      const values: Record<string, string> = { list_name: listName, value: choice.value };
       for (const [lang, text] of Object.entries(choice.label ?? {})) {
-        values[lang === defaultLanguage ? 'label' : `label::${lang}`] = text;
+        values[lang === defaultLanguage ? 'label' : `label:${lang}`] = text;
+      }
+      if (choice.image) values['image'] = choice.image;
+      for (const [lang, image] of Object.entries(choice.images ?? {})) {
+        if (image !== '') values[`image:${lang}`] = image;
       }
       for (const [key, value] of Object.entries(choice.extra ?? {})) values[key] = value;
       choiceRows.push(choiceColumns.map((col) => values[columnLabel(col)] ?? ''));

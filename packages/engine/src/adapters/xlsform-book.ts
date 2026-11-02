@@ -19,10 +19,10 @@
 import type { CellValue, OutSheet, StyleBook } from './xlsx.js';
 
 /** Yellow: the parser reads these columns when it judges an upload. */
-const YELLOW = 'FFFFF2CC';
+const YELLOW = 'FFFFFF00';
 const YELLOW_HEADER = 'FFFFE699';
 /** Peach: a row that opens or closes a group or repeat. */
-const PEACH = 'FFFCE4D6';
+const PEACH = 'FFFDE9D9';
 /** Green: a row whose answer comes from a choice list. */
 const GREEN = 'FFE2EFDA';
 const NAVY = 'FF1F2A37';
@@ -43,11 +43,18 @@ export const XLSFORM_STYLES: StyleBook = {
   helpCode: { bold: true, color: INK, border: true, vertical: 'top' },
 };
 
-const KEY_BASES = new Set(['name', 'constraint_message', 'relevant', 'relevance', 'choice_filter']);
-const KEY_HEADERS = new Set(['name', 'constraint_message', 'relevant', 'relevance', 'choice_filter']);
+const KEY_BASES = new Set([
+  'name', 'constraint_message', 'constraint message', 'relevant', 'relevance', 'choice_filter',
+]);
+const KEY_HEADERS = new Set(KEY_BASES);
 
 function baseOf(header: string): string {
-  return header.trim().toLowerCase().split('::')[0] ?? header;
+  const raw = header.trim().toLowerCase();
+  const at = raw.indexOf('::');
+  if (at !== -1) return raw.slice(0, at).trim();
+  const colon = raw.lastIndexOf(':');
+  if (colon > 0 && !raw.startsWith('media:')) return raw.slice(0, colon).trim();
+  return raw;
 }
 
 function isKeyColumn(header: string): boolean {
@@ -65,7 +72,7 @@ function surveyWidths(headers: string[]): number[] {
     if (base === 'type') return 20;
     if (base === 'name') return 24;
     if (base === 'label' || base === 'hint') return 44;
-    if (base === 'constraint_message' || base === 'required_message') return 38;
+    if (base === 'constraint_message' || base === 'constraint message' || base === 'required_message' || base === 'required message') return 38;
     if (base === 'constraint' || base === 'relevant' || base === 'relevance') return 32;
     if (base === 'calculation' || base === 'choice_filter') return 30;
     if (base === 'repeat_count' || base === 'appearance' || base === 'default') return 18;
@@ -104,15 +111,18 @@ function styleSurvey(sheet: OutSheet): OutSheet {
 }
 
 function styleChoices(sheet: OutSheet): OutSheet {
+  const headers = (sheet.rows[0] ?? []).map((cell) => String(cell ?? ''));
+  const keyHeaders = new Set(['list_name', 'value', 'name', 'filter', 'filter2', 'filter3', 'filter4', 'filter5']);
   const styles = sheet.rows.map((row, index) =>
     row.map((cell, column) => {
-      if (index === 0) return column < 2 ? 'keyHeader' : 'header';
-      if (column === 0) return 'key';
+      const key = keyHeaders.has(headers[column] ?? '');
+      if (index === 0) return key ? 'keyHeader' : 'header';
+      if (key) return 'key';
       if (cell === '' || cell === null) return null;
       return 'body';
     }),
   );
-  return { ...sheet, styles, widths: [24, 24, 44], freeze: { rows: 1, columns: 2 } };
+  return { ...sheet, styles, widths: headers.map((header) => header.startsWith('label') ? 40 : 22), freeze: { rows: 1, columns: 2 } };
 }
 
 function styleSettings(sheet: OutSheet): OutSheet {

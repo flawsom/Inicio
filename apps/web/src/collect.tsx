@@ -155,6 +155,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
     return new URLSearchParams(window.location.search).get('enumerator')?.trim() || undefined;
   }, []);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
+  const [pluginMetadata, setPluginMetadata] = useState<Record<string, string>>({});
   const [draft, setDraft] = useState<StoredDraft | null>(null);
   const [status, setStatus] = useState<string>('in_progress');
   const [problems, setProblems] = useState<{ missing: string[]; invalid: string[] }>({ missing: [], invalid: [] });
@@ -207,17 +208,25 @@ export function Collect({ token }: { token: string }): JSX.Element {
   const transport = useMemo<Transport>(
     () => ({
       async start(t, clientId, payload) {
-        const res = await api.startResponse(t, clientId, payload.answers, payload.base, payload.caseid, payload.enumerator);
+        const res = await api.startResponse(
+          t,
+          clientId,
+          payload.answers,
+          payload.base,
+          payload.caseid,
+          payload.enumerator,
+          payload.pluginMetadata,
+        );
         setOnline(true);
         return { responseId: res.responseId, status: res.status as StoredDraft['status'] };
       },
       async save(t, responseId, payload) {
-        const res = await api.saveResponse(t, responseId, payload.answers, payload.base, payload.paradata);
+        const res = await api.saveResponse(t, responseId, payload.answers, payload.base, payload.paradata, payload.pluginMetadata);
         setOnline(true);
         return res;
       },
       async submit(t, responseId, payload) {
-        const res = await api.submitResponse(t, responseId, payload.answers, payload.base, payload.paradata);
+        const res = await api.submitResponse(t, responseId, payload.answers, payload.base, payload.paradata, payload.pluginMetadata);
         setOnline(true);
         return { status: res.status as StoredDraft['status'] };
       },
@@ -320,6 +329,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
       if (cancelled) return;
       setDraft(local);
       setAnswers(local.answers);
+      setPluginMetadata(local.pluginMetadata ?? {});
       setStatus(local.status);
 
       // Paint from the cached definition first: it is what makes the form usable
@@ -349,8 +359,13 @@ export function Collect({ token }: { token: string }): JSX.Element {
         if (local.responseId) {
           const server = await api.resumeResponse(token, local.responseId);
           if (!cancelled && server.status) {
-            local = resolveResume(local, { answers: server.answers ?? {}, status: server.status as StoredDraft['status'] });
+            local = resolveResume(local, {
+              answers: server.answers ?? {},
+              status: server.status as StoredDraft['status'],
+              ...(server.pluginMetadata !== undefined ? { pluginMetadata: server.pluginMetadata } : {}),
+            });
             if (server.caseid && local.caseid !== server.caseid) local = { ...local, caseid: server.caseid };
+            setPluginMetadata(local.pluginMetadata ?? {});
             if (server.datasets) setDatasets(server.datasets);
             await store.putDraft(local);
             setDraft(local);
@@ -491,7 +506,21 @@ export function Collect({ token }: { token: string }): JSX.Element {
     if (!store) return;
     // Persist before anything else: the device is the only copy until the server
     // acknowledges, and that must not depend on a timer or a network.
-    void recordAnswers(store, token, next, [name], recorderRef.current?.paradata()).then((saved) => {
+    void recordAnswers(store, token, next, [name], recorderRef.current?.paradata(), pluginMetadata).then((saved) => {
+      setDraft(saved);
+    });
+    scheduleFlush(1200);
+  };
+
+  /** `custom-specify-other` text is not an answer; it travels with the field. */
+  const updateMetadata = (name: string, value: string): void => {
+    const next = { ...pluginMetadata };
+    if (value === '') delete next[name];
+    else next[name] = value;
+    setPluginMetadata(next);
+    const store = storeRef.current;
+    if (!store) return;
+    void recordAnswers(store, token, answersRef.current, [name], recorderRef.current?.paradata(), next).then((saved) => {
       setDraft(saved);
     });
     scheduleFlush(1200);
@@ -629,6 +658,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
       }
       setDraft(result.draft);
       setAnswers(result.draft.answers);
+      setPluginMetadata(result.draft.pluginMetadata ?? {});
       setStatus(result.draft.status);
       setCopyNote('Restored the saved copy. Anything it was still holding will be sent now.');
       void flush().then(() => retryAttachments());
@@ -645,7 +675,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
     setProblems({ missing: [], invalid: [] });
     try {
       await uploadAuditClips();
-      await requestSubmit(store, token, answers, Object.keys(answers), recorderRef.current?.paradata());
+      await requestSubmit(store, token, answers, Object.keys(answers), recorderRef.current?.paradata(), pluginMetadata);
       const result = await flush();
       if (result && result.missing.length === 0 && result.invalid.length === 0) {
         setStatus(result.status);
@@ -714,7 +744,9 @@ export function Collect({ token }: { token: string }): JSX.Element {
       definition={definition}
       datasets={datasets}
       answers={answers}
+      pluginMetadata={pluginMetadata}
       onChange={update}
+      onPluginMetadataChange={updateMetadata}
       onFieldVisible={noteFieldVisible}
       attachments={attachments ?? undefined}
       onAttachFile={attachFile}

@@ -50,6 +50,8 @@ export interface StoredDraft {
   dirty: string[];
   /** Field timings, kept with the draft so they survive a reload. */
   paradata?: Paradata;
+  /** SurveyCTO plug-in metadata, keyed by field name. */
+  pluginMetadata?: Record<string, string>;
   status: 'in_progress' | 'submitted' | 'screened_out' | 'quota_full';
   updatedAt: string;
   /** When the server last confirmed this draft. */
@@ -82,6 +84,7 @@ export interface PendingPayload {
   answers: Record<string, unknown>;
   base: Record<string, unknown>;
   paradata?: Paradata;
+  pluginMetadata?: Record<string, string>;
   /** Only the create call uses these; saves and submits already know the response. */
   caseid?: string;
   enumerator?: string;

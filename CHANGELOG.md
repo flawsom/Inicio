@@ -11,6 +11,19 @@ what changed and why.
 
 ### Added
 
+- **Word questionnaires compile into the same authoring model as XLSForm.** A `.docx` upload is now accepted
+  by both `POST /forms` and `POST /forms/:formId/import`. The compiler reads WordprocessingML directly, carries
+  the `PROJECT:` title and eight paradata rows, and reports each of its 12 extraction rules as applied, partial
+  or not detected. Statement grids become one select per statement inside a `field-list` group with `label` and
+  `list-nolabel` appearances; NCCS grids, brand cascades, rankings, rotations, age post-codes, screener gates
+  and audit fields are recognised rather than flattened into plain text. A request carrying both a workbook and
+  a Word file is refused instead of one source silently winning.
+- **SurveyCTO `custom-specify-other` metadata survives the whole response lifecycle.** The respondent form
+  renders the inline "Please specify" box from the appearance, writes `selectedChoices|verbatim` (with
+  multi-select choices separated by spaces), and the API stores it under `response.meta.pluginMetadata` with no
+  migration. The value is returned on resume, carried by offline drafts and their outbox, and cleared when the
+  last text is erased. The compiled `_oth` calculate reads `plug-in-metadata()` but is gated on the other option
+  being selected, so stale text cannot leak into a later response.
 - **The rate limiter is durable, so a ceiling means something on a serverless deployment.** `@fastify/rate-limit`
   was registered with its default store, a per-process LRU map, which is the one thing a limit must not be here:
   the API runs as a function whose process is recycled between requests, so each instance counted from zero and

@@ -3,7 +3,9 @@ export {
   ExpressionError, tokenize, parse, evaluate, runExpression, collectRefs, collectBareNames, truthy,
   type Expr, type BinaryOp, type EvalContext,
 } from './expression.js';
-export { evaluateForm, effectiveValue, dependencies, filterChoices, type QuestionState, type FormEvaluation, type EvaluateOptions } from './evaluate.js';
+export {
+  evaluateForm, effectiveValue, dependencies, filterChoices, orderChoices, randomizedAppearance,
+  otherSpecifyCode, type QuestionState, type FormEvaluation, type EvaluateOptions } from './evaluate.js';
 export {
   datasetContext, lookupDataset, findCase, findEnumerator,
   type DatasetRow, type DatasetTable, type DatasetContext,
@@ -27,6 +29,11 @@ export {
 } from './audit.js';
 export { readWorkbook, writeWorkbook, colName, colIndex, escapeXml, decodeXml, type CellValue, type OutSheet, type Sheet, type Workbook } from './adapters/xlsx.js';
 export { diffDefinitions, type DefinitionDiff } from './diff.js';
+export { readDocx, docxText, parseParagraph, parseTable, type DocxBlock, type DocxCell, type DocxDocument, type DocxParagraph, type DocxTable } from './compiler/docx.js';
+export {
+  compileDocx, compileDocxDocument, extractQuestionnaire, compilerRuleNames, COMPILER_RULES,
+  type DocxCompileOptions, type DocxCompileResult, type CompilerDiagnostic, type CompilerRuleStatus,
+} from './compiler/docx-compiler.js';
 export {
   detectOutliers, frequencyReport, tTestMean, twoSampleTTest, chiSquareTest, formatP, normalCdf,
   type OutlierReport, type FrequencyFinding, type MeanTestReport, type ChiSquareReport,

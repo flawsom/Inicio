@@ -1099,11 +1099,15 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
       for (let i = 0; i < bytes.length; i += 8192) {
         binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
       }
+      const isDocx = /\.docx$/i.test(file.name);
       const res = await fetch(`/api/v1/forms/${form.id}/import`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ xlsformBase64: btoa(binary), versionId: selected?.status === 'draft' ? selected.id : null }),
+        body: JSON.stringify({
+          [isDocx ? 'docxBase64' : 'xlsformBase64']: btoa(binary),
+          versionId: selected?.status === 'draft' ? selected.id : null,
+        }),
       });
       const body = (await res.json().catch(() => null)) as ImportResult | null;
       if (!res.ok) {
@@ -1203,12 +1207,12 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
               {selected?.status === 'published' ? 'Already published' : 'Publish this version'}
             </button>
             <button type="button" className="ghost" onClick={() => fileInput.current?.click()}>
-              Import .xlsx (XLSForm)
+              Import .xlsx or .docx
             </button>
             <input
               ref={fileInput}
               type="file"
-              accept=".xlsx"
+              accept=".xlsx,.docx"
               style={{ display: 'none' }}
               onChange={(e) => {
                 const file = e.target.files?.[0];
@@ -2296,7 +2300,13 @@ function Workspace({ me, onSignedOut }: { me: Me; onSignedOut: () => void }): JS
       let binary = '';
       const bytes = new Uint8Array(buffer);
       for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-      const res = await api.createForm({ orgId, name: file.name.replace(/\.xlsx$/i, ''), xlsformBase64: btoa(binary) });
+      const isDocx = /\.docx$/i.test(file.name);
+      const name = file.name.replace(/\.(xlsx|docx)$/i, '');
+      const res = await api.createForm({
+        orgId,
+        name,
+        ...(isDocx ? { docxBase64: btoa(binary) } : { xlsformBase64: btoa(binary) }),
+      });
       setFormId(res.form.id);
       setSideNotice({ kind: 'ok', text: `Imported "${file.name}". Review it, then publish to start collecting.` });
       reloadForms();
@@ -2378,12 +2388,12 @@ function Workspace({ me, onSignedOut }: { me: Me; onSignedOut: () => void }): JS
           Create form
         </button>
         <button type="button" className="ghost" onClick={() => fileInput.current?.click()} disabled={!orgId}>
-          Create from .xlsx
+          Create from .xlsx or .docx
         </button>
         <input
           ref={fileInput}
           type="file"
-          accept=".xlsx"
+          accept=".xlsx,.docx"
           style={{ display: 'none' }}
           onChange={(e) => {
             const file = e.target.files?.[0];

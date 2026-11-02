@@ -88,7 +88,7 @@ Status legend: **shipped** is in this repository now, **building** is this chang
 | Automated QC | 9 statistical checks, nightly report, critical flags, group comparisons | Speeding, straight-lining, duplicate and manual flags | **Shipped:** IQR outliers, too-frequent and too-infrequent shares, one-sample and Welch group-mean tests, chi-squared group distributions, exclusions and explicit thresholds |
 | Exports | XLSX, CSV, SAV, Stata templates, attachments, correction log | CSV bundle, XLSX, JSON, SAV, DTA, codebook | **Shipped**, with a different correction-log design |
 | Enumerator management | Enumerator dataset, `enumerator` field type, identity, auto-publish | No enumerator identity | **Shipped:** enumerator datasets, `enumerator` question type, validation on start and identity stored with the response |
-| Field plug-ins | Attached zip, `custom-*` appearance, expression parameters | XLSForm appearance preserved, no plug-in runtime | **Later** |
+| Field plug-ins | Attached zip, `custom-*` appearance, expression parameters | XLSForm appearance preserved; `custom-specify-other` metadata is extracted and persisted; no plug-in runtime | **Partial** |
 | CATI and telephony | Call management, phone-call log functions, WhatsApp plug-in | No telephony | **Later** |
 | AI transcription and translation | Paid AI features over audio | No AI features | **Later**, and only with evidence-linked output |
 | Encryption | Encrypted forms, publishable fields, private-key export | TLS and RLS, no client-side form encryption | **Later** |
@@ -114,7 +114,7 @@ A field team needs to interview a known sample, preload what is already known ab
 - No role or enumerator assignment rules.
 - No dynamic `search()` lists yet.
 - No review and correction yet.
-- No field plug-ins, CATI, encryption or AI.
+- No third-party field plug-ins execute, and no CATI, encryption or AI.
 
 These are not forgotten. They are ordered in section 7.
 

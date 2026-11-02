@@ -32,6 +32,18 @@ export interface EvaluateOptions {
    * `once(random())` is drawn once rather than on every evaluation.
    */
   onceValues?: Record<string, unknown>;
+  /** SurveyCTO plug-in metadata, keyed by field name. */
+  pluginMetadata?: Record<string, string>;
+  /** Device snapshot for `device-info()`. */
+  deviceInfo?: Record<string, unknown> | string;
+  /** Interview start, used by `duration()`. */
+  startedAt?: Date | string | number;
+  /** Evaluation clock, used by `duration()` and deterministic tests. */
+  now?: Date | string | number;
+  /** Server-measured duration, when available. */
+  durationSeconds?: number;
+  /** Seed for the `randomized(0,k)` appearance. */
+  randomSeed?: number;
 }
 
 /** Build the static label map `choice-label()` reads, once per evaluation. */
@@ -96,6 +108,12 @@ export function evaluateForm(
     variables: options.variables,
     datasets: options.datasets,
     choiceLabels,
+    pluginMetadata: options.pluginMetadata,
+    deviceInfo: options.deviceInfo,
+    startedAt: options.startedAt,
+    now: options.now,
+    durationSeconds: options.durationSeconds,
+    onceValues: options.onceValues,
     current,
   });
 
@@ -243,6 +261,51 @@ function dynamicSearchSource(question: Question): string | null {
   return null;
 }
 
+/** The SurveyCTO `randomized(start, anchors)` appearance, if present. */
+export function randomizedAppearance(question: Question): { anchors: number } | null {
+  const match = /\brandomized\s*\(\s*\d+\s*,\s*(\d+)\s*\)/.exec(question.appearance ?? '');
+  if (!match) return null;
+  return { anchors: Math.max(0, Number.parseInt(match[1] ?? '0', 10)) };
+}
+
+/** The code inside `custom-specify-other(other='99')`, if present. */
+export function otherSpecifyCode(question: Question): string | null {
+  const match = /\bcustom-specify-other\s*\(\s*other\s*=\s*['"]([^'"]+)['"]\s*\)/.exec(question.appearance ?? '');
+  return match?.[1] ?? null;
+}
+
+/** A small deterministic PRNG, so a shuffled option order can be replayed. */
+function seededRandom(seed: number): () => number {
+  let state = (seed >>> 0) || 0x9e3779b9;
+  return () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    return (state >>> 0) / 0x1_0000_0000;
+  };
+}
+
+/**
+ * Apply `randomized(0,k)` without moving the anchored last k options.
+ *
+ * No seed means no shuffle: a headless export or a test should be stable. The
+ * runtime passes the response's own seed, so the order is random per interview
+ * and identical when that interview is reopened.
+ */
+export function orderChoices(choices: Choice[], question: Question, seed?: number): Choice[] {
+  const rule = randomizedAppearance(question);
+  if (!rule || seed === undefined || choices.length <= 1) return choices;
+  const tailLength = Math.min(rule.anchors, choices.length);
+  const moving = choices.slice(0, choices.length - tailLength);
+  const anchored = choices.slice(choices.length - tailLength);
+  const random = seededRandom(seed);
+  for (let i = moving.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [moving[i], moving[j]] = [moving[j]!, moving[i]!];
+  }
+  return [...moving, ...anchored];
+}
+
 /**
  * The options a respondent may actually pick, after applying `choice_filter`
  * (XLSForm cascading selects: `state = ${state}`, where the bare name is a column on
@@ -298,25 +361,29 @@ export function filterChoices(
         };
       });
       const staticChoices = list.filter((choice) => /^\d+$/.test(choice.value));
-      return [...dynamic, ...staticChoices];
+      return orderChoices([...dynamic, ...staticChoices], q, options.randomSeed);
     }
   }
 
   const source = q.rules?.choiceFilter;
-  if (!source) return list;
+  if (!source) return orderChoices(list, q, options.randomSeed);
 
-  return list.filter((choice) =>
-    truthy(
-      safeEval(
-        source,
-        {
-          answers: effective,
-          variables: options.variables,
-          datasets: options.datasets,
-          attributes: choice.extra ?? {},
-        },
-        true,
+  return orderChoices(
+    list.filter((choice) =>
+      truthy(
+        safeEval(
+          source,
+          {
+            answers: effective,
+            variables: options.variables,
+            datasets: options.datasets,
+            attributes: choice.extra ?? {},
+          },
+          true,
+        ),
       ),
     ),
+    q,
+    options.randomSeed,
   );
 }

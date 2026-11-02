@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { strFromU8, unzipSync } from 'fflate';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { buildApp } from '../src/app.js';
 import { env } from '../src/env.js';
 import { PRIVACY, TERMS } from '../src/legal/documents.js';
@@ -35,6 +35,33 @@ const brokenDefinition: FormDefinition = {
     { id: 'q_ghost', name: 'ghosted', type: 'text', label: { en: 'Ghost' }, rules: { visibleIf: '${nowhere} = 1' } },
   ],
 };
+
+function minimalDocx(): Uint8Array {
+  const document =
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+    '<w:body>' +
+    '<w:p><w:r><w:t>Bounce - Rider Survey Instrument</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t>S1. Which city do you deliver in? SA</w:t></w:r></w:p>' +
+    '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Bengaluru</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>1</w:t></w:r></w:p></w:tc></w:tr>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>Delhi NCR</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>2</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
+    '<w:sectPr/></w:body></w:document>';
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '</Types>',
+    ),
+    '_rels/.rels': strToU8(
+      '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+        '</Relationships>',
+    ),
+    'word/document.xml': strToU8(document),
+  });
+}
 
 let app: FastifyInstance;
 
@@ -335,6 +362,49 @@ describe('cross-organisation isolation over HTTP', () => {
 });
 
 describe('authoring, publishing and the XLSForm round trip', () => {
+  it('creates a form from a Word questionnaire and reports the compiled version', async () => {
+    const owner = await signIn(`docx-${Date.now()}@example.com`);
+    const orgId = await createOrg(owner, 'Word upload org');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/forms',
+      headers: { cookie: owner.cookie },
+      payload: {
+        orgId,
+        name: 'Bounce rider',
+        title: 'BOUNCE',
+        docxBase64: Buffer.from(minimalDocx()).toString('base64'),
+      },
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    const created = res.json() as {
+      form: { id: string; xlsform_form_id?: string };
+      version: { id: string; definition: { questions: Array<{ name: string }> } };
+      validation: { errors: number };
+    };
+    expect(created.form.xlsform_form_id).toBe('bounce');
+    expect(created.version.definition.questions.some((question) => question.name === 's1')).toBe(true);
+    expect(created.validation.errors).toBe(0);
+  });
+
+  it('rejects a create request that carries two source files at once', async () => {
+    const owner = await signIn(`both-${Date.now()}@example.com`);
+    const orgId = await createOrg(owner, 'Ambiguous upload org');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/forms',
+      headers: { cookie: owner.cookie },
+      payload: {
+        orgId,
+        name: 'Two sources',
+        docxBase64: Buffer.from(minimalDocx()).toString('base64'),
+        xlsformBase64: Buffer.from('not a workbook').toString('base64'),
+      },
+    });
+    expect(res.statusCode, res.body).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'invalid_request' });
+  });
+
   it('blocks publishing an unanalysable definition and allows a valid one', async () => {
     const owner = await signIn(`pub-${Date.now()}@example.com`);
     const orgId = await createOrg(owner, 'Publishing Org');
@@ -707,6 +777,40 @@ describe('collection, live data and exports', () => {
     // rather than keeping an answer the respondent was never asked for.
     expect(stored.answers['reason']).toBeNull();
     expect(stored.answers['score']).toBe(7);
+  });
+
+  it('persists custom-specify-other metadata with the response and returns it on resume', async () => {
+    const { token } = await publishFreshForm('metadata');
+    const metadata = { consent: '99|Used only for this test' };
+    const started = await app.inject({
+      method: 'POST',
+      url: `/api/v1/collect/${token}/responses`,
+      payload: { metadata },
+    });
+    expect(started.statusCode, started.body).toBe(201);
+    const responseId = (started.json() as { responseId: string }).responseId;
+
+    const saved = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/collect/${token}/responses/${responseId}`,
+      payload: { answers: { consent: 'yes' }, metadata },
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+
+    const resumed = await app.inject({ method: 'GET', url: `/api/v1/collect/${token}/responses/${responseId}` });
+    expect(resumed.statusCode, resumed.body).toBe(200);
+    expect((resumed.json() as { pluginMetadata: Record<string, string> }).pluginMetadata).toEqual(metadata);
+
+    const cleared = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/collect/${token}/responses/${responseId}`,
+      payload: { answers: { consent: 'yes' }, metadata: {} },
+    });
+    expect(cleared.statusCode, cleared.body).toBe(200);
+    const after = await app.inject({ method: 'GET', url: `/api/v1/collect/${token}/responses/${responseId}` });
+    const afterBody = after.json() as { pluginMetadata?: Record<string, string> };
+    expect(afterBody.pluginMetadata).toEqual({});
+    expect('pluginMetadata' in afterBody).toBe(true);
   });
 
   it('exports a real bundle whose data matches the responses, and refuses .sav honestly', async () => {

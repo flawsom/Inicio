@@ -91,13 +91,29 @@ export function isDue(outbox: Outbox, now: number): boolean {
  * device's copy is kept whole — it may hold hours of field work — and the
  * server-side merge reconciles it on the next sync instead of a browser guessing.
  */
-export function resolveResume(local: StoredDraft, server: { answers: Record<string, unknown>; status: StoredDraft['status'] }): StoredDraft {
+export function resolveResume(
+  local: StoredDraft,
+  server: {
+    answers: Record<string, unknown>;
+    status: StoredDraft['status'];
+    /** Omitted when the server did not report metadata; an empty object clears it. */
+    pluginMetadata?: Record<string, string>;
+  },
+): StoredDraft {
   const pending = !isDrained(local.outbox);
+  const serverMetadata = server.pluginMetadata;
   return {
     ...local,
     answers: pending ? local.answers : { ...local.answers, ...server.answers },
     base: pending ? local.base : { ...local.base, ...server.answers },
     status: server.status !== 'in_progress' ? server.status : local.status,
+    ...(serverMetadata !== undefined
+      ? {
+          // While a save is pending the device map is complete and newer, so it wins
+          // whole: merging would resurrect a key the respondent just cleared.
+          pluginMetadata: pending ? local.pluginMetadata ?? serverMetadata : serverMetadata,
+        }
+      : {}),
   };
 }
 

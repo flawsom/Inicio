@@ -3,6 +3,7 @@ import {
   datasetContext,
   evaluateForm,
   filterChoices,
+  otherSpecifyCode,
   type DatasetTable,
   type FormDefinition,
   type Question,
@@ -74,8 +75,12 @@ export interface RespondentFormProps {
   /** Attached server datasets, so pulldata() works on the device as it does on the server. */
   datasets?: DatasetTable[];
   answers: Record<string, unknown>;
+  /** `custom-specify-other` metadata, keyed by field name. */
+  pluginMetadata?: Record<string, string>;
   /** Called on every edit. Whether that is persisted is the caller's business. */
   onChange: (name: string, value: unknown) => void;
+  /** Called when an inline other-specify text changes. */
+  onPluginMetadataChange?: (name: string, value: string) => void;
   /** Called when a control loses focus: the collection app flushes its queue here. */
   onFlush?: () => void;
   /**
@@ -117,7 +122,9 @@ export function RespondentForm({
   definition,
   datasets,
   answers,
+  pluginMetadata,
   onChange,
+  onPluginMetadataChange,
   onFlush,
   onFieldVisible,
   problems,
@@ -135,9 +142,23 @@ export function RespondentForm({
   // new object every render would redraw a random number every time the screen
   // repainted. The server keeps the authoritative copy in the response's answers.
   const onceValues = useRef<Record<string, unknown>>({});
+  const [localMetadata, setLocalMetadata] = useState<Record<string, string>>({});
+  const metadata = pluginMetadata ?? localMetadata;
+  const setMetadata = (name: string, value: string): void => {
+    if (onPluginMetadataChange) {
+      onPluginMetadataChange(name, value);
+      return;
+    }
+    setLocalMetadata((previous) => {
+      const next = { ...previous };
+      if (value === '') delete next[name];
+      else next[name] = value;
+      return next;
+    });
+  };
   const evaluation = useMemo(
-    () => evaluateForm(form, answers, { datasets: datasetSnapshot, onceValues: onceValues.current }),
-    [form, answers, datasetSnapshot],
+    () => evaluateForm(form, answers, { datasets: datasetSnapshot, onceValues: onceValues.current, pluginMetadata: metadata }),
+    [form, answers, datasetSnapshot, metadata],
   );
   // One effect for every visible question, not a hook per question: hooks cannot be
   // called in a loop, and the signature is what makes "newly visible" cheap to spot.
@@ -160,6 +181,33 @@ export function RespondentForm({
 
   const label = (question: Question): string =>
     question.label?.[definition.defaultLanguage] ?? Object.values(question.label ?? {})[0] ?? question.name;
+
+  const otherSpecify = (question: Question, value: unknown): JSX.Element | null => {
+    const code = otherSpecifyCode(question);
+    if (!code) return null;
+    const selected = Array.isArray(value) ? value.map(String) : [String(value ?? '')];
+    if (!selected.includes(code)) return null;
+    const stored = metadata[question.name] ?? '';
+    const separator = stored.indexOf('|');
+    const text = separator >= 0 ? stored.slice(separator + 1) : stored;
+    return (
+      <div className="field">
+        <label>Please specify</label>
+        <input
+          type="text"
+          value={text}
+          disabled={evaluation.states[question.name]?.enabled === false || evaluation.states[question.name]?.computed === true}
+          onChange={(event) => {
+            const verbatim = event.target.value;
+            // SurveyCTO stores every selected choice, not only the `other` code:
+            // `selectedChoices|verbatim`, with multi-select choices space-separated.
+            setMetadata(question.name, verbatim === '' ? '' : `${selected.join(' ')}|${verbatim}`);
+          }}
+          onBlur={onFlush}
+        />
+      </div>
+    );
+  };
 
   const questionInput = (question: Question): JSX.Element => {
     const value = evaluation.states[question.name]?.value;
@@ -337,19 +385,22 @@ export function RespondentForm({
           ? [{ value: 'yes', label: { en: 'Yes' } }, { value: 'no', label: { en: 'No' } }]
           : filterChoices(form, question, answers, { datasets: datasetSnapshot }).map((c) => ({ value: c.value, label: c.label }));
       return (
-        <select
-          value={typeof value === 'string' ? value : ''}
-          disabled={disabled}
-          onChange={(e) => onChange(question.name, e.target.value)}
-          onBlur={onFlush}
-        >
-          <option value="">- choose -</option>
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label?.[definition.defaultLanguage] ?? Object.values(option.label ?? {})[0] ?? option.value}
-            </option>
-          ))}
-        </select>
+        <>
+          <select
+            value={typeof value === 'string' ? value : ''}
+            disabled={disabled}
+            onChange={(e) => onChange(question.name, e.target.value)}
+            onBlur={onFlush}
+          >
+            <option value="">- choose -</option>
+            {options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label?.[definition.defaultLanguage] ?? Object.values(option.label ?? {})[0] ?? option.value}
+              </option>
+            ))}
+          </select>
+          {otherSpecify(question, value)}
+        </>
       );
     }
 
@@ -357,24 +408,27 @@ export function RespondentForm({
       const options = filterChoices(form, question, answers, { datasets: datasetSnapshot });
       const selected = Array.isArray(value) ? value.map(String) : [];
       return (
-        <div className="choices">
-          {options.map((option) => (
-            <label key={option.value} className="choice">
-              <input
-                type="checkbox"
-                checked={selected.includes(option.value)}
-                onChange={(e) =>
-                  onChange(
-                    question.name,
-                    e.target.checked ? [...selected, option.value] : selected.filter((v) => v !== option.value),
-                  )
-                }
-                onBlur={onFlush}
-              />
-              {option.label?.[definition.defaultLanguage] ?? Object.values(option.label ?? {})[0] ?? option.value}
-            </label>
-          ))}
-        </div>
+        <>
+          <div className="choices">
+            {options.map((option) => (
+              <label key={option.value} className="choice">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(option.value)}
+                  onChange={(e) =>
+                    onChange(
+                      question.name,
+                      e.target.checked ? [...selected, option.value] : selected.filter((v) => v !== option.value),
+                    )
+                  }
+                  onBlur={onFlush}
+                />
+                {option.label?.[definition.defaultLanguage] ?? Object.values(option.label ?? {})[0] ?? option.value}
+              </label>
+            ))}
+          </div>
+          {otherSpecify(question, value)}
+        </>
       );
     }
 
