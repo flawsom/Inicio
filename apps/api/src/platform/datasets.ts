@@ -9,6 +9,7 @@ import {
 import { HttpError } from './db.js';
 import { audit } from './guards.js';
 import { requireActor, withActorOrg } from './actors.js';
+import { emitWebhook } from './webhooks/dispatch.js';
 
 /**
  * Server datasets: the tables an instrument reads before it asks, and updates
@@ -33,13 +34,13 @@ const COLUMN_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const createSchema = z.object({
   code: z.string().trim().min(1).max(60).regex(CODE_RE, 'code must start with a letter and contain only letters, numbers and underscores'),
   name: z.string().trim().min(1).max(200),
-  kind: z.enum(['data', 'cases']).default('data'),
+  kind: z.enum(['data', 'cases', 'enumerators']).default('data'),
   uniqueField: z.string().trim().min(1).max(120).regex(COLUMN_RE, 'uniqueField must be a column name').default('id'),
 });
 
 const rowsSchema = z.object({
-  mode: z.enum(['replace', 'append', 'merge']).default('merge'),
-  rows: z.array(z.record(z.string(), z.unknown())).max(DATASET_MAX_ROWS),
+  mode: z.enum(['replace', 'append', 'merge', 'clear']).default('merge'),
+  rows: z.array(z.record(z.string(), z.unknown())).max(DATASET_MAX_ROWS).default([]),
 });
 
 const attachSchema = z.object({
@@ -54,7 +55,7 @@ interface DatasetDbRow {
   org_id: string;
   code: string;
   name: string;
-  kind: 'data' | 'cases';
+  kind: 'data' | 'cases' | 'enumerators';
   unique_field: string;
   columns: string[];
   created_at: Date;
@@ -223,7 +224,7 @@ export const platformDatasetRoutes: FastifyPluginAsync = async (app) => {
   /* ------------------------------------------------------------------ datasets */
 
   app.get('/orgs/:orgId/datasets', async (req: FastifyRequest<{ Params: { orgId: string } }>, reply: FastifyReply) => {
-    const actor = await requireActor(req);
+    const actor = await requireActor(req, { scope: 'datasets:read' });
     const datasets = await withActorOrg(actor, req.params.orgId, async (client) => {
       const { rows } = await client.query<DatasetDbRow>(
         `SELECT d.id, d.org_id, d.code, d.name, d.kind, d.unique_field, d.columns,
@@ -240,7 +241,7 @@ export const platformDatasetRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/orgs/:orgId/datasets', async (req: FastifyRequest<{ Params: { orgId: string } }>, reply: FastifyReply) => {
-    const actor = await requireActor(req);
+    const actor = await requireActor(req, { scope: 'datasets:write' });
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'invalid_request', issues: parsed.error.issues });
@@ -258,7 +259,13 @@ export const platformDatasetRoutes: FastifyPluginAsync = async (app) => {
              RETURNING id, org_id, code, name, kind, unique_field, columns, created_at, updated_at, archived_at`,
             [req.params.orgId, code, name, kind, uniqueField, actor.userId],
           );
-          return rows[0]!;
+          const created = rows[0]!;
+          await emitWebhook(client, req.params.orgId, 'dataset.created', {
+            datasetId: created.id,
+            code: created.code,
+            kind: created.kind,
+          });
+          return created;
         },
         { write: true },
       );
@@ -282,7 +289,7 @@ export const platformDatasetRoutes: FastifyPluginAsync = async (app) => {
       req: FastifyRequest<{ Params: { orgId: string; datasetId: string }; Querystring: { limit?: string; offset?: string } }>,
       reply: FastifyReply,
     ) => {
-      const actor = await requireActor(req);
+      const actor = await requireActor(req, { scope: 'datasets:read' });
       const limit = Math.min(500, Math.max(1, Number(req.query.limit ?? 100) || 100));
       const offset = Math.max(0, Number(req.query.offset ?? 0) || 0);
       const payload = await withActorOrg(actor, req.params.orgId, async (client) => {
@@ -313,13 +320,16 @@ export const platformDatasetRoutes: FastifyPluginAsync = async (app) => {
 
   app.put(
     '/orgs/:orgId/datasets/:datasetId/rows',
-    async (req: FastifyRequest<{ Params: { orgId: string; datasetId: string } }>, reply: FastifyReply) => {
-      const actor = await requireActor(req);
+    async (req: FastifyRequest<{ Params: { orgId: string; datasetId: string } }>, reply: FastifyReply) => {      const actor = await requireActor(req, { scope: 'datasets:write' });
+
       const parsed = rowsSchema.safeParse(req.body);
       if (!parsed.success) {
         return reply.code(400).send({ error: 'invalid_request', issues: parsed.error.issues });
       }
       const { mode } = parsed.data;
+      if (mode !== 'clear' && parsed.data.rows.length === 0) {
+        return reply.code(400).send({ error: 'empty_import', message: 'An import needs at least one row. Use clear to empty the dataset.' });
+      }
       const normalised = parsed.data.rows.map(normaliseRow);
       const keys = new Set<string>();
 
@@ -330,6 +340,18 @@ export const platformDatasetRoutes: FastifyPluginAsync = async (app) => {
           async (client) => {
             const dataset = await loadDataset(client, req.params.orgId, req.params.datasetId);
             await client.query(`SELECT id FROM server_dataset WHERE id = $1 FOR UPDATE`, [dataset.id]);
+
+            if (mode === 'clear') {
+              await client.query(`DELETE FROM server_dataset_row WHERE dataset_id = $1`, [dataset.id]);
+              await client.query(`UPDATE server_dataset SET columns = '[]'::jsonb WHERE id = $1`, [dataset.id]);
+              await emitWebhook(client, req.params.orgId, 'dataset.changed', {
+                datasetId: dataset.id,
+                code: dataset.code,
+                mode,
+                total: 0,
+              });
+              return { imported: 0, total: 0, columns: [] };
+            }
 
             const importedColumns = inferColumns(normalised);
             const columns = mode === 'replace'
@@ -381,7 +403,15 @@ export const platformDatasetRoutes: FastifyPluginAsync = async (app) => {
               `SELECT count(*)::int AS n FROM server_dataset_row WHERE dataset_id = $1`,
               [dataset.id],
             );
-            return { imported: prepared.length, total: counted[0]?.n ?? 0, columns };
+            const total = counted[0]?.n ?? 0;
+            await emitWebhook(client, req.params.orgId, 'dataset.changed', {
+              datasetId: dataset.id,
+              code: dataset.code,
+              mode,
+              imported: prepared.length,
+              total,
+            });
+            return { imported: prepared.length, total, columns };
           },
           { write: true },
         );
@@ -404,7 +434,7 @@ export const platformDatasetRoutes: FastifyPluginAsync = async (app) => {
   app.delete(
     '/orgs/:orgId/datasets/:datasetId',
     async (req: FastifyRequest<{ Params: { orgId: string; datasetId: string } }>, reply: FastifyReply) => {
-      const actor = await requireActor(req);
+      const actor = await requireActor(req, { scope: 'datasets:write' });
       const archived = await withActorOrg(
         actor,
         req.params.orgId,
@@ -415,6 +445,9 @@ export const platformDatasetRoutes: FastifyPluginAsync = async (app) => {
               RETURNING id`,
             [req.params.datasetId, req.params.orgId],
           );
+          if (rows[0]) {
+            await emitWebhook(client, req.params.orgId, 'dataset.archived', { datasetId: rows[0].id });
+          }
           return rows[0] ?? null;
         },
         { write: true },
@@ -435,7 +468,7 @@ export const platformDatasetRoutes: FastifyPluginAsync = async (app) => {
       req: FastifyRequest<{ Params: { orgId: string; formId: string; versionId: string } }>,
       reply: FastifyReply,
     ) => {
-      const actor = await requireActor(req);
+      const actor = await requireActor(req, { scope: 'datasets:read' });
       const attachments = await withActorOrg(actor, req.params.orgId, async (client) => {
         const { rows } = await client.query<DatasetAttachmentRow>(
           `SELECT fd.id, fd.dataset_id, d.code AS dataset_code, d.name AS dataset_name,
@@ -460,7 +493,7 @@ export const platformDatasetRoutes: FastifyPluginAsync = async (app) => {
       req: FastifyRequest<{ Params: { orgId: string; formId: string; versionId: string } }>,
       reply: FastifyReply,
     ) => {
-      const actor = await requireActor(req);
+      const actor = await requireActor(req, { scope: 'datasets:write' });
       const parsed = attachSchema.safeParse(req.body);
       if (!parsed.success) {
         return reply.code(400).send({ error: 'invalid_request', issues: parsed.error.issues });
@@ -521,7 +554,14 @@ export const platformDatasetRoutes: FastifyPluginAsync = async (app) => {
               JSON.stringify(dataset.columns ?? []),
             ],
           );
-          return rows[0]!;
+          const attached = rows[0]!;
+          await emitWebhook(client, req.params.orgId, 'dataset.attached', {
+            datasetId: attached.dataset_id,
+            formId: req.params.formId,
+            versionId: req.params.versionId,
+            publish: attached.publish,
+          });
+          return attached;
         },
         { write: true },
       );
@@ -542,7 +582,7 @@ export const platformDatasetRoutes: FastifyPluginAsync = async (app) => {
       req: FastifyRequest<{ Params: { orgId: string; formId: string; versionId: string; attachmentId: string } }>,
       reply: FastifyReply,
     ) => {
-      const actor = await requireActor(req);
+      const actor = await requireActor(req, { scope: 'datasets:write' });
       const removed = await withActorOrg(
         actor,
         req.params.orgId,
@@ -553,6 +593,14 @@ export const platformDatasetRoutes: FastifyPluginAsync = async (app) => {
               RETURNING id`,
             [req.params.attachmentId, req.params.orgId, req.params.formId, req.params.versionId],
           );
+          if (rows[0]) {
+            await emitWebhook(client, req.params.orgId, 'dataset.detached', {
+              datasetId: null,
+              attachmentId: rows[0].id,
+              formId: req.params.formId,
+              versionId: req.params.versionId,
+            });
+          }
           return rows[0] ?? null;
         },
         { write: true },

@@ -44,6 +44,16 @@ describe('workbook validation', () => {
     expect(report.sheetNames).toEqual(['survey', 'choices', 'settings']);
   });
 
+  it('preserves a custom appearance but says the plug-in code will not run', () => {
+    const sheets = validSheets();
+    sheets[0]!.rows[2] = ['select_one colors', 'color', 'Favourite colour', 'yes', '', 'custom-qr minimal'];
+    const report = validateXlsFormSheets(sheets);
+    const warning = report.diagnostics.find((diagnostic) => diagnostic.code === 'field-plugin-not-supported');
+    expect(warning).toMatchObject({ severity: 'warning', row: 3, column: 'appearance' });
+    expect(warning?.message).toContain('custom-qr');
+    expect(report.errors).toBe(0);
+  });
+
   it('addresses a diagnostic by sheet, row and cell', () => {
     const sheets = validSheets();
     // A second question named `color`, with a reference to a question that does not exist.

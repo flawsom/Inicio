@@ -5,7 +5,7 @@ export {
 } from './expression.js';
 export { evaluateForm, effectiveValue, dependencies, filterChoices, type QuestionState, type FormEvaluation, type EvaluateOptions } from './evaluate.js';
 export {
-  datasetContext, lookupDataset, findCase,
+  datasetContext, lookupDataset, findCase, findEnumerator,
   type DatasetRow, type DatasetTable, type DatasetContext,
 } from './datasets.js';
 export { validateForm, isPublishable, type ValidationReport } from './validate.js';
@@ -15,7 +15,7 @@ export {
   type XlsFormBook, type XlsFormBookOptions,
 } from './adapters/xlsform.js';
 export {
-  validateXlsFormSheets, checkUpload, compareVersions,
+  validateXlsFormSheets, checkUpload, compareVersions, CUSTOM_APPEARANCE_ALLOWLIST,
   type Diagnostic, type DiagnosticSeverity, type WorkbookValidationReport,
   type UploadGuardInput, type UploadGuardResult,
 } from './adapters/xlsform-validate.js';
@@ -27,4 +27,8 @@ export {
 } from './audit.js';
 export { readWorkbook, writeWorkbook, colName, colIndex, escapeXml, decodeXml, type CellValue, type OutSheet, type Sheet, type Workbook } from './adapters/xlsx.js';
 export { diffDefinitions, type DefinitionDiff } from './diff.js';
+export {
+  detectOutliers, frequencyReport, tTestMean, twoSampleTTest, chiSquareTest, formatP, normalCdf,
+  type OutlierReport, type FrequencyFinding, type MeanTestReport, type ChiSquareReport,
+} from './qc.js';
 export * from './export/index.js';

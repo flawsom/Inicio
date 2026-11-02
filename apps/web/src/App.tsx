@@ -57,6 +57,15 @@ const Collect = lazy(() => import('./collect').then((module) => ({ default: modu
 const CasesTab = lazy(() => import('./cases').then((module) => ({ default: module.CasesTab })));
 
 /**
+ * The review desk, in its own chunk.
+ *
+ * Review is a deliberate visit, not a number on the dashboard. Keeping the queue,
+ * correction editor and history out of the console entry lets the quality screen
+ * open quickly and still gives the reviewer the whole record when they ask for it.
+ */
+const ReviewPanel = lazy(() => import('./reviews').then((module) => ({ default: module.ReviewPanel })));
+
+/**
  * The workspace shell: sign in, pick an organisation, author a form, publish it,
  * collect responses, watch the numbers arrive, export.
  *
@@ -1483,6 +1492,9 @@ export function QualityTab({ formId, orgId }: { formId: string; orgId: string })
     deps: [orgId, formId, status],
   });
   const [reviewing, setReviewing] = useState<string | null>(null);
+  const [reviewResponseId, setReviewResponseId] = useState<string | null>(null);
+  const [qcReport, setQcReport] = useState<import('./api').QcReport | null>(null);
+  const [qcBusy, setQcBusy] = useState(false);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -1505,6 +1517,26 @@ export function QualityTab({ formId, orgId }: { formId: string; orgId: string })
       setError(err instanceof ApiError ? (err.message ?? err.code) : 'that did not work');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const runQc = async (): Promise<void> => {
+    setQcBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await api.qcScan(orgId, formId);
+      setQcReport(await api.qcReport(orgId, formId));
+      setNotice(
+        result.flagged === 0
+          ? `Scanned ${result.scanned} response${result.scanned === 1 ? '' : 's'}: no new statistical findings.`
+          : `Scanned ${result.scanned} response${result.scanned === 1 ? '' : 's'}: ${result.flagged} statistical finding${result.flagged === 1 ? '' : 's'} added to the queue.`,
+      );
+      queue.reload();
+    } catch (err) {
+      setError(err instanceof ApiError ? (err.message ?? err.code) : 'statistical QC did not run');
+    } finally {
+      setQcBusy(false);
     }
   };
 
@@ -1545,6 +1577,9 @@ export function QualityTab({ formId, orgId }: { formId: string; orgId: string })
         <button type="button" className="ghost" onClick={() => void scan()} disabled={busy}>
           Scan for duplicates
         </button>
+        <button type="button" className="ghost" onClick={() => void runQc()} disabled={qcBusy}>
+          {qcBusy ? 'Running QC…' : 'Run statistical QC'}
+        </button>
       </div>
 
       {error && <p className="error small">{error}</p>}
@@ -1555,6 +1590,47 @@ export function QualityTab({ formId, orgId }: { formId: string; orgId: string })
         appear when you scan. Every threshold is stated: see the Quality tab&rsquo;s legend in the API
         (<code>GET /api/v1/flag-kinds</code>).
       </p>
+
+      {qcReport && (
+        <div className="card stack">
+          <div className="row wrap">
+            <strong className="small grow">Statistical QC report</strong>
+            <span className="muted small">{qcReport.scanned} responses scanned</span>
+          </div>
+          <div className="row wrap">
+            {Object.entries(qcReport.byKind).map(([kind, count]) => (
+              <span key={kind} className="pill">{kind.replace('_', ' ')}: {count}</span>
+            ))}
+            {Object.keys(qcReport.byKind).length === 0 && <span className="muted small">No findings.</span>}
+          </div>
+          {qcReport.findings.length > 0 && (
+            <table>
+              <thead><tr><th>Finding</th><th>Question</th><th>Evidence</th></tr></thead>
+              <tbody>
+                {qcReport.findings.slice(0, 25).map((finding, index) => (
+                  <tr key={`${finding.responseId}-${finding.kind}-${finding.questionId ?? ''}-${index}`}>
+                    <td className="small">{finding.kind.replace('_', ' ')}<div className="muted">{finding.severity}</div></td>
+                    <td className="small mono">{finding.questionId ?? '(response)'}</td>
+                    <td className="small">
+                      {Object.entries(finding.detail).map(([key, value]) => (
+                        <div key={key}><span className="muted">{key}:</span> {typeof value === 'object' ? JSON.stringify(value) : String(value)}</div>
+                      ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <p className="muted small">
+            The IQR multiple, the frequency shares and the significance level are the server's defaults. The same report
+            is available from <code>GET /api/v1/orgs/:orgId/forms/:formId/qc/report</code>.
+          </p>
+        </div>
+      )}
+
+      <Suspense fallback={<p className="muted small">Opening the review desk…</p>}>
+        <ReviewPanel orgId={orgId} formId={formId} initialResponseId={reviewResponseId} />
+      </Suspense>
 
       <div className="card">
         {flags.length === 0 ? (
@@ -1592,6 +1668,9 @@ export function QualityTab({ formId, orgId }: { formId: string; orgId: string })
                   <td className="small muted">
                     <code>{flag.responseId.slice(0, 8)}</code>
                     <div>{new Date(flag.createdAt).toLocaleString()}</div>
+                    <button type="button" className="ghost" onClick={() => setReviewResponseId(flag.responseId)}>
+                      Open review
+                    </button>
                   </td>
                   <td>
                     {flag.status !== 'open' ? (

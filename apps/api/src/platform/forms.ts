@@ -966,6 +966,28 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
           [form.id],
         );
 
+        // Corrections are a separate, append-only table. The data files carry the
+        // current value; this is the evidence of what changed, who changed it and why.
+        const { rows: corrections } = await client.query<{
+          response_id: string;
+          question: string;
+          from_value: unknown;
+          to_value: unknown;
+          reason: string | null;
+          actor: string | null;
+          created_at: Date;
+        }>(
+          `SELECT l.response_id, c->>'questionId' AS question,
+                  c->'from' AS from_value, c->'to' AS to_value,
+                  c->>'reason' AS reason, u.email AS actor, l.created_at
+             FROM review_log l
+             LEFT JOIN app_user u ON u.id = l.actor_id
+             CROSS JOIN LATERAL jsonb_array_elements(l.corrections) c
+            WHERE l.form_id = $1 AND l.action = 'correction'
+            ORDER BY l.created_at, l.id`,
+          [form.id],
+        );
+
         // question_id holds the stable question NAME, so an export never depends on
         // database row ids surviving.
         const responses = raw.map((row) => ({
@@ -988,6 +1010,15 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
           // including when that version went live. A null here used to mean
           // "published" and "never published" looked identical in meta.json.
           publishedAt: published.published_at?.toISOString() ?? null,
+          corrections: corrections.map((entry) => ({
+            response: entry.response_id,
+            question: entry.question,
+            from: entry.from_value,
+            to: entry.to_value,
+            reason: entry.reason,
+            actor: entry.actor,
+            at: entry.created_at.toISOString(),
+          })),
         });
         return { bundle, slug: form.slug };
       });

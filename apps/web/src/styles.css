@@ -1476,6 +1476,48 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
   .otpbox { height: 52px; font-size: 20px; }
 }
 
+/* ------------------------------------------------------------ review and corrections */
+
+.review-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.6fr);
+  gap: var(--sp-3);
+  align-items: start;
+}
+
+.review-list { display: grid; gap: var(--sp-1); max-height: 70vh; overflow: auto; }
+
+.review-item {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: var(--sp-2);
+  border: 1px solid var(--line-control, currentColor);
+  border-radius: var(--radius-sm, 8px);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.review-item.active { border-color: var(--live, currentColor); }
+.review-item:hover { background: rgba(127, 127, 127, 0.08); }
+
+.review-answer { display: grid; gap: 2px; }
+.review-answer input { width: 100%; }
+
+.review-log {
+  display: grid;
+  gap: 2px;
+  padding: var(--sp-2);
+  border-left: 2px solid var(--line-control, currentColor);
+}
+
+@media (max-width: 820px) {
+  .review-grid { grid-template-columns: minmax(0, 1fr); }
+  .review-list { max-height: 40vh; }
+}
+
 /* ----------------------------------------------------------------- the builder */
 
 /*

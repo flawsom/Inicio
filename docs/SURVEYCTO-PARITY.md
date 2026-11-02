@@ -1,7 +1,7 @@
 # SurveyCTO parity and the Inicio program layer
 
 **Status:** active design and implementation record.
-**Last reviewed:** 2026-11-01.
+**Last reviewed:** 2026-11-02.
 **Scope:** the operational features that make SurveyCTO a field-research platform, not only a form renderer.
 
 This document is the elephant. It holds the research, the decisions, the gaps against Inicio, and the build order. The implementation is deliberately smaller than the whole document: shipping one complete loop is worth more than ten half-features.
@@ -81,13 +81,13 @@ Status legend: **shipped** is in this repository now, **building** is this chang
 |---|---|---|---|
 | Server datasets | Three dataset types (data, cases, enumerators), attach to forms, replace/append/merge, unique IDs, offline updates | No dataset model | **Shipped:** organisation datasets, CSV rows, version attachment, case preload, submission write-back |
 | `pulldata()` | `pulldata('dataset','column','lookup',key)`, with indexed `_key` lookup columns | Imported and noted, never evaluated | **Shipped:** pure engine function with a dataset context, identical on client and server |
-| Scripting functions | `choice-label`, `selected-at`, `join`, `count-if`, `sum-if`, `format-date-time`, `once`, `indexed-repeat`, `rank-index`, geo and phone functions | Core XPath only | **Shipped:** pure string, list, select, numeric, date and dataset functions. `once`, repeat aggregates and phone/geo functions are **next** |
-| Dynamic choice lists | `search()` appearance over a dataset with contains, starts-with, matches and filters | Static choices and `choice_filter` | **Next:** dataset-backed choices with the same client/server resolver |
+| Scripting functions | `choice-label`, `selected-at`, `join`, `count-if`, `sum-if`, `format-date-time`, `once`, `indexed-repeat`, `rank-index`, geo and phone functions | Core XPath only | **Shipped:** pure string, list, select, numeric, date and dataset functions, dynamic `search()` choices and persisted `once()`. Repeat-aware `indexed-repeat`, `rank-index`, repeat aggregates and device phone/geo context are **next** |
+| Dynamic choice lists | `search()` appearance over a dataset with contains, starts-with, matches and filters | Static choices and `choice_filter` | **Shipped:** dataset-backed choices resolved by the same client/server evaluator |
 | Cases | `id`, `label`, `formids`, `users`, `roles`, `enumerators`, `sortby`, offline case transfers | `response.caseid` column only | **Shipped:** case dataset, case link, case id on the response, preload and write-back. Assignment, offline transfer and role filters are **next** |
-| Review and correction | Hold all, some or none; QC-triggered; classify GOOD/OKAY/POOR/FAKE; correct with comments; approve or reject; correction log | Review fields and append-only log exist in migration 0012; no API or console | **Next:** review queue, corrections with validation, full audit trail |
-| Automated QC | 9 statistical checks, nightly report, critical flags, group comparisons | Speeding, straight-lining, duplicate and manual flags | **Next:** outlier, too-frequent and group-difference checks with evidence |
+| Review and correction | Hold all, some or none; QC-triggered; classify GOOD/OKAY/POOR/FAKE; correct with comments; approve or reject; correction log | Review fields and append-only log exist in migration 0012; no API or console | **Shipped:** queue, claim, comment, approve, reject, reopen, validated corrections, stale-edit refusal and append-only history |
+| Automated QC | 9 statistical checks, nightly report, critical flags, group comparisons | Speeding, straight-lining, duplicate and manual flags | **Shipped:** IQR outliers, too-frequent and too-infrequent shares, one-sample and Welch group-mean tests, chi-squared group distributions, exclusions and explicit thresholds |
 | Exports | XLSX, CSV, SAV, Stata templates, attachments, correction log | CSV bundle, XLSX, JSON, SAV, DTA, codebook | **Shipped**, with a different correction-log design |
-| Enumerator management | Enumerator dataset, `enumerator` field type, identity, auto-publish | No enumerator identity | **Next** |
+| Enumerator management | Enumerator dataset, `enumerator` field type, identity, auto-publish | No enumerator identity | **Shipped:** enumerator datasets, `enumerator` question type, validation on start and identity stored with the response |
 | Field plug-ins | Attached zip, `custom-*` appearance, expression parameters | XLSForm appearance preserved, no plug-in runtime | **Later** |
 | CATI and telephony | Call management, phone-call log functions, WhatsApp plug-in | No telephony | **Later** |
 | AI transcription and translation | Paid AI features over audio | No AI features | **Later**, and only with evidence-linked output |
@@ -253,41 +253,52 @@ No separate admin app. The console is already where forms, responses and quality
 
 ### Phase B: review and correction
 
-- [ ] `GET /orgs/:orgId/forms/:formId/review` queue with state, age and flags
-- [ ] `POST .../responses/:responseId/review` for claim, comment, approve, reject, reopen
-- [ ] Correction endpoint that records `{ questionId, from, to }` and appends `review_log`
-- [ ] Validate corrections against the published definition instead of writing raw values
-- [ ] Decide whether corrections apply before or after export, and make the choice visible
-- [ ] Quality tab review queue, correction diff and append-only history
-- [ ] Tests for illegal transitions, stale corrections and cross-tenant review access
+- [x] `GET /orgs/:orgId/forms/:formId/review` queue with state, age and flags
+- [x] `POST .../responses/:responseId/review` for claim, comment, approve, reject, reopen
+- [x] Correction endpoint that records `{ questionId, from, to }` and appends `review_log`
+- [x] Validate corrections against the published definition instead of writing raw values
+- [x] Corrections change the live answers; exports carry both the corrected data and the log
+- [x] Quality tab review queue, correction diff and append-only history
+- [x] Tests for illegal transitions, stale corrections and cross-tenant review access
 
 ### Phase C: dynamic data and scripting depth
 
-- [ ] `search()` appearance with contains, starts-with, ends-with and matches
-- [ ] Dataset-backed choice lists, client and server
-- [ ] `once()` with a persisted per-response value
+- [x] `search()` appearance with contains, starts-with, ends-with and matches
+- [x] Dataset-backed choice lists, client and server
+- [x] `once()` with a persisted per-response value
 - [ ] Repeat-aware `count-if`, `sum-if`, `indexed-repeat`, `rank-index`
 - [ ] `calculate_here` segment timing
 - [ ] External CSV attachments as a first-class dataset import
-- [ ] Enumerator dataset and `enumerator` field type
+- [x] Enumerator dataset and `enumerator` field type
 
 ### Phase D: statistical quality
 
-- [ ] Outlier check with an explicit IQR multiple and exclusion values
-- [ ] Too-frequent and too-infrequent checks with a stated share
-- [ ] Mean and group-mean checks with the test and p-value recorded
-- [ ] Group-distribution check with a chi-squared result
-- [ ] QC report as a dataset, with a stable warning id
-- [ ] Critical flags route submissions into the review queue
+- [x] Outlier check with an explicit IQR multiple and exclusion values
+- [x] Too-frequent and too-infrequent checks with a stated share
+- [x] Mean and group-mean checks with the test and p-value recorded
+- [x] Group-distribution check with a chi-squared result
+- [x] QC report with stable evidence, plus a scan that writes ordinary flags
+- [x] Critical flags route submissions into the review queue
 
 ### Phase E: interoperability and delivery
 
-- [ ] Dataset REST API with append, merge and clear modes
-- [ ] Webhook events for dataset changes
-- [ ] Publish to Google Sheets or an HTTPS endpoint
-- [ ] Correction log in CSV, XLSX, SAV and DTA exports
+- [x] Dataset REST API with append, merge and clear modes, including scoped API-key access
+- [x] Webhook events for dataset creation, changes, archival and attachment
+- [ ] Publish to Google Sheets
+- [x] HTTPS publishing through signed webhooks plus the scoped dataset API
+- [x] Correction log in CSV, XLSX and JSON exports
+- [x] Correction log beside SAV and DTA when their codebook bundle is requested
+- [ ] Correction log inside a bare SAV or DTA file (the format carries one table)
 - [ ] Field plug-in packaging and a safe `custom-*` allowlist
-- [ ] Self-host documentation for the API, database and object store
+- [x] Self-host documentation for the API, database and object store
+
+## 7a. What is still deliberately not claimed
+
+- Repeat groups are modelled and round-trip through XLSForm, but answers are still one flat map per response. `indexed-repeat`, repeat-aware aggregates and `rank-index` need per-instance answer storage, so they are not faked.
+- `calculate_here` segment timing is not a separate paradata stream. Field timings are captured per question and shown in review.
+- Google Sheets is not a built-in OAuth publisher. A webhook receiver or Apps Script can read the scoped dataset API and write a sheet, and then the integration is visibly the operator's own credential.
+- Field plug-ins do not execute. A `custom-*` appearance is preserved through an XLSForm round trip, and no third-party code is loaded.
+- Encryption at rest, CATI, telephony and AI transcription are outside this build.
 
 ## 8. Security and correctness rules
 

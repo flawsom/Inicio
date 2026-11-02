@@ -137,8 +137,8 @@ export function CasesTab({
   );
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
-  const [newKind, setNewKind] = useState<'data' | 'cases'>('cases');
-  const [mode, setMode] = useState<'merge' | 'replace' | 'append'>('merge');
+  const [newKind, setNewKind] = useState<'data' | 'cases' | 'enumerators'>('cases');
+  const [mode, setMode] = useState<'merge' | 'replace' | 'append' | 'clear'>('merge');
   const [keyQuestion, setKeyQuestion] = useState('caseid');
   const [publish, setPublish] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -251,13 +251,23 @@ export function CasesTab({
     });
   };
 
+  const clearRows = (): Promise<void> =>
+    run(async () => {
+      if (!selectedId) throw new Error('Choose a dataset first.');
+      const result = await api.importDatasetRows(orgId, selectedId, { mode: 'clear', rows: [] });
+      await loadDatasets();
+      await loadDetail(selectedId);
+      setNotice(`Cleared the dataset. It now holds ${result.total} rows.`);
+    });
+
   const attach = (): Promise<void> =>
     run(async () => {
       if (!versionId || !selectedId) throw new Error('Choose a dataset and a version first.');
+      const isEnumeratorList = selected?.kind === 'enumerators';
       const result = await api.attachDataset(orgId, formId, versionId, {
         datasetId: selectedId,
-        keyQuestion: keyQuestion.trim() || null,
-        publish,
+        keyQuestion: isEnumeratorList ? null : keyQuestion.trim() || null,
+        publish: isEnumeratorList ? false : publish,
       });
       await loadAttachments(versionId);
       const mapping = Object.keys(result.dataset.mapping).length;
@@ -365,9 +375,13 @@ export function CasesTab({
             </label>
             <label className="small muted">
               Kind
-              <select value={newKind} onChange={(event) => setNewKind(event.target.value as 'data' | 'cases')}>
+              <select
+                value={newKind}
+                onChange={(event) => setNewKind(event.target.value as 'data' | 'cases' | 'enumerators')}
+              >
                 <option value="cases">Cases</option>
                 <option value="data">Data</option>
+                <option value="enumerators">Enumerators</option>
               </select>
             </label>
             <button type="button" onClick={() => void create()} disabled={busy || newCode.trim() === ''}>
@@ -382,16 +396,20 @@ export function CasesTab({
           <div className="row wrap">
             <label className="small muted">
               On import
-              <select value={mode} onChange={(event) => setMode(event.target.value as 'merge' | 'replace' | 'append')}>
+              <select value={mode} onChange={(event) => setMode(event.target.value as 'merge' | 'replace' | 'append' | 'clear')}>
                 <option value="merge">Merge by key</option>
                 <option value="replace">Replace every row</option>
                 <option value="append">Append only new keys</option>
+                <option value="clear">Clear all rows</option>
               </select>
             </label>
             <label className="small muted">
               CSV file
-              <input type="file" accept=".csv,text/csv" onChange={importFile} disabled={!selectedId || busy} />
+              <input type="file" accept=".csv,text/csv" onChange={importFile} disabled={!selectedId || busy || mode === 'clear'} />
             </label>
+            <button type="button" className="ghost" onClick={() => void clearRows()} disabled={!selectedId || busy}>
+              Clear rows
+            </button>
           </div>
           <p className="muted small">
             The first row is the header. Values are stored as text, exactly as they appear in the file. A duplicate key

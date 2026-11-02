@@ -40,6 +40,8 @@ export const API_SCOPES = [
   'analytics:read',
   'flags:read',
   'flags:write',
+  'datasets:read',
+  'datasets:write',
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
@@ -67,6 +69,8 @@ export const ENFORCED_SCOPES: readonly ApiScope[] = [
   'analytics:read',
   'flags:read',
   'flags:write',
+  'datasets:read',
+  'datasets:write',
 ];
 
 /** Shown in the console and in the docs, so a scope is never a magic string. */
@@ -77,6 +81,8 @@ export const API_SCOPE_DETAIL: Record<ApiScope, string> = {
   'analytics:read': 'Read tallies, timelines and sync-conflict counts.',
   'flags:read': 'Read the quality-flag queue.',
   'flags:write': 'Resolve, dismiss or raise a quality flag.',
+  'datasets:read': 'Read server datasets, their rows and their form attachments.',
+  'datasets:write': 'Create datasets, import or clear rows, archive them and attach them to versions.',
 };
 
 export const apiScopeSchema = z.enum(API_SCOPES);

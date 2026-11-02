@@ -21,7 +21,7 @@ export interface DatasetTable {
   /** The name `pulldata('code', ...)` uses. Case-insensitive on lookup. */
   code: string;
   name?: string;
-  kind?: 'data' | 'cases';
+  kind?: 'data' | 'cases' | 'enumerators';
   uniqueField: string;
   columns: string[];
   rows: DatasetRow[];
@@ -76,6 +76,25 @@ export function lookupDataset(
     if (String(candidate).trim() === wanted) {
       return row[valueField] === undefined ? null : row[valueField];
     }
+  }
+  return null;
+}
+
+/** The enumerator row an id or code names, or null. */
+export function findEnumerator(
+  datasets: DatasetContext | undefined,
+  enumeratorId: string,
+): { table: DatasetTable; row: DatasetRow } | null {
+  if (!datasets) return null;
+  const wanted = enumeratorId.trim().toLowerCase();
+  if (wanted === '') return null;
+  for (const table of Object.values(datasets)) {
+    if (table.kind !== 'enumerators') continue;
+    const row = table.rows.find((candidate) =>
+      [candidate[table.uniqueField], candidate['name'], candidate['code']]
+        .some((value) => String(value ?? '').trim().toLowerCase() === wanted),
+    );
+    if (row) return { table, row };
   }
   return null;
 }

@@ -80,6 +80,22 @@ export interface MissingCell {
   code: MissingCode;
 }
 
+/**
+ * One correction, in the order it was recorded. The current answer is what the data
+ * files carry; this table is the evidence of what changed, who changed it and why.
+ * It is a separate table rather than extra columns because a response can be
+ * corrected more than once.
+ */
+export interface ExportCorrection {
+  response: string;
+  question: string;
+  from: unknown;
+  to: unknown;
+  reason: string | null;
+  actor: string | null;
+  at: string;
+}
+
 export type Cell = string | number | boolean | null;
 
 export interface ExportDataset {
@@ -88,6 +104,8 @@ export interface ExportDataset {
   missing: MissingCell[];
   codebook: CodebookEntry[];
   valueLabels: Array<{ variable: string; code: string; label: string }>;
+  /** Empty unless the caller supplied review history. */
+  corrections: ExportCorrection[];
   meta: {
     title: string;
     formVersion: number | null;
@@ -113,6 +131,8 @@ export interface BuildOptions {
   formVersion?: number | null;
   publishedAt?: string | null;
   now?: Date;
+  /** Append-only correction history, when the caller can read it. */
+  corrections?: ExportCorrection[];
 }
 
 const META_COLUMNS: ExportColumn[] = [
@@ -388,6 +408,7 @@ export function buildDataset(def: FormDefinition, responses: ExportResponse[], o
     missing,
     codebook,
     valueLabels,
+    corrections: options.corrections ?? [],
     meta: {
       title: def.title,
       formVersion: options.formVersion ?? null,

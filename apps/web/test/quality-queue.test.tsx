@@ -101,6 +101,7 @@ beforeEach(() => {
     calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : null });
     if (method === 'POST' && url.endsWith('/flags/scan')) return json({ flagged: scanned });
     if (method === 'PATCH') return json({ flag: { ...queueBody.flags[0], status: 'resolved' } });
+    if (url.includes('/review')) return json({ responses: [], summary: {}, limit: 100, offset: 0 });
     return json(queueBody);
   }) as unknown as typeof fetch);
 });
@@ -139,7 +140,7 @@ async function mount(): Promise<void> {
   });
 }
 
-const reads = (): Call[] => calls.filter((c) => c.method === 'GET');
+const reads = (): Call[] => calls.filter((c) => c.method === 'GET' && c.url.includes('/flags'));
 
 describe('the quality queue', () => {
   it('reads the open queue for this form, and shows the evidence behind each finding', async () => {

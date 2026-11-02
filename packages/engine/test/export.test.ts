@@ -206,6 +206,36 @@ describe('export bundle', () => {
     expect(bundle.dataset.meta.missingCount).toBe(bundle.dataset.missing.length);
   });
 
+  it('carries the append-only correction log in csv, xlsx and json', () => {
+    const corrections = [
+      {
+        response: 'r1',
+        question: 'name',
+        from: 'Amina',
+        to: 'Amina K.',
+        reason: 'Checked against the consent form.',
+        actor: 'supervisor@example.org',
+        at: '2026-10-02T09:00:00.000Z',
+      },
+    ];
+    const csv = buildExportBundle(def, responses, { formats: ['csv'], corrections });
+    expect(csv.files.map((file) => file.name)).toContain('corrections.csv');
+    const correctionsCsv = strFromU8(csv.files.find((file) => file.name === 'corrections.csv')!.bytes);
+    expect(correctionsCsv).toContain('response_id,question,from,to,reason,actor,corrected_at');
+    expect(correctionsCsv).toContain('Amina K.');
+
+    const xlsx = buildExportBundle(def, responses, { formats: ['xlsx'], corrections });
+    const book = readWorkbook(xlsx.files[0]!.bytes);
+    expect(book.sheets.map((sheet) => sheet.name)).toContain('corrections');
+
+    const json = buildExportBundle(def, responses, { formats: ['json'], corrections });
+    const parsed = JSON.parse(strFromU8(json.files[0]!.bytes)) as { corrections: unknown[] };
+    expect(parsed.corrections).toHaveLength(1);
+
+    const plain = buildExportBundle(def, responses, { formats: ['csv'] });
+    expect(plain.files.map((file) => file.name)).not.toContain('corrections.csv');
+  });
+
   it('refuses statistical formats with a reason instead of shipping a broken file', () => {
     const bundle = buildExportBundle(def, responses, { formats: ['csv'] });
     expect(bundle.unavailable.map((u) => u.format)).toEqual(['sav', 'dta']);

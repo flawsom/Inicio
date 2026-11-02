@@ -322,12 +322,102 @@ export interface FlagQueue {
   summary: { byStatus: Record<string, number>; byKind: Record<string, number>; open: number };
 }
 
+/** One response waiting for, or already given, a review decision. */
+export interface ReviewItem {
+  id: string;
+  status: string;
+  reviewState: 'none' | 'pending' | 'approved' | 'rejected';
+  claimedBy: string | null;
+  claimedById: string | null;
+  claimedAt: string | null;
+  reviewedBy: string | null;
+  reviewedById: string | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  startedAt: string;
+  submittedAt: string | null;
+  durationSeconds: number | null;
+  enumeratorRef: string | null;
+  caseid: string | null;
+  formVersion: number;
+  formVersionId: string;
+  flags: { total: number; severe: number; open: number };
+  answerCount: number;
+}
+
+export interface ReviewCorrection {
+  questionId: string;
+  from?: unknown;
+  to: unknown;
+  reason?: string;
+}
+
+export interface ReviewLogEntry {
+  id: string;
+  action: 'claim' | 'comment' | 'correction' | 'approve' | 'reject' | 'reopen' | 'assign';
+  from_state: string | null;
+  to_state: string | null;
+  note: string | null;
+  corrections: ReviewCorrection[];
+  created_at: string;
+  actor: string | null;
+}
+
+export interface ReviewFlag {
+  id: string;
+  question_id: string | null;
+  kind: string;
+  severity: string;
+  detail: Record<string, unknown>;
+  status: string;
+  note: string | null;
+  created_at: string;
+}
+
+export interface ReviewTiming {
+  field_name: string;
+  total_seconds: string | number;
+  first_seen_seconds: string | number | null;
+  visits: number;
+}
+
+export interface ReviewDetail {
+  response: ReviewItem;
+  answers: Record<string, unknown>;
+  definition: Definition;
+  log: ReviewLogEntry[];
+  flags: ReviewFlag[];
+  timings: ReviewTiming[];
+}
+
+export interface ReviewQueue {
+  responses: ReviewItem[];
+  summary: Record<string, { total: number; claimed: number; unclaimed: number }>;
+  limit: number;
+  offset: number;
+}
+
+export interface QcFinding {
+  responseId: string;
+  kind: string;
+  severity: string;
+  questionId: string | null;
+  detail: Record<string, unknown>;
+}
+
+export interface QcReport {
+  findings: QcFinding[];
+  scanned: number;
+  byKind: Record<string, number>;
+  options: Record<string, unknown>;
+}
+
 /** An organisation-level table an instrument can read before and write after. */
 export interface DatasetSummary {
   id: string;
   code: string;
   name: string;
-  kind: 'data' | 'cases';
+  kind: 'data' | 'cases' | 'enumerators';
   uniqueField: string;
   columns: string[];
   rowCount: number;
@@ -555,6 +645,7 @@ export const api = {
     answers: Record<string, unknown> = {},
     base: Record<string, unknown> = {},
     caseid?: string,
+    enumerator?: string,
   ) =>
     request<{
       responseId: string;
@@ -567,6 +658,7 @@ export const api = {
       answers,
       base,
       ...(caseid ? { caseid } : {}),
+      ...(enumerator ? { enumerator } : {}),
     }),
   saveResponse: (
     token: string,
@@ -660,12 +752,70 @@ export const api = {
   /** The whole-form detector: exact duplicate submissions. Idempotent. */
   scanFlags: (orgId: string, formId: string) =>
     request<{ flagged: number }>('POST', `/orgs/${orgId}/forms/${formId}/flags/scan`),
+  qcReport: (orgId: string, formId: string, params: { outlierMultiple?: number; minShare?: number; maxShare?: number; alpha?: number } = {}) => {
+    const query = new URLSearchParams();
+    if (params.outlierMultiple !== undefined) query.set('outlierMultiple', String(params.outlierMultiple));
+    if (params.minShare !== undefined) query.set('minShare', String(params.minShare));
+    if (params.maxShare !== undefined) query.set('maxShare', String(params.maxShare));
+    if (params.alpha !== undefined) query.set('alpha', String(params.alpha));
+    return request<QcReport>('GET', `/orgs/${orgId}/forms/${formId}/qc/report${query.size > 0 ? `?${query}` : ''}`);
+  },
+  qcScan: (
+    orgId: string,
+    formId: string,
+    params: { outlierMultiple?: number; minShare?: number; maxShare?: number; alpha?: number; exclusions?: number[] } = {},
+  ) =>
+    request<{ scanned: number; flagged: number; byKind: Record<string, number>; options: Record<string, unknown> }>(
+      'POST',
+      `/orgs/${orgId}/forms/${formId}/qc/scan`,
+      params,
+    ),
+
+  // ------------------------------------------------------------ review queue
+
+  reviewQueue: (
+    orgId: string,
+    formId: string,
+    options: { state?: 'pending' | 'approved' | 'rejected' | 'none' | 'all'; limit?: number; offset?: number } = {},
+  ) => {
+    const params = new URLSearchParams();
+    if (options.state) params.set('state', options.state);
+    if (options.limit) params.set('limit', String(options.limit));
+    if (options.offset) params.set('offset', String(options.offset));
+    const query = params.toString();
+    return request<ReviewQueue>('GET', `/orgs/${orgId}/forms/${formId}/review${query ? `?${query}` : ''}`);
+  },
+  reviewResponse: (orgId: string, formId: string, responseId: string) =>
+    request<ReviewDetail>('GET', `/orgs/${orgId}/forms/${formId}/review/${responseId}`),
+  reviewAction: (
+    orgId: string,
+    formId: string,
+    responseId: string,
+    payload: { action: 'claim' | 'comment' | 'approve' | 'reject' | 'reopen'; note?: string },
+  ) =>
+    request<{ response: ReviewItem }>(
+      'POST',
+      `/orgs/${orgId}/forms/${formId}/review/${responseId}`,
+      payload,
+    ),
+  correctResponse: (
+    orgId: string,
+    formId: string,
+    responseId: string,
+    payload: { corrections: ReviewCorrection[]; note?: string },
+  ) =>
+    request<{
+      responseId: string;
+      reviewState: string;
+      corrections: ReviewCorrection[];
+      answers: Record<string, unknown>;
+    }>('POST', `/orgs/${orgId}/forms/${formId}/review/${responseId}/corrections`, payload),
 
   // -------------------------------------------------------------- datasets
 
   datasets: (orgId: string) =>
     request<{ datasets: DatasetSummary[] }>('GET', `/orgs/${orgId}/datasets`),
-  createDataset: (orgId: string, payload: { code: string; name: string; kind: 'data' | 'cases'; uniqueField?: string }) =>
+  createDataset: (orgId: string, payload: { code: string; name: string; kind: 'data' | 'cases' | 'enumerators'; uniqueField?: string }) =>
     request<{ dataset: DatasetSummary }>('POST', `/orgs/${orgId}/datasets`, payload),
   dataset: (orgId: string, datasetId: string, options: { limit?: number; offset?: number } = {}) =>
     request<{
@@ -681,7 +831,7 @@ export const api = {
   importDatasetRows: (
     orgId: string,
     datasetId: string,
-    payload: { mode: 'replace' | 'append' | 'merge'; rows: Array<Record<string, unknown>> },
+    payload: { mode: 'replace' | 'append' | 'merge' | 'clear'; rows: Array<Record<string, unknown>> },
   ) =>
     request<{ mode: string; imported: number; total: number; columns: string[] }>(
       'PUT',

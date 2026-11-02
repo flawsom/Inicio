@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { datasetContext } from '../src/datasets.js';
 import { evaluateForm, filterChoices } from '../src/evaluate.js';
 import type { FormDefinition, Question } from '../src/types.js';
 
@@ -84,6 +85,19 @@ describe('form evaluation', () => {
     expect(res.states['info']!.required).toBe(false);
   });
 
+  it('keeps a once() calculation at its first value across evaluations', () => {
+    const def = form([
+      q({ name: 'a', type: 'integer' }),
+      q({ name: 'draw', type: 'calculate', rules: { calculate: 'once(${a} * 2)' } }),
+    ]);
+    const onceValues: Record<string, unknown> = {};
+    expect(evaluateForm(def, { a: 1 }, { onceValues }).states['draw']!.value).toBe(2);
+    expect(evaluateForm(def, { a: 5 }, { onceValues }).states['draw']!.value).toBe(2);
+    // Without a store the expression is still evaluated, which is the behaviour a
+    // preview needs; persistence is the caller's promise, not the engine's.
+    expect(evaluateForm(def, { a: 5 }).states['draw']!.value).toBe(10);
+  });
+
   it('marks a visible-but-read-only question via enableIf', () => {
     const def = form([
       q({ name: 'mode', type: 'text' }),
@@ -134,5 +148,64 @@ describe('cascading selects (choice_filter)', () => {
 
   it('returns the whole list when the question has no filter', () => {
     expect(filterChoices(def, def.questions[0]!, {}).map((c) => c.value)).toEqual(['ka', 'mh']);
+  });
+});
+
+describe('dynamic choice lists (search)', () => {
+  const def = form(
+    [
+      q({ name: 'search_text', type: 'text' }),
+      q({
+        name: 'person',
+        type: 'select_one',
+        appearance: "quick search('people', 'contains', 'name', ${search_text})",
+        choices: { listName: 'people' },
+      }),
+    ],
+    {
+      choiceLists: {
+        people: [{ value: 'person_id', label: { en: 'name' }, extra: { image: 'photo' } }],
+      },
+    },
+  );
+  const datasets = datasetContext([
+    {
+      code: 'people',
+      uniqueField: 'person_id',
+      columns: ['person_id', 'name', 'village', 'sortby', 'photo'],
+      rows: [
+        { person_id: 'p2', name: 'Joseph', village: 'Mwanza', sortby: 2, photo: 'j.jpg' },
+        { person_id: 'p1', name: 'Amina', village: 'Kigoma', sortby: 1, photo: 'a.jpg' },
+        { person_id: 'p3', name: 'Amina', village: 'Kigoma', sortby: 3, photo: 'a2.jpg' },
+      ],
+    },
+  ]);
+
+  it('loads rows from the named dataset and uses the placeholder columns', () => {
+    const choices = filterChoices(def, def.questions[1]!, { search_text: 'am' }, { datasets });
+    expect(choices.map((choice) => choice.value)).toEqual(['p1', 'p3']);
+    expect(choices[0]).toMatchObject({ label: { en: 'Amina' }, image: 'a.jpg' });
+  });
+
+  it('supports startswith, endswith, matches and the extra exact filter', () => {
+    const question = def.questions[1]!;
+    const withAppearance = (appearance: string): Question => ({ ...question, appearance });
+    expect(filterChoices(def, withAppearance("search('people', 'startswith', 'name', ${search_text})"), { search_text: 'Jo' }, { datasets })
+      .map((choice) => choice.value)).toEqual(['p2']);
+    expect(filterChoices(def, withAppearance("search('people', 'endswith', 'name', ${search_text})"), { search_text: 'mina' }, { datasets })
+      .map((choice) => choice.value)).toEqual(['p1', 'p3']);
+    expect(filterChoices(def, withAppearance("search('people', 'matches', 'name', ${search_text})"), { search_text: 'Joseph' }, { datasets })
+      .map((choice) => choice.value)).toEqual(['p2']);
+    expect(filterChoices(
+      def,
+      withAppearance("search('people', 'contains', 'name', ${search_text}, 'village', 'Kigoma')"),
+      { search_text: '' },
+      { datasets },
+    ).map((choice) => choice.value)).toEqual(['p1', 'p3']);
+  });
+
+  it('returns no choices for a blank dataset or a search with no matches', () => {
+    expect(filterChoices(def, def.questions[1]!, { search_text: 'zzz' }, { datasets })).toEqual([]);
+    expect(filterChoices(def, def.questions[1]!, { search_text: '' }, {})).toEqual([]);
   });
 });

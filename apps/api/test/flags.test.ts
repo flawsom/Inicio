@@ -608,12 +608,23 @@ describe('quality flags and the flag queue', () => {
     expect(res.statusCode, res.body).toBe(200);
     const body = res.json() as {
       kinds: Array<{ kind: string; detail: string }>;
-      thresholds: { speeding: string; straightLining: string };
+      thresholds: { speeding: string; straightLining: string; groupTests: string };
     };
-    expect(body.kinds.map((k) => k.kind)).toEqual(['speeding', 'straight_lining', 'duplicate', 'manual']);
+    expect(body.kinds.map((k) => k.kind)).toEqual([
+      'speeding',
+      'straight_lining',
+      'duplicate',
+      'manual',
+      'outlier',
+      'too_frequent',
+      'too_infrequent',
+      'group_mean',
+      'group_distribution',
+    ]);
     // The numbers in the API are the numbers in the documentation of the rule.
     expect(body.thresholds.speeding).toContain('20s');
     expect(body.thresholds.straightLining).toContain('80%');
+    expect(body.thresholds.groupTests).toContain('0.05');
     // Each kind explains itself in a finished sentence, so the console never renders
     // a bare identifier where a reviewer needs words. (`manual`'s is the short one:
     // "Raised by a person." — a length floor here would be about the wording, not

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   datasetContext,
   evaluateForm,
@@ -131,8 +131,12 @@ export function RespondentForm({
 }: RespondentFormProps): JSX.Element {
   const form = definition as unknown as FormDefinition;
   const datasetSnapshot = useMemo(() => (datasets ? datasetContext(datasets) : undefined), [datasets]);
+  // `once()` is per interview, not per render. The map is deliberately a ref: a
+  // new object every render would redraw a random number every time the screen
+  // repainted. The server keeps the authoritative copy in the response's answers.
+  const onceValues = useRef<Record<string, unknown>>({});
   const evaluation = useMemo(
-    () => evaluateForm(form, answers, { datasets: datasetSnapshot }),
+    () => evaluateForm(form, answers, { datasets: datasetSnapshot, onceValues: onceValues.current }),
     [form, answers, datasetSnapshot],
   );
   // One effect for every visible question, not a hook per question: hooks cannot be
@@ -304,6 +308,26 @@ export function RespondentForm({
             {canLocate ? 'Use my location' : 'Location unavailable'}
           </button>
         </div>
+      );
+    }
+
+    if (question.type === 'enumerator') {
+      const table = datasets?.find((candidate) => candidate.kind === 'enumerators');
+      const rows = table?.rows ?? [];
+      return (
+        <select
+          value={typeof value === 'string' ? value : ''}
+          disabled={disabled}
+          onChange={(e) => onChange(question.name, e.target.value)}
+          onBlur={onFlush}
+        >
+          <option value="">- choose -</option>
+          {rows.map((row) => {
+            const id = String(row[table?.uniqueField ?? 'id'] ?? '');
+            const label = String(row['name'] ?? row['label'] ?? row['code'] ?? id);
+            return <option key={id} value={id}>{label}</option>;
+          })}
+        </select>
       );
     }
 

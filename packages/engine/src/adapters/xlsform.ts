@@ -92,7 +92,7 @@ const DIRECT: Record<string, QuestionType> = {
   image: 'image', photo: 'image', audio: 'audio', video: 'video', file: 'file',
   barcode: 'barcode',
   geopoint: 'geopoint', geotrace: 'geotrace', geoshape: 'geoshape',
-  note: 'note', calculate: 'calculate',
+  note: 'note', calculate: 'calculate', enumerator: 'enumerator',
 };
 
 /** ODK/Enketo metadata types: no user input, often device-supplied. */

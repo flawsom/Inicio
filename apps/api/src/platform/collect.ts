@@ -7,6 +7,7 @@ import {
   evaluateForm,
   evaluateSpeed,
   findCase,
+  findEnumerator,
   parseSpeedSpec,
   runExpression,
   truthy,
@@ -64,6 +65,8 @@ const startSchema = z.object({
   base: answersSchema.optional(),
   /** A case selected from a case list, or `?caseid=` on the link. */
   caseid: z.string().trim().min(1).max(200).optional(),
+  /** An enumerator id selected from an attached enumerator list. */
+  enumerator: z.string().trim().min(1).max(200).optional(),
   /** Panel links carry an opaque id/ticket from the query string. */
   embedded: z.record(z.string(), z.unknown()).optional(),
 });
@@ -233,7 +236,10 @@ export function planSync(
   current: Map<string, unknown>,
   datasets?: DatasetContext,
 ): SyncPlan {
-  const evaluation = evaluateForm(definition, incoming, { datasets });
+  // `once()` reads the values the server already stored, so a retried save keeps
+  // the first draw instead of computing a new random value on every request.
+  const onceValues = Object.fromEntries(current);
+  const evaluation = evaluateForm(definition, incoming, { datasets, onceValues });
   const entries: SyncEntry[] = [];
   const values: Record<string, unknown> = {};
   let conflicts = 0;
@@ -285,6 +291,14 @@ export function planSync(
   }
 
   return { entries, values, missing: evaluation.missing, invalid: evaluation.invalid, conflicts };
+}
+
+/** The enumerator id an answer names, if this form has an enumerator question. */
+function enumeratorAnswer(definition: FormDefinition, values: Record<string, unknown>): string | null {
+  const question = definition.questions.find((candidate) => candidate.type === 'enumerator');
+  if (!question) return null;
+  const value = values[question.name];
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
 
 async function readCurrent(client: PoolClient, responseId: string): Promise<Map<string, unknown>> {
@@ -549,6 +563,12 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
         if (caseId && Object.values(context).some((table) => table.kind === 'cases') && !findCase(context, caseId)) {
           throw new HttpError(422, 'unknown_case', 'That case is not in this form\'s case list. Check the case id and try again.');
         }
+        const requestedEnumerator = body.data.enumerator
+          ?? (typeof body.data.embedded?.['enumerator'] === 'string' ? body.data.embedded['enumerator'] : undefined);
+        const enumeratorRef = requestedEnumerator?.trim() || null;
+        if (enumeratorRef && Object.values(context).some((table) => table.kind === 'enumerators') && !findEnumerator(context, enumeratorRef)) {
+          throw new HttpError(422, 'unknown_enumerator', 'That enumerator is not in this form\'s enumerator list.');
+        }
 
         // `app.response_id` is already this id, so the collector policy lets the
         // lookup see exactly the one row that could be ours.
@@ -564,8 +584,8 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
         }
 
         const { rows: inserted } = await client.query<{ id: string }>(
-          `INSERT INTO response (id, org_id, form_id, form_version_id, status, meta, respondent_ref, client_uuid, caseid)
-           VALUES ($1, $2, $3, $4, 'in_progress', $5::jsonb, $6, $7, $8)
+          `INSERT INTO response (id, org_id, form_id, form_version_id, status, meta, respondent_ref, client_uuid, caseid, enumerator_ref)
+           VALUES ($1, $2, $3, $4, 'in_progress', $5::jsonb, $6, $7, $8, $9)
            ON CONFLICT (id) DO NOTHING
            RETURNING id`,
           [
@@ -577,6 +597,7 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
             typeof body.data.embedded?.['pid'] === 'string' ? String(body.data.embedded['pid']) : null,
             clientId ?? null,
             caseId,
+            enumeratorRef,
           ],
         );
 
@@ -604,7 +625,7 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
           const plan = planSync(version.definition, seeded, body.data.base, new Map(), context);
           await writeAnswers(client, link.org_id, responseId, plan);
         }
-        return { responseId, created: true, status: 'in_progress', caseid: caseId, form, datasets };
+        return { responseId, created: true, status: 'in_progress', caseid: caseId, enumeratorRef, form, datasets };
       });
       reply.header('cache-control', 'no-store');
       return reply.code(payload.created ? 201 : 200).send(payload);
@@ -619,8 +640,8 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
       const payload = await withCollector(link.org_id, req.params.responseId, async (client) => {
         const version = await publishedVersionOf(client, link);
         const datasets = await loadCollectDatasets(client, version.id);
-        const { rows: response } = await client.query<{ status: string; started_at: Date; submitted_at: Date | null; caseid: string | null }>(
-          `SELECT status, started_at, submitted_at, caseid FROM response WHERE id = $1`,
+        const { rows: response } = await client.query<{ status: string; started_at: Date; submitted_at: Date | null; caseid: string | null; enumerator_ref: string | null }>(
+          `SELECT status, started_at, submitted_at, caseid, enumerator_ref FROM response WHERE id = $1`,
           [req.params.responseId],
         );
         if (!response[0]) throw new HttpError(404, 'not_found');
@@ -632,6 +653,7 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
           responseId: req.params.responseId,
           status: response[0].status,
           caseid: response[0].caseid,
+          enumeratorRef: response[0].enumerator_ref,
           startedAt: response[0].started_at,
           submittedAt: response[0].submitted_at,
           answers: Object.fromEntries(answers.map((a) => [a.question_id, a.value])),
@@ -676,6 +698,13 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
           datasetContext(datasets),
         );
         await writeAnswers(client, link.org_id, req.params.responseId, plan);
+        const answeredEnumerator = enumeratorAnswer(version.definition, plan.values);
+        if (version.definition.questions.some((question) => question.type === 'enumerator')) {
+          await client.query(`UPDATE response SET enumerator_ref = $2 WHERE id = $1`, [
+            req.params.responseId,
+            answeredEnumerator,
+          ]);
+        }
         await writeFieldTimings(client, link.org_id, req.params.responseId, version.definition, body.data.paradata);
         // `answers` is what the server actually holds: the device adopts it as its
         // new baseline, so the next sync compares against reality rather than hope.
@@ -773,6 +802,13 @@ export const platformCollectRoutes: FastifyPluginAsync = async (app) => {
         }
 
         await writeAnswers(client, link.org_id, req.params.responseId, plan);
+        const answeredEnumerator = enumeratorAnswer(version.definition, plan.values);
+        if (version.definition.questions.some((question) => question.type === 'enumerator')) {
+          await client.query(`UPDATE response SET enumerator_ref = $2 WHERE id = $1`, [
+            req.params.responseId,
+            answeredEnumerator,
+          ]);
+        }
         await writeFieldTimings(client, link.org_id, req.params.responseId, version.definition, body.data.paradata);
 
         const quotaStatus = await applyQuotas(client, link.form_id, plan.values);

@@ -28,6 +28,11 @@ export const WEBHOOK_EVENTS = [
   'response.submitted',
   'response.flagged',
   'flag.resolved',
+  'dataset.created',
+  'dataset.changed',
+  'dataset.archived',
+  'dataset.attached',
+  'dataset.detached',
 ] as const;
 
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
@@ -37,6 +42,11 @@ export const WEBHOOK_EVENT_DETAIL: Record<WebhookEvent, string> = {
   'response.submitted': 'A respondent submitted a response.',
   'response.flagged': 'A quality flag was raised on a response.',
   'flag.resolved': 'A quality flag was resolved or dismissed.',
+  'dataset.created': 'An organisation dataset was created.',
+  'dataset.changed': 'Rows were imported, merged, replaced or cleared in a dataset.',
+  'dataset.archived': 'A dataset was archived.',
+  'dataset.attached': 'A dataset was attached to a form version.',
+  'dataset.detached': 'A dataset was detached from a form version.',
 };
 
 export const webhookEventSchema = z.enum(WEBHOOK_EVENTS);

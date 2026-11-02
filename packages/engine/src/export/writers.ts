@@ -87,7 +87,7 @@ export function csvBundle(dataset: ExportDataset): BundleFile[] {
     ...dataset.missing.map((m) => [m.response, m.variable, m.question, m.code, MISSING_CODES[m.code].numeric ?? ''] as Cell[]),
   ];
 
-  return [
+  const files: BundleFile[] = [
     { name: 'data.csv', contentType: 'text/csv; charset=utf-8', bytes: strToU8(toCsv(data)), description: 'The data, exactly as captured. Values are stored codes, not labels.' },
     {
       name: 'spreadsheet-view.csv',
@@ -100,6 +100,37 @@ export function csvBundle(dataset: ExportDataset): BundleFile[] {
     { name: 'missing.csv', contentType: 'text/csv; charset=utf-8', bytes: strToU8(toCsv(missing)), description: 'Which kind of missing each blank cell is: system, not_asked, skipped, refused or dont_know.' },
     { name: 'meta.json', contentType: 'application/json', bytes: strToU8(`${JSON.stringify(dataset.meta, null, 2)}\n`), description: 'Form version, collection window, response counts and the export format choices.' },
   ];
+  if (dataset.corrections.length > 0) files.push(correctionsCsv(dataset.corrections));
+  return files;
+}
+
+/** The append-only correction history, in the order the reviewer recorded it. */
+function correctionsCsv(corrections: ExportDataset['corrections']): BundleFile {
+  const rows: Cell[][] = [
+    ['response_id', 'question', 'from', 'to', 'reason', 'actor', 'corrected_at'],
+    ...corrections.map((entry) => [
+      entry.response,
+      entry.question,
+      cellText(entry.from),
+      cellText(entry.to),
+      entry.reason,
+      entry.actor,
+      entry.at,
+    ] as Cell[]),
+  ];
+  return {
+    name: 'corrections.csv',
+    contentType: 'text/csv; charset=utf-8',
+    bytes: strToU8(toCsv(rows)),
+    description: 'The append-only review log: every changed answer, its old and new value, who changed it and when.',
+  };
+}
+
+/** JSON values are preserved as JSON, because a correction may be an array or object. */
+function cellText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value);
 }
 
 /**
@@ -163,22 +194,38 @@ export function xlsxBundle(dataset: ExportDataset): BundleFile[] {
     ...dataset.meta.notes.map((note, i) => [`note_${i + 1}`, note] as Cell[]),
   ];
 
-  const bytes = writeWorkbook({
-    sheets: [
-      { name: 'data', rows: dataSheet },
-      { name: 'codebook', rows: codebookSheet },
-      { name: 'value_labels', rows: valueLabelSheet },
-      { name: 'missing', rows: missingSheet },
-      { name: 'meta', rows: metaSheet },
-    ],
-  });
+  const sheets = [
+    { name: 'data', rows: dataSheet },
+    { name: 'codebook', rows: codebookSheet },
+    { name: 'value_labels', rows: valueLabelSheet },
+    { name: 'missing', rows: missingSheet },
+    { name: 'meta', rows: metaSheet },
+  ];
+  if (dataset.corrections.length > 0) {
+    sheets.push({
+      name: 'corrections',
+      rows: [
+        ['response_id', 'question', 'from', 'to', 'reason', 'actor', 'corrected_at'],
+        ...dataset.corrections.map((entry) => [
+          entry.response,
+          entry.question,
+          cellText(entry.from),
+          cellText(entry.to),
+          entry.reason,
+          entry.actor,
+          entry.at,
+        ] as Cell[]),
+      ],
+    });
+  }
+  const bytes = writeWorkbook({ sheets });
 
   return [
     {
       name: 'export.xlsx',
       contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       bytes,
-      description: 'One workbook: data, codebook, value_labels, missing and meta sheets. Text cells are strings, never formulas.',
+      description: 'One workbook: data, codebook, value_labels, missing, meta and, when corrections exist, a corrections sheet. Text cells are strings, never formulas.',
     },
   ];
 }
@@ -191,6 +238,7 @@ export interface JsonExport {
   codebook: ExportDataset['codebook'];
   valueLabels: ExportDataset['valueLabels'];
   missing: ExportDataset['missing'];
+  corrections?: ExportDataset['corrections'];
   data: Array<Record<string, Cell>>;
 }
 
@@ -202,6 +250,7 @@ export function toJsonExport(dataset: ExportDataset): JsonExport {
     codebook: dataset.codebook,
     valueLabels: dataset.valueLabels,
     missing: dataset.missing,
+    ...(dataset.corrections.length > 0 ? { corrections: dataset.corrections } : {}),
     data: dataset.rows.map((row) => {
       const record: Record<string, Cell> = {};
       names.forEach((name, i) => {

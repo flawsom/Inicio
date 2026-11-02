@@ -33,6 +33,8 @@ export interface StoredDraft {
   token: string;
   /** The case this interview belongs to, if the link named one. */
   caseid?: string;
+  /** The enumerator this device was opened for, if the link named one. */
+  enumerator?: string;
   /**
    * The device's own stable id for this response. It becomes the response id on
    * the server, which is what makes a retried sync idempotent.
@@ -80,8 +82,9 @@ export interface PendingPayload {
   answers: Record<string, unknown>;
   base: Record<string, unknown>;
   paradata?: Paradata;
-  /** Only the create call uses this; saves and submits already know the response. */
+  /** Only the create call uses these; saves and submits already know the response. */
   caseid?: string;
+  enumerator?: string;
 }
 
 /** The published definition, cached so the form can open with no network at all. */

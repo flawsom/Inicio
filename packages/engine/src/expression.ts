@@ -29,6 +29,15 @@ export type Expr =
 export type BinaryOp =
   | 'or' | 'and' | '=' | '!=' | '<' | '<=' | '>' | '>=' | '+' | '-' | '*' | '/' | '%' | 'div' | 'mod';
 
+export interface DynamicChoiceColumns {
+  /** The dataset column whose value the answer stores. */
+  valueColumn: string;
+  /** Columns whose values form the visible label, in order. */
+  labelColumns: string[];
+  /** Optional dataset column holding an image filename. */
+  imageColumn?: string | null;
+}
+
 export interface EvalContext {
   /** Answer values keyed by question name. */
   answers?: Record<string, unknown>;
@@ -41,6 +50,8 @@ export interface EvalContext {
   datasets?: import('./datasets.js').DatasetContext;
   /** Labels for static choices, keyed by question name and then choice value. */
   choiceLabels?: Record<string, Record<string, string>>;
+  /** The columns a dynamic `search()` list takes its value and label from. */
+  dynamicChoice?: DynamicChoiceColumns;
   /** The value being validated, bound to `.` inside a constraint. */
   current?: unknown;
   /**
@@ -522,6 +533,62 @@ function callFunction(name: string, args: Expr[], ctx: EvalContext): unknown {
       requireArgs(name, args, 1);
       const value = arg(0);
       return isBlank(value) || (Array.isArray(value) && value.length === 0);
+    }
+    case 'search': {
+      // `search()` is an appearance expression, not a normal calculation. It
+      // returns the rows the choice list should show, and the caller supplies the
+      // one placeholder choice that names the value and label columns.
+      const source = String(arg(0) ?? '').trim().toLowerCase();
+      const table = ctx.datasets?.[source];
+      const columns = ctx.dynamicChoice;
+      if (!table || !columns?.valueColumn) return [];
+      let rows = table.rows.slice();
+
+      if (args.length >= 4) {
+        const kind = String(arg(1) ?? '').trim().toLowerCase();
+        const fields = String(arg(2) ?? '').split(',').map((field) => field.trim()).filter(Boolean);
+        const needle = String(arg(3) ?? '').toLowerCase();
+        rows = rows.filter((row) =>
+          fields.some((field) => {
+            const cell = String(row[field] ?? '').toLowerCase();
+            if (kind === 'contains') return cell.includes(needle);
+            if (kind === 'startswith') return cell.startsWith(needle);
+            if (kind === 'endswith') return cell.endsWith(needle);
+            if (kind === 'matches') return cell === needle;
+            return true;
+          }),
+        );
+      }
+
+      if (args.length >= 6) {
+        const filterColumn = String(arg(4) ?? '').trim();
+        const filterText = String(arg(5) ?? '');
+        if (filterColumn !== '') {
+          rows = rows.filter((row) => String(row[filterColumn] ?? '') === filterText);
+        }
+      }
+
+      rows.sort((left, right) => {
+        const a = Number(left['sortby']);
+        const b = Number(right['sortby']);
+        if (Number.isNaN(a) || Number.isNaN(b)) return 0;
+        return a - b;
+      });
+
+      const seen = new Set<string>();
+      const choices: Array<{ value: string; label: string; image?: string }> = [];
+      for (const row of rows) {
+        const value = String(row[columns.valueColumn] ?? '').trim();
+        if (value === '' || seen.has(value)) continue;
+        seen.add(value);
+        const label = columns.labelColumns
+          .map((column) => String(row[column] ?? '').trim())
+          .filter(Boolean)
+          .join(' ');
+        const image = columns.imageColumn ? String(row[columns.imageColumn] ?? '').trim() : '';
+        choices.push({ value, label: label || value, ...(image ? { image } : {}) });
+      }
+      return choices;
     }
     case 'pulldata': {
       requireArgs(name, args, 4);

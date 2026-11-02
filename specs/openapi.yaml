@@ -2146,7 +2146,10 @@ paths:
       tags: [Program data]
       operationId: listDatasets
       summary: The organisation's datasets
-      description: 'Session-only: case lists can contain personal data, and they are not yet part of the scoped machine API.'
+      description: Requires `datasets:read` when called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
       parameters:
         - $ref: '#/components/parameters/OrgId'
       responses:
@@ -2166,8 +2169,12 @@ paths:
       operationId: createDataset
       summary: Create a dataset
       description: |
-        Session-only. The code is the name `pulldata()` uses. A duplicate code in
-        the same organisation is `409 dataset_code_taken`.
+        The code is the name `pulldata()` uses. A duplicate code in the same
+        organisation is `409 dataset_code_taken`. Requires `datasets:write` when
+        called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
       parameters:
         - $ref: '#/components/parameters/OrgId'
       requestBody:
@@ -2179,7 +2186,7 @@ paths:
               properties:
                 code: { type: string, maxLength: 60, example: cases }
                 name: { type: string, maxLength: 200 }
-                kind: { type: string, enum: [data, cases], default: data }
+                kind: { type: string, enum: [data, cases, enumerators], default: data }
                 uniqueField: { type: string, default: id }
               required: [code, name]
       responses:
@@ -2199,7 +2206,10 @@ paths:
       tags: [Program data]
       operationId: readDataset
       summary: One dataset and a page of its rows
-      description: 'Session-only: case lists can contain personal data, and they are not yet part of the scoped machine API.'
+      description: Requires `datasets:read` when called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
       parameters:
         - $ref: '#/components/parameters/OrgId'
         - name: datasetId
@@ -2239,7 +2249,10 @@ paths:
       tags: [Program data]
       operationId: archiveDataset
       summary: Archive a dataset
-      description: Session-only. Archiving hides it from collection and the catalog; it does not delete the rows.
+      description: Archives it, which hides it from collection and the catalog without deleting the rows. Requires `datasets:write` when called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
       parameters:
         - $ref: '#/components/parameters/OrgId'
         - name: datasetId
@@ -2255,11 +2268,16 @@ paths:
     put:
       tags: [Program data]
       operationId: importDatasetRows
-      summary: Replace, append or merge rows
+      summary: Replace, append, merge or clear rows
       description: |
         Session-only. `replace` clears the dataset, `append` refuses an existing key,
-        and `merge` upserts. Every row is validated, the key must be non-empty and
-        unique within the upload, and the columns are inferred and stored once.
+        `merge` upserts, and `clear` removes every row and its columns. Every row is
+        validated, the key must be non-empty and unique within the upload, and the
+        columns are inferred and stored once. Requires `datasets:write` when
+        called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
       parameters:
         - $ref: '#/components/parameters/OrgId'
         - name: datasetId
@@ -2273,12 +2291,12 @@ paths:
             schema:
               type: object
               properties:
-                mode: { type: string, enum: [replace, append, merge], default: merge }
+                mode: { type: string, enum: [replace, append, merge, clear], default: merge }
                 rows:
                   type: array
                   maxItems: 5000
+                  default: []
                   items: { type: object, additionalProperties: true }
-              required: [rows]
       responses:
         '200':
           description: What was imported and what the dataset holds now.
@@ -2301,7 +2319,10 @@ paths:
       tags: [Program data]
       operationId: listFormDatasets
       summary: Datasets attached to one version
-      description: 'Session-only: the attachment reveals which case list an instrument reads.'
+      description: Requires `datasets:read` when called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
       parameters:
         - $ref: '#/components/parameters/OrgId'
         - $ref: '#/components/parameters/FormId'
@@ -2326,10 +2347,14 @@ paths:
       operationId: attachDataset
       summary: Attach a dataset to a version
       description: |
-        Session-only. Attaching to a version, rather than a form, keeps an old
-        published instrument reading the data it was published with. Columns whose
-        names match question names are mapped automatically; a supplied mapping is
-        validated against both sides.
+        Attaching to a version, rather than a form, keeps an old published
+        instrument reading the data it was published with. Columns whose names
+        match question names are mapped automatically; a supplied mapping is
+        validated against both sides. Requires `datasets:write` when called with a
+        key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
       parameters:
         - $ref: '#/components/parameters/OrgId'
         - $ref: '#/components/parameters/FormId'
@@ -2369,7 +2394,10 @@ paths:
       tags: [Program data]
       operationId: detachDataset
       summary: Detach a dataset from a version
-      description: Session-only. The dataset and its rows are unchanged.
+      description: The dataset and its rows are unchanged. Requires `datasets:write` when called with a key.
+      security:
+        - cookieAuth: []
+        - bearerApiKey: []
       parameters:
         - $ref: '#/components/parameters/OrgId'
         - $ref: '#/components/parameters/FormId'
@@ -2417,6 +2445,10 @@ paths:
                     properties:
                       speeding: { type: string }
                       straightLining: { type: string }
+                      outlier: { type: string }
+                      tooFrequent: { type: string }
+                      tooInfrequent: { type: string }
+                      groupTests: { type: string }
 
   /api/v1/orgs/{orgId}/flags:
     get:
@@ -2516,6 +2548,292 @@ paths:
                 type: object
                 properties: { flagged: { type: integer } }
         '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/forms/{formId}/review:
+    get:
+      tags: [Review]
+      operationId: listReviewQueue
+      summary: The review queue, with state counts
+      description: |
+        Session-only. A queue of submitted responses ordered so unclaimed pending
+        work comes first. `summary` carries the total and claimed count for every
+        state, so a console can show the size of the queue without a second call.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/FormId'
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [pending, approved, rejected, none, all]
+            default: pending
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Responses, their flag counts, and the state summary.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responses:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReviewItem' }
+                  summary:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        total: { type: integer }
+                        claimed: { type: integer }
+                        unclaimed: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/forms/{formId}/review/{responseId}:
+    get:
+      tags: [Review]
+      operationId: readReview
+      summary: One response with its answers, flags, log and field timings
+      description: Session-only. The published definition is returned with the current answers, so a reviewer sees what the respondent was asked, not what the draft says today.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/FormId'
+        - $ref: '#/components/parameters/ResponseId'
+      responses:
+        '200':
+          description: The review detail.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  response: { $ref: '#/components/schemas/ReviewItem' }
+                  answers: { type: object, additionalProperties: true }
+                  definition: { type: object, additionalProperties: true }
+                  log:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReviewLogEntry' }
+                  flags:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReviewFlag' }
+                  timings:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        field_name: { type: string }
+                        total_seconds: { type: [string, 'null'] }
+                        first_seen_seconds: { type: [string, 'null'] }
+                        visits: { type: integer }
+        '404': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Review]
+      operationId: decideReview
+      summary: Claim, comment, approve, reject or reopen a response
+      description: |
+        Session-only. Transitions are checked against the current state, so an
+        approval is recorded once and a second approval is `409 illegal_transition`.
+        Every action appends an immutable `review_log` row with the actor and time.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/FormId'
+        - $ref: '#/components/parameters/ResponseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action: { type: string, enum: [claim, comment, approve, reject, reopen] }
+                note: { type: string, maxLength: 2000 }
+              required: [action]
+      responses:
+        '200':
+          description: The response in its new state.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { response: { $ref: '#/components/schemas/ReviewItem' } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/forms/{formId}/review/{responseId}/corrections:
+    post:
+      tags: [Review]
+      operationId: correctResponse
+      summary: Correct one or more answers with before and after values
+      description: |
+        Session-only. Every correction names a question from the published
+        definition, and its `to` value is validated by the same answer rules used
+        during collection. Supplying `from` makes a concurrent edit a
+        `409 stale_correction` instead of silently overwriting it. The previous
+        value, the new value and the reason are appended to `review_log`; the log is
+        append-only in the database.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/FormId'
+        - $ref: '#/components/parameters/ResponseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                corrections:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: object
+                    properties:
+                      questionId: { type: string, maxLength: 200 }
+                      from: { description: The value the reviewer saw. Omit only when an unconditional overwrite is intended. }
+                      to: { description: The validated replacement value. }
+                      reason: { type: string, maxLength: 500 }
+                    required: [questionId, to]
+                note: { type: string, maxLength: 2000 }
+              required: [corrections]
+      responses:
+        '200':
+          description: The corrections that were applied, and the answers after them.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  responseId: { type: string, format: uuid }
+                  reviewState: { type: string, enum: [none, pending, approved, rejected] }
+                  corrections:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        questionId: { type: string }
+                        from: {}
+                        to: {}
+                        reason: { type: string }
+                  answers: { type: object, additionalProperties: true }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+
+  # ---------------------------------------------------------------------------
+  # Statistical QC. The report is read-only; the scan writes ordinary flags, so
+  # a statistical finding is reviewed through the same queue as everything else.
+  # ---------------------------------------------------------------------------
+  /api/v1/orgs/{orgId}/forms/{formId}/qc/report:
+    get:
+      tags: [Quality]
+      operationId: qcReport
+      summary: Run every statistical check without writing anything
+      description: |
+        Session-only. IQR outliers for numeric answers, too-frequent and
+        too-infrequent shares for categorical answers, and, when enumerators are
+        attached, group-mean and group-distribution tests. Each finding carries its
+        question, value, bounds, test statistic or p-value. The same arithmetic runs
+        for the scan, so a report cannot describe a different check from the one
+        that created a flag.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/FormId'
+        - name: outlierMultiple
+          in: query
+          required: false
+          schema: { type: number, minimum: 0, maximum: 10, default: 1.5 }
+        - name: minShare
+          in: query
+          required: false
+          schema: { type: number, minimum: 0, maximum: 1, default: 0.02 }
+        - name: maxShare
+          in: query
+          required: false
+          schema: { type: number, minimum: 0, maximum: 1, default: 0.8 }
+        - name: alpha
+          in: query
+          required: false
+          schema: { type: number, minimum: 0.001, maximum: 0.5, default: 0.05 }
+        - name: exclusions
+          in: query
+          required: false
+          schema: { type: string, example: '-99,-98' }
+          description: Comma-separated numeric values treated as missing.
+      responses:
+        '200':
+          description: Findings, the number of responses scanned, and counts by kind.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  findings:
+                    type: array
+                    items: { $ref: '#/components/schemas/QcFinding' }
+                  scanned: { type: integer }
+                  byKind: { type: object, additionalProperties: { type: integer } }
+                  options: { type: object, additionalProperties: true }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /api/v1/orgs/{orgId}/forms/{formId}/qc/scan:
+    post:
+      tags: [Quality]
+      operationId: scanQc
+      summary: Run the statistical checks and add their findings to the flag queue
+      description: |
+        Session-only. Idempotent through the same unique flag index as the other
+        detectors: a second scan records nothing new. Severe findings move an
+        otherwise unreviewed response into the review queue.
+      parameters:
+        - $ref: '#/components/parameters/OrgId'
+        - $ref: '#/components/parameters/FormId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                outlierMultiple: { type: number, minimum: 0, maximum: 10, default: 1.5 }
+                minShare: { type: number, minimum: 0, maximum: 1, default: 0.02 }
+                maxShare: { type: number, minimum: 0, maximum: 1, default: 0.8 }
+                alpha: { type: number, minimum: 0.001, maximum: 0.5, default: 0.05 }
+                exclusions:
+                  type: array
+                  maxItems: 20
+                  items: { type: number }
+              required: []
+      responses:
+        '200':
+          description: How many responses were scanned and what was found.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scanned: { type: integer }
+                  flagged: { type: integer }
+                  byKind: { type: object, additionalProperties: { type: integer } }
+                  options: { type: object, additionalProperties: true }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
 
   /api/v1/orgs/{orgId}/forms/{formId}/responses/{responseId}/flags:
     post:
@@ -2911,7 +3229,16 @@ components:
 
     WebhookEvent:
       type: string
-      enum: [form.published, response.submitted]
+      enum:
+        - form.published
+        - response.submitted
+        - response.flagged
+        - flag.resolved
+        - dataset.created
+        - dataset.changed
+        - dataset.archived
+        - dataset.attached
+        - dataset.detached
 
     WebhookEndpoint:
       type: object
@@ -2952,7 +3279,7 @@ components:
         id: { type: string, format: uuid }
         code: { type: string, description: The name pulldata() uses. }
         name: { type: string }
-        kind: { type: string, enum: [data, cases] }
+        kind: { type: string, enum: [data, cases, enumerators] }
         uniqueField: { type: string }
         columns: { type: array, items: { type: string } }
         rowCount: { type: integer }
@@ -2967,7 +3294,7 @@ components:
         datasetId: { type: string, format: uuid }
         code: { type: string }
         name: { type: string }
-        kind: { type: string, enum: [data, cases] }
+        kind: { type: string, enum: [data, cases, enumerators] }
         uniqueField: { type: string }
         columns: { type: array, items: { type: string } }
         keyQuestion: { type: [string, 'null'] }
@@ -2978,7 +3305,16 @@ components:
 
     FlagKind:
       type: string
-      enum: [speeding, straight_lining, duplicate, manual]
+      enum:
+        - speeding
+        - straight_lining
+        - duplicate
+        - manual
+        - outlier
+        - too_frequent
+        - too_infrequent
+        - group_mean
+        - group_distribution
 
     QualityFlag:
       type: object
@@ -3013,6 +3349,78 @@ components:
             byStatus: { type: object, additionalProperties: { type: integer } }
             byKind: { type: object, additionalProperties: { type: integer } }
             open: { type: integer }
+
+    ReviewItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string }
+        reviewState: { type: string, enum: [none, pending, approved, rejected] }
+        claimedBy: { type: [string, 'null'], format: email }
+        claimedById: { type: [string, 'null'], format: uuid }
+        claimedAt: { type: [string, 'null'], format: date-time }
+        reviewedBy: { type: [string, 'null'], format: email }
+        reviewedById: { type: [string, 'null'], format: uuid }
+        reviewedAt: { type: [string, 'null'], format: date-time }
+        reviewNote: { type: [string, 'null'] }
+        startedAt: { type: string, format: date-time }
+        submittedAt: { type: [string, 'null'], format: date-time }
+        durationSeconds: { type: [number, 'null'] }
+        enumeratorRef: { type: [string, 'null'] }
+        caseid: { type: [string, 'null'] }
+        formVersion: { type: integer }
+        formVersionId: { type: string, format: uuid }
+        flags:
+          type: object
+          properties:
+            total: { type: integer }
+            severe: { type: integer }
+            open: { type: integer }
+        answerCount: { type: integer }
+
+    ReviewLogEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        action: { type: string, enum: [claim, comment, approve, reject, reopen, correction] }
+        from_state: { type: string }
+        to_state: { type: string }
+        note: { type: [string, 'null'] }
+        corrections:
+          type: [array, 'null']
+          items:
+            type: object
+            properties:
+              questionId: { type: string }
+              from: {}
+              to: {}
+              reason: { type: string }
+        created_at: { type: string, format: date-time }
+        actor: { type: [string, 'null'], format: email }
+
+    ReviewFlag:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        question_id: { type: [string, 'null'] }
+        kind: { $ref: '#/components/schemas/FlagKind' }
+        severity: { type: string, enum: [info, warn, severe] }
+        detail: { type: object, additionalProperties: true }
+        status: { type: string, enum: [open, resolved, dismissed] }
+        note: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+
+    QcFinding:
+      type: object
+      properties:
+        responseId: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/FlagKind' }
+        severity: { type: string, enum: [info, warn, severe] }
+        questionId: { type: [string, 'null'] }
+        detail:
+          type: object
+          additionalProperties: true
+          description: The observed value, the bounds or test statistic, and the threshold that produced the finding.
 
     MailStatus:
       type: object

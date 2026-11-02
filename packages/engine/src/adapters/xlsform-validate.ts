@@ -38,6 +38,14 @@ export interface WorkbookValidationReport {
 
 const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+/**
+ * Field plug-ins are not executed here. This is the allowlist of custom appearances
+ * whose behaviour is implemented by the base renderer. It is empty on purpose: an
+ * unknown `custom-*` appearance is preserved through a round trip and rendered as
+ * the underlying control, and no third-party code is fetched or executed.
+ */
+export const CUSTOM_APPEARANCE_ALLOWLIST: readonly string[] = [];
+
 /** Types the platform renders, plus metadata and audit phrases it preserves. */
 const KNOWN_TYPES = new Set<string>([
   'text', 'textarea', 'integer', 'decimal', 'percentage', 'currency', 'date', 'datetime', 'time',
@@ -491,6 +499,18 @@ export function validateXlsFormSheets(sheets: Sheet[]): WorkbookValidationReport
       if ('error' in spec) {
         report.error('speed-spec', 'survey', rowNumber, `${type}: ${spec.error}`, at('appearance'));
       }
+    }
+
+    const appearance = cell(survey, row, surveyIndex, 'appearance');
+    const custom = appearance.value.split(/\s+/).find((token) => token.startsWith('custom-'));
+    if (custom && !CUSTOM_APPEARANCE_ALLOWLIST.includes(custom)) {
+      report.warning(
+        'field-plugin-not-supported',
+        'survey',
+        rowNumber,
+        `${custom} is preserved in the workbook, but this deployment does not load field plug-in code. The base control will render instead.`,
+        at('appearance'),
+      );
     }
   });
 

@@ -48,6 +48,18 @@ const sampleDefinition: FormDefinition = {
   choiceLists: {},
 };
 
+const enumeratorDefinition: FormDefinition = {
+  title: 'Enumerator visit',
+  defaultLanguage: 'en',
+  languages: ['en'],
+  groups: [],
+  questions: [
+    { id: 'q_enum', name: 'enum', type: 'enumerator', label: { en: 'Enumerator' } },
+    { id: 'q_note', name: 'note', type: 'text', label: { en: 'Note' } },
+  ],
+  choiceLists: {},
+};
+
 let app: FastifyInstance;
 
 beforeAll(async () => {
@@ -62,7 +74,7 @@ afterAll(async () => {
 async function createDataset(
   cookie: string,
   orgId: string,
-  payload: { code: string; name: string; kind?: 'data' | 'cases'; uniqueField?: string },
+  payload: { code: string; name: string; kind?: 'data' | 'cases' | 'enumerators'; uniqueField?: string },
 ): Promise<string> {
   const res = await app.inject({
     method: 'POST',
@@ -78,7 +90,7 @@ async function importRows(
   cookie: string,
   orgId: string,
   datasetId: string,
-  mode: 'replace' | 'append' | 'merge',
+  mode: 'replace' | 'append' | 'merge' | 'clear',
   rows: Array<Record<string, unknown>>,
 ) {
   return app.inject({
@@ -275,6 +287,119 @@ describe('server datasets and cases', () => {
     ]);
     expect(replaced.statusCode, replaced.body).toBe(200);
     expect((replaced.json() as { total: number }).total).toBe(1);
+
+    const cleared = await importRows(owner.cookie, orgId, datasetId, 'clear', []);
+    expect(cleared.statusCode, cleared.body).toBe(200);
+    expect(cleared.json()).toMatchObject({ imported: 0, total: 0, columns: [] });
+    const empty = await app.inject({
+      method: 'GET',
+      url: `/api/v1/orgs/${orgId}/datasets/${datasetId}`,
+      headers: { cookie: owner.cookie },
+    });
+    expect((empty.json() as { rows: unknown[] }).rows).toHaveLength(0);
+  });
+
+  it('queues a dataset.changed webhook in the same transaction as an import', async () => {
+    const owner = await signInPlatform(app, uniqueEmail('dataset-webhook'));
+    const orgId = await createOrgFor(app, owner, 'Dataset webhook org');
+    const datasetId = await createDataset(owner.cookie, orgId, { code: 'sample', name: 'Sample' });
+    const endpoint = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orgs/${orgId}/webhooks`,
+      headers: { cookie: owner.cookie },
+      payload: { url: 'https://receiver.example/hook', events: ['dataset.changed'] },
+    });
+    expect(endpoint.statusCode, endpoint.body).toBe(201);
+    const endpointId = (endpoint.json() as { endpoint: { id: string } }).endpoint.id;
+
+    const imported = await importRows(owner.cookie, orgId, datasetId, 'replace', [{ id: 'A', value: 'one' }]);
+    expect(imported.statusCode, imported.body).toBe(200);
+    const cleared = await importRows(owner.cookie, orgId, datasetId, 'clear', []);
+    expect(cleared.statusCode, cleared.body).toBe(200);
+
+    const deliveries = await app.inject({
+      method: 'GET',
+      url: `/api/v1/orgs/${orgId}/webhooks/${endpointId}/deliveries`,
+      headers: { cookie: owner.cookie },
+    });
+    expect(deliveries.statusCode, deliveries.body).toBe(200);
+    const rows = (deliveries.json() as {
+      deliveries: Array<{ event: string; status: string; payload: { data: Record<string, unknown> } }>;
+    }).deliveries;
+    expect(rows.every((row) => row.event === 'dataset.changed' && row.status === 'pending')).toBe(true);
+    expect(rows.map((row) => row.payload.data['mode']).sort()).toEqual(['clear', 'replace']);
+  });
+
+  it('validates an enumerator against the attached enumerator list and stores the identity', async () => {
+    const owner = await signInPlatform(app, uniqueEmail('enumerator-owner'));
+    const orgId = await createOrgFor(app, owner, 'Enumerator org');
+    const { formId, versionId } = await createPublishedForm(app, owner, orgId, 'Enumerator form', enumeratorDefinition);
+    const datasetId = await createDataset(owner.cookie, orgId, {
+      code: 'enumerators',
+      name: 'Field team',
+      kind: 'enumerators',
+    });
+    const imported = await importRows(owner.cookie, orgId, datasetId, 'replace', [
+      { id: 'EN-01', name: 'Amina' },
+      { id: 'EN-02', name: 'Joseph' },
+    ]);
+    expect(imported.statusCode, imported.body).toBe(200);
+
+    const attached = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orgs/${orgId}/forms/${formId}/versions/${versionId}/datasets`,
+      headers: { cookie: owner.cookie },
+      payload: { datasetId, keyQuestion: null, publish: false },
+    });
+    expect(attached.statusCode, attached.body).toBe(201);
+
+    const token = await createLink(owner.cookie, formId);
+    const started = await app.inject({
+      method: 'POST',
+      url: `/api/v1/collect/${token}/responses`,
+      payload: { enumerator: 'EN-01' },
+    });
+    expect(started.statusCode, started.body).toBe(201);
+    expect((started.json() as { enumeratorRef: string }).enumeratorRef).toBe('EN-01');
+
+    const unknown = await app.inject({
+      method: 'POST',
+      url: `/api/v1/collect/${token}/responses`,
+      payload: { enumerator: 'EN-99' },
+    });
+    expect(unknown.statusCode).toBe(422);
+    expect(unknown.json()).toMatchObject({ error: 'unknown_enumerator' });
+  });
+
+  it('lets a scoped key read datasets but not write them without datasets:write', async () => {
+    const owner = await signInPlatform(app, uniqueEmail('dataset-key'));
+    const orgId = await createOrgFor(app, owner, 'Dataset key org');
+    await createDataset(owner.cookie, orgId, { code: 'sample', name: 'Sample' });
+    const minted = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orgs/${orgId}/api-keys`,
+      headers: { cookie: owner.cookie },
+      payload: { name: 'Reader', scopes: ['datasets:read'] },
+    });
+    expect(minted.statusCode, minted.body).toBe(201);
+    const secret = (minted.json() as { secret: string }).secret;
+
+    const read = await app.inject({
+      method: 'GET',
+      url: `/api/v1/orgs/${orgId}/datasets`,
+      headers: { authorization: `Bearer ${secret}` },
+    });
+    expect(read.statusCode, read.body).toBe(200);
+    expect((read.json() as { datasets: unknown[] }).datasets).toHaveLength(1);
+
+    const write = await app.inject({
+      method: 'POST',
+      url: `/api/v1/orgs/${orgId}/datasets`,
+      headers: { authorization: `Bearer ${secret}` },
+      payload: { code: 'other', name: 'Other' },
+    });
+    expect(write.statusCode).toBe(403);
+    expect(write.json()).toMatchObject({ error: 'insufficient_scope' });
   });
 
   it('does not let another organisation read the dataset or attach it', async () => {

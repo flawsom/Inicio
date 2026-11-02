@@ -29,7 +29,10 @@ import { emitWebhook } from './webhooks/dispatch.js';
  *    scan rather than something that pretends to be real-time.
  */
 
-export const FLAG_KINDS = ['speeding', 'straight_lining', 'duplicate', 'manual'] as const;
+export const FLAG_KINDS = [
+  'speeding', 'straight_lining', 'duplicate', 'manual',
+  'outlier', 'too_frequent', 'too_infrequent', 'group_mean', 'group_distribution',
+] as const;
 export type FlagKind = (typeof FLAG_KINDS)[number];
 
 export const FLAG_KIND_DETAIL: Record<FlagKind, string> = {
@@ -37,6 +40,11 @@ export const FLAG_KIND_DETAIL: Record<FlagKind, string> = {
   straight_lining: 'Most answers share one value, which is what answering without reading looks like.',
   duplicate: 'The answers are identical to another submitted response on the same form.',
   manual: 'Raised by a person.',
+  outlier: 'A numeric answer sits outside the form\'s quartile fences.',
+  too_frequent: 'One answer is chosen far more often than the other options.',
+  too_infrequent: 'An option is chosen far less often than the stated minimum share.',
+  group_mean: 'An enumerator\'s numeric mean differs from the rest by more than chance.',
+  group_distribution: 'An enumerator\'s answer distribution differs from the rest.',
 };
 
 /** With no per-form threshold configured yet, these are the numbers, stated openly. */
@@ -45,6 +53,14 @@ export const SPEED_PER_QUESTION_SECONDS = 4;
 /** And this is what "most answers are the same" means here. */
 export const STRAIGHT_LINE_MIN_ANSWERS = 4;
 export const STRAIGHT_LINE_SHARE = 0.8;
+
+/** The statistical scan's defaults, published here so the console and the report agree. */
+export const QC_DEFAULTS = {
+  outlierMultiple: 1.5,
+  minShare: 0.02,
+  maxShare: 0.8,
+  alpha: 0.05,
+} as const;
 
 export interface DetectedFlag {
   kind: FlagKind;
@@ -159,6 +175,16 @@ export async function recordFlags(
     );
     if (rows[0]) {
       written += 1;
+      if (flag.severity === 'severe') {
+        // A critical finding is also a review task. A response that is already
+        // approved stays approved: a detector does not silently undo a person's
+        // decision, it adds evidence the reviewer can act on.
+        await client.query(
+          `UPDATE response SET review_state = 'pending'
+            WHERE id = $1 AND review_state = 'none'`,
+          [context.responseId],
+        );
+      }
       await emitWebhook(client, context.orgId, 'response.flagged', {
         formId: context.formId,
         responseId: context.responseId,
@@ -277,6 +303,10 @@ export const platformFlagRoutes: FastifyPluginAsync = async (app) => {
       thresholds: {
         speeding: `under max(${SPEED_FLOOR_SECONDS}s, ${SPEED_PER_QUESTION_SECONDS}s x answered questions)`,
         straightLining: `${Math.round(STRAIGHT_LINE_SHARE * 100)}% of at least ${STRAIGHT_LINE_MIN_ANSWERS} answers share one value`,
+        outlier: `outside q1 - ${QC_DEFAULTS.outlierMultiple} x iqr and q3 + ${QC_DEFAULTS.outlierMultiple} x iqr, after exclusions`,
+        tooFrequent: `an option's share is at least ${QC_DEFAULTS.maxShare}`,
+        tooInfrequent: `an option's share is at most ${QC_DEFAULTS.minShare}`,
+        groupTests: `Welch t test and Pearson chi-squared at alpha ${QC_DEFAULTS.alpha}`,
       },
       actor: { via: actor.via },
     });

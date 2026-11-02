@@ -108,11 +108,12 @@ export async function ensureDraft(
   token: string,
   existingResponseId: string | null = null,
   caseid?: string,
+  enumerator?: string,
 ): Promise<StoredDraft> {
   const found = await store.getDraft(token);
   if (found) {
-    if (caseid && found.caseid !== caseid) {
-      const next = { ...found, caseid };
+    if ((caseid && found.caseid !== caseid) || (enumerator && found.enumerator !== enumerator)) {
+      const next = { ...found, ...(caseid ? { caseid } : {}), ...(enumerator ? { enumerator } : {}) };
       await store.putDraft(next);
       return next;
     }
@@ -121,6 +122,7 @@ export async function ensureDraft(
   const draft: StoredDraft = {
     token,
     ...(caseid ? { caseid } : {}),
+    ...(enumerator ? { enumerator } : {}),
     clientId: existingResponseId ?? newClientId(),
     responseId: existingResponseId,
     answers: {},
@@ -240,6 +242,7 @@ export async function runSync(store: OfflineStore, token: string, transport: Tra
         answers: working.answers,
         base: working.base,
         ...(working.caseid ? { caseid: working.caseid } : {}),
+        ...(working.enumerator ? { enumerator: working.enumerator } : {}),
       });
       working = { ...working, responseId: started.responseId, status: started.status, outbox: markSynced(working.outbox, 'create') };
       await store.putDraft(working);

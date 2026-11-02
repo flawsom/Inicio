@@ -26,6 +26,12 @@ export interface EvaluateOptions {
   datasets?: import('./datasets.js').DatasetContext;
   /** Optional override for `choice-label()`, mostly useful in tests. */
   choiceLabels?: Record<string, Record<string, string>>;
+  /**
+   * Per-response values already computed by a top-level `once()` calculation.
+   * The caller seeds this from stored answers and keeps the map across saves, so
+   * `once(random())` is drawn once rather than on every evaluation.
+   */
+  onceValues?: Record<string, unknown>;
 }
 
 /** Build the static label map `choice-label()` reads, once per evaluation. */
@@ -51,6 +57,18 @@ function safeEval(source: string, ctx: Parameters<typeof evaluate>[1], fallback:
   } catch (err) {
     if (err instanceof ExpressionError) return fallback;
     throw err;
+  }
+}
+
+/** The expression inside a top-level `once(...)`, or null for any other source. */
+function onceExpression(source: string): import('./expression.js').Expr | null {
+  try {
+    const parsed = parse(source);
+    return parsed.kind === 'call' && parsed.name === 'once' && parsed.args.length === 1
+      ? parsed.args[0]!
+      : null;
+  } catch {
+    return null;
   }
 }
 
@@ -106,7 +124,17 @@ export function evaluateForm(
 
       const calcSrc = q.rules?.calculate;
       if (calcSrc) {
-        const next = safeEval(calcSrc, ctx(), null);
+        const once = onceExpression(calcSrc);
+        const stored = options.onceValues && Object.prototype.hasOwnProperty.call(options.onceValues, q.name)
+          ? options.onceValues[q.name]
+          : undefined;
+        const next = once
+          ? options.onceValues
+            ? stored !== undefined
+              ? stored
+              : (options.onceValues[q.name] = evaluate(once, ctx()))
+            : evaluate(once, ctx())
+          : safeEval(calcSrc, ctx(), null);
         if (JSON.stringify(next) !== JSON.stringify(effective[q.name])) {
           effective[q.name] = next;
           changed = true;
@@ -195,9 +223,30 @@ export function dependencies(question: Question): string[] {
 }
 
 /**
+ * The full `search(...)` call inside an appearance string, parentheses balanced.
+ * `quick search('people')` is legal, so the whole appearance cannot be parsed as
+ * an expression. This extracts the call and leaves the visual styles alone.
+ */
+function dynamicSearchSource(question: Question): string | null {
+  const appearance = question.appearance ?? '';
+  const start = appearance.search(/\bsearch\s*\(/);
+  if (start < 0) return null;
+  const open = appearance.indexOf('(', start);
+  let depth = 0;
+  for (let i = open; i < appearance.length; i += 1) {
+    if (appearance[i] === '(') depth += 1;
+    else if (appearance[i] === ')') {
+      depth -= 1;
+      if (depth === 0) return appearance.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/**
  * The options a respondent may actually pick, after applying `choice_filter`
  * (XLSForm cascading selects: `state = ${state}`, where the bare name is a column on
- * the choices sheet).
+ * the choices sheet) or a dynamic `search()` over an attached dataset.
  *
  * On a malformed filter we show *all* options rather than none: a collection tool that
  * silently hides every choice is worse than one that shows too many.
@@ -210,12 +259,51 @@ export function filterChoices(
 ): Choice[] {
   const list = q.choices?.listName ? def.choiceLists[q.choices.listName] : q.choices?.inline;
   if (!list) return [];
-  const source = q.rules?.choiceFilter;
-  if (!source) return list;
 
   const evaluated = evaluateForm(def, answers, options);
   const effective: Record<string, unknown> = {};
   for (const [name, state] of Object.entries(evaluated.states)) effective[name] = state.value;
+
+  const searchSource = dynamicSearchSource(q);
+  if (searchSource) {
+    const prompt = list[0];
+    const labelColumns = String(
+      prompt?.label?.[def.defaultLanguage] ?? Object.values(prompt?.label ?? {})[0] ?? '',
+    )
+      .split(',')
+      .map((column) => column.trim())
+      .filter(Boolean);
+    const imageColumns = String(prompt?.extra?.['image'] ?? '').trim();
+    const rows = safeEval(
+      searchSource,
+      {
+        answers: effective,
+        variables: options.variables,
+        datasets: options.datasets,
+        dynamicChoice: {
+          valueColumn: prompt?.value ?? '',
+          labelColumns,
+          imageColumn: imageColumns || null,
+        },
+      },
+      [],
+    );
+    if (Array.isArray(rows)) {
+      const dynamic: Choice[] = rows.map((row) => {
+        const source = row as { value?: unknown; label?: unknown; image?: unknown };
+        return {
+          value: String(source.value ?? ''),
+          label: { [def.defaultLanguage]: String(source.label ?? source.value ?? '') },
+          ...(source.image ? { image: String(source.image) } : {}),
+        };
+      });
+      const staticChoices = list.filter((choice) => /^\d+$/.test(choice.value));
+      return [...dynamic, ...staticChoices];
+    }
+  }
+
+  const source = q.rules?.choiceFilter;
+  if (!source) return list;
 
   return list.filter((choice) =>
     truthy(

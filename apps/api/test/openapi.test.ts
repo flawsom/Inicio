@@ -48,6 +48,8 @@ const SOURCES: Array<{ file: string; prefix: string }> = [
   { file: 'apps/api/src/platform/webhooks/routes.ts', prefix: '/api/v1' },
   { file: 'apps/api/src/platform/flags.ts', prefix: '/api/v1' },
   { file: 'apps/api/src/platform/datasets.ts', prefix: '/api/v1' },
+  { file: 'apps/api/src/platform/reviews.ts', prefix: '/api/v1' },
+  { file: 'apps/api/src/platform/qc.ts', prefix: '/api/v1' },
   { file: 'apps/api/src/platform/public.ts', prefix: '/api/v1' },
   { file: 'apps/api/src/platform/attachments.ts', prefix: '/api/v1' },
 ];
@@ -70,6 +72,14 @@ const MACHINE_SURFACE: Array<{ operation: string; scope: string }> = [
   { operation: 'patch /api/v1/orgs/{orgId}/flags/{flagId}', scope: 'flags:write' },
   { operation: 'post /api/v1/orgs/{orgId}/forms/{formId}/flags/scan', scope: 'flags:write' },
   { operation: 'post /api/v1/orgs/{orgId}/forms/{formId}/responses/{responseId}/flags', scope: 'flags:write' },
+  { operation: 'get /api/v1/orgs/{orgId}/datasets', scope: 'datasets:read' },
+  { operation: 'post /api/v1/orgs/{orgId}/datasets', scope: 'datasets:write' },
+  { operation: 'get /api/v1/orgs/{orgId}/datasets/{datasetId}', scope: 'datasets:read' },
+  { operation: 'delete /api/v1/orgs/{orgId}/datasets/{datasetId}', scope: 'datasets:write' },
+  { operation: 'put /api/v1/orgs/{orgId}/datasets/{datasetId}/rows', scope: 'datasets:write' },
+  { operation: 'get /api/v1/orgs/{orgId}/forms/{formId}/versions/{versionId}/datasets', scope: 'datasets:read' },
+  { operation: 'post /api/v1/orgs/{orgId}/forms/{formId}/versions/{versionId}/datasets', scope: 'datasets:write' },
+  { operation: 'delete /api/v1/orgs/{orgId}/forms/{formId}/versions/{versionId}/datasets/{attachmentId}', scope: 'datasets:write' },
 ];
 
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const;
@@ -264,7 +274,7 @@ describe('the API contract', () => {
     // Nothing scope-shaped that the API does not know about. Content types such as
     // `text/html` share the `word:word` shape, so this looks only at the namespaces
     // the scope vocabulary actually uses.
-    const namespaces = ['forms', 'responses', 'analytics', 'flags', 'keys', 'webhooks'];
+    const namespaces = ['forms', 'responses', 'analytics', 'flags', 'keys', 'webhooks', 'datasets'];
     const mentioned = new Set(
       (text.match(/[a-z]+:[a-z]+/g) ?? []).filter((token) => namespaces.includes(token.split(':')[0] as string)),
     );

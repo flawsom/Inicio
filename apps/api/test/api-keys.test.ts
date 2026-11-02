@@ -161,7 +161,16 @@ describe('API keys', () => {
     // route is wired — and a key carrying only vocabulary is a key that can call
     // nothing, which the console would otherwise offer as if it worked.
     expect(body.scopes.map((entry) => entry.scope).sort()).toEqual(
-      ['analytics:read', 'flags:read', 'flags:write', 'forms:read', 'responses:export', 'responses:read'].sort(),
+      [
+        'analytics:read',
+        'datasets:read',
+        'datasets:write',
+        'flags:read',
+        'flags:write',
+        'forms:read',
+        'responses:export',
+        'responses:read',
+      ].sort(),
     );
     expect(body.scopes.every((entry) => entry.enforced)).toBe(true);
     expect(body.scopes.every((entry) => entry.detail.length > 0)).toBe(true);

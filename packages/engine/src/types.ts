@@ -5,7 +5,7 @@ export type LocalizedText = Record<string, string>;
 export type QuestionType =
   | 'text' | 'textarea' | 'integer' | 'decimal' | 'percentage' | 'currency'
   | 'date' | 'datetime' | 'time' | 'yesno'
-  | 'select_one' | 'select_multiple' | 'rank'
+  | 'select_one' | 'select_multiple' | 'rank' | 'enumerator'
   | 'geopoint' | 'geotrace' | 'geoshape'
   | 'image' | 'audio' | 'video' | 'file' | 'barcode'
   | 'note' | 'calculate';
@@ -49,6 +49,8 @@ export interface Choice {
   label: LocalizedText;
   /** Extra attribute columns from the XLSForm `choices` sheet, used by choiceFilter. */
   extra?: Record<string, string>;
+  /** An image filename or URL, when a dynamic `search()` list named one. */
+  image?: string;
 }
 
 /**

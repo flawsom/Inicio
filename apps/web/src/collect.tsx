@@ -150,6 +150,10 @@ export function Collect({ token }: { token: string }): JSX.Element {
     if (typeof window === 'undefined') return undefined;
     return new URLSearchParams(window.location.search).get('caseid')?.trim() || undefined;
   }, []);
+  const enumerator = useMemo(() => {
+    if (typeof window === 'undefined') return undefined;
+    return new URLSearchParams(window.location.search).get('enumerator')?.trim() || undefined;
+  }, []);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [draft, setDraft] = useState<StoredDraft | null>(null);
   const [status, setStatus] = useState<string>('in_progress');
@@ -203,7 +207,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
   const transport = useMemo<Transport>(
     () => ({
       async start(t, clientId, payload) {
-        const res = await api.startResponse(t, clientId, payload.answers, payload.base, payload.caseid);
+        const res = await api.startResponse(t, clientId, payload.answers, payload.base, payload.caseid, payload.enumerator);
         setOnline(true);
         return { responseId: res.responseId, status: res.status as StoredDraft['status'] };
       },
@@ -312,7 +316,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
       // A response id kept by an older build in localStorage is adopted, so an
       // upgrade mid-interview does not abandon work already in progress.
       const legacy = window.localStorage.getItem(storageKey(token));
-      let local = await ensureDraft(store, token, legacy, caseid);
+      let local = await ensureDraft(store, token, legacy, caseid, enumerator);
       if (cancelled) return;
       setDraft(local);
       setAnswers(local.answers);
@@ -375,7 +379,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
       cancelled = true;
       if (timer.current) window.clearTimeout(timer.current);
     };
-  }, [token, flush, caseid]);
+  }, [token, flush, caseid, enumerator]);
 
   useEffect(() => {
     const onOnline = (): void => {
@@ -719,6 +723,7 @@ export function Collect({ token }: { token: string }): JSX.Element {
       subtitle={
         <>
           {caseid && <>Case {caseid}. </>}
+          {enumerator && <>Enumerator {enumerator}. </>}
           {storage?.warning && <><strong>{storage.warning}</strong>{' '}</>}
           {savedAt && <>Saved on this device at {savedAt}. </>}
           {syncedAt ? <>The server has everything up to {syncedAt}.</> : <>Not sent to the server yet.</>}
