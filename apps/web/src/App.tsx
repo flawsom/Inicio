@@ -15,9 +15,14 @@ import {
 } from './api';
 import { AdminView } from './admin';
 import { InvitePage, LegalPage, TermsGate } from './legal';
-import { useFormStream, type Aggregate, type StreamStatus } from './realtime';
-import { createAmbientField, type AmbientField, type AmbientQuality } from './immersive/ambient';
+import { liveLabel, useLive } from './live';
 import { navigate } from './router';
+import { createAmbientField, type AmbientField, type AmbientQuality } from './immersive/ambient';
+
+// Kept exported from here because the console's live-read tests import the hook
+// from the screen that uses it. The implementation lives in `./live` so the lazy
+// monitoring chunk can share exactly the same push/fallback contract.
+export { liveLabel, useLive } from './live';
 
 /**
  * The marketing page, in its own chunk.
@@ -66,6 +71,16 @@ const CasesTab = lazy(() => import('./cases').then((module) => ({ default: modul
 const ReviewPanel = lazy(() => import('./reviews').then((module) => ({ default: module.ReviewPanel })));
 
 /**
+ * The live monitor, in its own chunk.
+ *
+ * It carries the question profiler, the SVG charts and the Power BI report plan.
+ * A person opening the builder or reading a table of responses should not pay for
+ * any of that, and the monitor still arrives in the same frame as the form it is
+ * describing.
+ */
+const MonitorTab = lazy(() => import('./monitor').then((module) => ({ default: module.MonitorTab })));
+
+/**
  * The workspace shell: sign in, pick an organisation, author a form, publish it,
  * collect responses, watch the numbers arrive, export.
  *
@@ -86,105 +101,6 @@ interface Me {
   organisations: Organisation[];
 }
 
-interface LiveOptions {
-  /**
-   * The form whose stream drives this read. When the value is null the read has
-   * no push channel (the workspace list spans every form, so no single stream
-   * describes it) and the fallback timer is the only mechanism.
-   */
-  formId?: string | null;
-  /** Which aggregate on that stream invalidates this read. */
-  aggregate?: Aggregate;
-  /**
-   * Interval used *only* while the push channel is not live for this aggregate.
-   * It is a safety net, not the mechanism: the point of the channel is that this
-   * timer does not run at all when the stream is up.
-   */
-  fallbackMs: number;
-  deps: unknown[];
-}
-
-interface LiveResult<T> {
-  data: T | null;
-  error: string | null;
-  reload: () => void;
-  status: StreamStatus;
-  /** True when the server is pushing this aggregate, so nothing is being timed. */
-  live: boolean;
-}
-
-/**
- * A live read: the server pushes, the timer is the fallback.
- *
- * The distinction is the whole point of the change. Previously every one of these
- * reads had an interval, so a screen that had not changed in an hour still cost a
- * query every five seconds, and the number on screen could still be fifteen seconds
- * old. Here the interval is only armed once the stream has actually failed.
- */
-export function useLive<T>(load: () => Promise<T>, options: LiveOptions): LiveResult<T> {
-  const { formId = null, aggregate, fallbackMs, deps } = options;
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [tick, setTick] = useState(0);
-  const loadRef = useRef(load);
-  loadRef.current = load;
-
-  const run = useCallback(async (): Promise<void> => {
-    try {
-      const result = await loadRef.current();
-      setData(result);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'request failed');
-    }
-  }, []);
-
-  // The first read, every deps change, and a manual refresh. Always exactly one
-  // request per reason, never a loop.
-  useEffect(() => {
-    void run();
-    // The caller passes the identity of what it read; `tick` is the manual refresh.
-  }, [run, tick, ...deps]);
-
-  // The push channel. Only subscribed when this read names an aggregate: a read
-  // with no aggregate has no event that invalidates it.
-  const onStreamEvent = useCallback(
-    (changed: Aggregate[]) => {
-      if (aggregate && changed.includes(aggregate)) void run();
-    },
-    [aggregate, run],
-  );
-  const status = useFormStream(aggregate ? formId : null, onStreamEvent);
-
-  const live = Boolean(aggregate && formId && status === 'live');
-
-  useEffect(() => {
-    if (live) return;
-    const timer = window.setInterval(() => void run(), fallbackMs);
-    // A background tab has its timers throttled (or frozen), so the first thing a
-    // returning reader saw could be a snapshot from minutes ago. Refresh the
-    // moment the tab becomes visible again, and again if the window is refocused.
-    const refreshIfVisible = (): void => {
-      if (document.visibilityState === 'visible') void run();
-    };
-    document.addEventListener('visibilitychange', refreshIfVisible);
-    window.addEventListener('focus', refreshIfVisible);
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', refreshIfVisible);
-      window.removeEventListener('focus', refreshIfVisible);
-    };
-  }, [live, fallbackMs, run]);
-
-  return { data, error, reload: () => setTick((n) => n + 1), status, live };
-}
-
-/** The one line the header shows about the connection, in plain words. */
-export function liveLabel(status: StreamStatus, live: boolean, fallbackMs: number): string {
-  if (live) return 'live: pushed by the server the moment it changes';
-  if (status === 'connecting') return `live: connecting, refreshing every ${Math.round(fallbackMs / 1000)}s until it opens`;
-  return `live: stream down, refreshing every ${Math.round(fallbackMs / 1000)}s`;
-}
 
 /**
  * The pointer trail, on every route rather than only on the landing page.
@@ -1034,7 +950,7 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
     fallbackMs: 60_000,
     deps: [form.id],
   });
-  const [tab, setTab] = useState<'builder' | 'data' | 'cases' | 'quality' | 'distribute'>('builder');
+  const [tab, setTab] = useState<'builder' | 'monitor' | 'data' | 'cases' | 'quality' | 'distribute'>('builder');
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   // Bumped whenever the server rewrites the selected version in place, so the
@@ -1173,17 +1089,19 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
       </div>
 
       <nav className="tabs">
-        {(['builder', 'data', 'cases', 'quality', 'distribute'] as const).map((name) => (
+        {(['builder', 'monitor', 'data', 'cases', 'quality', 'distribute'] as const).map((name) => (
           <button key={name} type="button" className={tab === name ? 'tab active' : 'tab'} onClick={() => setTab(name)}>
             {name === 'builder'
               ? 'Builder'
-              : name === 'data'
-                ? 'Responses & exports'
-                : name === 'cases'
-                  ? 'Cases & data'
-                  : name === 'quality'
-                    ? 'Quality'
-                    : 'Distribute'}
+              : name === 'monitor'
+                ? 'Live monitor'
+                : name === 'data'
+                  ? 'Responses & exports'
+                  : name === 'cases'
+                    ? 'Cases & data'
+                    : name === 'quality'
+                      ? 'Quality'
+                      : 'Distribute'}
           </button>
         ))}
       </nav>
@@ -1243,6 +1161,11 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
         </div>
       )}
 
+      {tab === 'monitor' && (
+        <Suspense fallback={<p className="muted">Opening the live monitor…</p>}>
+          <MonitorTab formId={form.id} publishedVersion={published?.version ?? null} />
+        </Suspense>
+      )}
       {tab === 'data' && (
         <DataTab formId={form.id} orgId={form.org_id} publishedVersion={published?.version ?? null} />
       )}

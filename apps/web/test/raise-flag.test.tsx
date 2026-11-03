@@ -105,6 +105,7 @@ const analyticsBody = {
   publishedVersion: 1,
   byStatus: [{ status: 'submitted', count: 1 }],
   tallies: [{ question_id: 'q1', value: 'yes', count: 1 }],
+  answered: [{ question_id: 'q1', answered: 1 }],
   timeline: [{ day: '2026-10-13', started: 2, submitted: 1 }],
   conflicts: 1,
   generatedAt: '2026-10-13T09:20:00.000Z',

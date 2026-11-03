@@ -100,27 +100,34 @@ export interface VersionLineage {
   published_at: string | null;
 }
 
+export interface DefinitionChoice {
+  value: string;
+  label: Record<string, string>;
+}
+
+export interface DefinitionQuestion {
+  id: string;
+  name: string;
+  type: string;
+  label: Record<string, string>;
+  /** Shown under the label, in the respondent's own language. */
+  hint?: Record<string, string>;
+  /** XLSForm appearance string, including `custom-*` parameters. */
+  appearance?: string;
+  groupId?: string | null;
+  required?: boolean | string;
+  choices?: { listName?: string; inline?: DefinitionChoice[] } | null;
+  validation?: { constraint?: string | null; message?: Record<string, string> } | null;
+  rules?: { visibleIf?: string | null; enableIf?: string | null; calculate?: string | null; choiceFilter?: string | null };
+}
+
 export interface Definition {
   title: string;
   defaultLanguage: string;
   languages: string[];
   groups: Array<{ id: string; name: string; label: Record<string, string>; repeat?: boolean }>;
-  questions: Array<{
-    id: string;
-    name: string;
-    type: string;
-    label: Record<string, string>;
-    /** Shown under the label, in the respondent's own language. */
-    hint?: Record<string, string>;
-    /** XLSForm appearance string, including `custom-*` parameters. */
-    appearance?: string;
-    groupId?: string | null;
-    required?: boolean | string;
-    choices?: { listName?: string; inline?: Array<{ value: string; label: Record<string, string> }> } | null;
-    validation?: { constraint?: string | null; message?: Record<string, string> } | null;
-    rules?: { visibleIf?: string | null; enableIf?: string | null; calculate?: string | null; choiceFilter?: string | null };
-  }>;
-  choiceLists: Record<string, unknown>;
+  questions: DefinitionQuestion[];
+  choiceLists: Record<string, DefinitionChoice[]>;
   triggers?: Array<{ type: string; when: string }>;
 }
 
@@ -232,6 +239,8 @@ export interface FormAnalytics {
   publishedVersion: number | null;
   byStatus: Array<{ status: string; count: number }>;
   tallies: Array<{ question_id: string; value: unknown; count: number }>;
+  /** Distinct submitted responses that answered each question. */
+  answered: Array<{ question_id: string; answered: number }>;
   timeline: Array<{ day: string; started: number; submitted: number }>;
   /** Responses where a device and the server disagreed about an answer. */
   conflicts: number;

@@ -908,6 +908,20 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
           ORDER BY a.question_id, count(*) DESC`,
         [form.id],
       );
+      // How many responses answered each question. A tally is a value, not a
+      // person: a multi-select stores one array per response, and summing tally
+      // rows would be a fact about values rather than a base of respondents.
+      const { rows: answered } = await client.query(
+        `SELECT a.question_id, count(DISTINCT a.response_id)::int AS answered
+           FROM response_answer a
+           JOIN response r ON r.id = a.response_id
+          WHERE r.form_id = $1 AND r.status = 'submitted'
+            AND a.value IS NOT NULL AND a.value <> 'null'::jsonb
+            AND a.value <> '[]'::jsonb AND a.value <> '""'::jsonb
+          GROUP BY a.question_id
+          ORDER BY a.question_id`,
+        [form.id],
+      );
       const { rows: timeline } = await client.query(
         `SELECT to_char(date_trunc('day', started_at), 'YYYY-MM-DD') AS day,
                 count(*)::int AS started,
@@ -930,6 +944,7 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
         publishedVersion: published?.version ?? null,
         byStatus: counts,
         tallies,
+        answered,
         timeline,
         conflicts: conflictRows[0]?.count ?? 0,
         generatedAt: new Date().toISOString(),

@@ -1,0 +1,90 @@
+name: inicio-superset
+
+# A single-host Apache Superset stack for the free-forever BI path.
+#
+# This is intentionally smaller than the upstream development compose: it runs
+# the web app, a Postgres metadata/BI database and Redis. Alerts, reports,
+# thumbnails and async queries are not enabled, so no Celery worker or beat is
+# required. Superset's own docs say compose is not a production-grade deployment;
+# put this behind TLS, back up the metadata database and pin the image before
+# treating it as one. See docs/FREE-BI.md for the honest boundary.
+
+x-superset-environment: &superset-environment
+  SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+  SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:?set SUPERSET_SECRET_KEY in docker/superset/.env}
+  SUPERSET_METADATA_DATABASE_URI: postgresql+psycopg2://superset:${SUPERSET_DB_PASSWORD:?set SUPERSET_DB_PASSWORD in docker/superset/.env}@db:5432/superset
+  SUPERSET_BI_DATABASE_URI: postgresql+psycopg2://superset:${SUPERSET_DB_PASSWORD}@db:5432/inicio_bi
+  SUPERSET_BI_DATABASE_NAME: ${SUPERSET_BI_DATABASE_NAME:-Inicio BI}
+  SUPERSET_ADMIN_USER: ${SUPERSET_ADMIN_USER:-admin}
+  SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:?set SUPERSET_ADMIN_PASSWORD in docker/superset/.env}
+  SUPERSET_ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL:-admin@example.com}
+  # run-server.sh reads GUNICORN_TIMEOUT directly; Superset's own
+  # SUPERSET_WEBSERVER_TIMEOUT does not change the gunicorn timeout.
+  GUNICORN_TIMEOUT: '120'
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: ${SUPERSET_DB_PASSWORD:?set SUPERSET_DB_PASSWORD in docker/superset/.env}
+      POSTGRES_DB: superset
+    volumes:
+      - db_home:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U superset -d superset']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'no', '--save', '']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  superset:
+    image: apache/superset:6.1.0
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment: *superset-environment
+    ports:
+      # Loopback by default: a cloud VM must not publish an HTTP admin login on
+      # first boot. Put a TLS proxy on the host and point it at this port, or use
+      # an SSH tunnel. Set SUPERSET_BIND_ADDRESS=0.0.0.0 only when a network-level
+      # control already protects the port.
+      - '${SUPERSET_BIND_ADDRESS:-127.0.0.1}:${SUPERSET_PORT:-8088}:8088'
+    volumes:
+      - ./superset_config.py:/app/pythonpath/superset_config.py:ro
+      - ./bootstrap.py:/app/pythonpath/bootstrap.py:ro
+      - ./entrypoint.sh:/app/pythonpath/entrypoint.sh:ro
+      - superset_home:/app/superset_home
+    command: ['/bin/sh', '/app/pythonpath/entrypoint.sh']
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8088/health', timeout=5)",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+
+volumes:
+  db_home:
+  superset_home:

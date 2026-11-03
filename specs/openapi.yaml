@@ -3216,6 +3216,17 @@ components:
               question_id: { type: string }
               value: {}
               count: { type: integer }
+        answered:
+          type: array
+          description: |
+            Distinct submitted responses that answered each question. This is the
+            denominator for a multi-select share and the only honest source for a
+            missing count; summing tallies would count mentions, not people.
+          items:
+            type: object
+            properties:
+              question_id: { type: string }
+              answered: { type: integer }
         timeline:
           type: array
           items:

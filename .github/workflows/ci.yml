@@ -69,6 +69,18 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # The Fabric deploy command is not part of a workspace package, so the
+      # recursive `pnpm test` above does not reach it. Its tests are pure: they
+      # validate the artifact, secret handling and PBIR rewrite without a tenant.
+      - name: Fabric CLI tests
+        run: pnpm fabric:test
+
+      # The free BI path is also outside the workspace packages. Its tests use a
+      # local mock of the documented Superset API, so they need no container and
+      # no Superset password.
+      - name: Superset provisioning tests
+        run: pnpm superset:test
+
       - name: Build
         run: pnpm build
 

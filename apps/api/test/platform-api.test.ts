@@ -767,9 +767,14 @@ describe('collection, live data and exports', () => {
     // Live analytics: computed on request from the rows just written.
     const analytics = await app.inject({ method: 'GET', url: `/api/v1/forms/${formId}/analytics`, headers: { cookie: owner.cookie } });
     expect(analytics.headers['cache-control']).toBe('private, no-store');
-    const live = analytics.json() as { byStatus: Array<{ status: string; count: number }>; tallies: Array<{ question_id: string; count: number }> };
+    const live = analytics.json() as {
+      byStatus: Array<{ status: string; count: number }>;
+      tallies: Array<{ question_id: string; count: number }>;
+      answered: Array<{ question_id: string; answered: number }>;
+    };
     expect(live.byStatus).toEqual([{ status: 'submitted', count: 1 }]);
     expect(live.tallies.some((t) => t.question_id === 'score')).toBe(true);
+    expect(live.answered).toContainEqual({ question_id: 'score', answered: 1 });
 
     const responses = await app.inject({ method: 'GET', url: `/api/v1/forms/${formId}/responses`, headers: { cookie: owner.cookie } });
     const stored = (responses.json() as { responses: Array<{ answers: Record<string, unknown> }> }).responses[0]!;
@@ -777,6 +782,68 @@ describe('collection, live data and exports', () => {
     // rather than keeping an answer the respondent was never asked for.
     expect(stored.answers['reason']).toBeNull();
     expect(stored.answers['score']).toBe(7);
+  });
+
+  it('reports one answered respondent for a multi-select, not one per selected option', async () => {
+    const owner = await signIn(`multi-${Date.now()}@example.com`);
+    const orgId = await createOrg(owner, 'Multi org');
+    const definition: FormDefinition = {
+      ...validDefinition,
+      questions: [
+        ...validDefinition.questions,
+        {
+          id: 'q_topics',
+          name: 'topics',
+          type: 'select_multiple',
+          label: { en: 'Which topics?' },
+          choices: { listName: 'topics' },
+        },
+      ],
+      choiceLists: {
+        ...validDefinition.choiceLists,
+        topics: [
+          { value: 'washable', label: { en: 'Washable cover' } },
+          { value: 'chew', label: { en: 'Chew-proof edge' } },
+        ],
+      },
+    };
+    const formId = await createForm(owner, orgId, 'Multi select', definition);
+    const detail = await app.inject({ method: 'GET', url: `/api/v1/forms/${formId}`, headers: { cookie: owner.cookie } });
+    const versionId = (detail.json() as { versions: Array<{ id: string }> }).versions[0]!.id;
+    const published = await app.inject({
+      method: 'POST',
+      url: `/api/v1/forms/${formId}/versions/${versionId}/publish`,
+      headers: { cookie: owner.cookie },
+    });
+    expect(published.statusCode, published.body).toBe(200);
+    const link = await app.inject({
+      method: 'POST',
+      url: `/api/v1/forms/${formId}/links`,
+      headers: { cookie: owner.cookie },
+      payload: { kind: 'anonymous', label: 'public' },
+    });
+    expect(link.statusCode, link.body).toBe(201);
+    const token = (link.json() as { token: string }).token;
+
+    const started = await app.inject({ method: 'POST', url: `/api/v1/collect/${token}/responses`, payload: {} });
+    expect(started.statusCode, started.body).toBe(201);
+    const responseId = (started.json() as { responseId: string }).responseId;
+    const submitted = await app.inject({
+      method: 'POST',
+      url: `/api/v1/collect/${token}/responses/${responseId}/submit`,
+      payload: { answers: { consent: 'yes', score: 7, topics: ['washable', 'chew'] } },
+    });
+    expect(submitted.statusCode, submitted.body).toBe(200);
+
+    const analytics = await app.inject({ method: 'GET', url: `/api/v1/forms/${formId}/analytics`, headers: { cookie: owner.cookie } });
+    const live = analytics.json() as {
+      tallies: Array<{ question_id: string; value: unknown; count: number }>;
+      answered: Array<{ question_id: string; answered: number }>;
+    };
+    const topicTallies = live.tallies.filter((row) => row.question_id === 'topics');
+    expect(topicTallies).toHaveLength(1);
+    expect(topicTallies[0]).toMatchObject({ value: ['washable', 'chew'], count: 1 });
+    expect(live.answered).toContainEqual({ question_id: 'topics', answered: 1 });
   });
 
   it('persists custom-specify-other metadata with the response and returns it on resume', async () => {
