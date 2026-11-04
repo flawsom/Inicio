@@ -2540,21 +2540,12 @@ export function compileDocxDocument(document: DocxDocument, options: DocxCompile
 function detectLanguages(document: DocxDocument): string[] {
   const found = new Set<string>();
   for (const block of document.blocks) {
-    if (block.kind === 'table') {
-      const header = languageHeader(block.table);
-      if (!header) continue;
-      for (const entry of header.languages) {
-        const supplied = block.table.rows.slice(header.row + 1).some((row) => (row[entry.column]?.text ?? '').trim() !== '');
-        if (supplied) found.add(entry.language);
-      }
-      continue;
-    }
-    // A paragraph such as `Marathi: ...` is an explicit translation. Merely
-    // mentioning a language in respondent copy is not one, so the compiler does
-    // not emit empty regional columns for it.
-    const text = block.paragraph.text;
-    for (const language of KNOWN_LANGUAGES) {
-      if (new RegExp(`(?:^|[\\n|])\\s*${escapeRegex(language)}\\s*:`, 'i').test(text)) found.add(language);
+    if (block.kind !== 'table') continue;
+    const header = languageHeader(block.table);
+    if (!header) continue;
+    for (const entry of header.languages) {
+      const supplied = block.table.rows.slice(header.row + 1).some((row) => (row[entry.column]?.text ?? '').trim() !== '');
+      if (supplied) found.add(entry.language);
     }
   }
   return [...found];
