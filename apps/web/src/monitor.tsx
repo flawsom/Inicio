@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { AnalysisStudio } from './analysis-studio';
 import { ClientAnalysis } from './analysis';
 import { api } from './api';
 import { liveLabel, useLive } from './live';
@@ -589,6 +590,8 @@ export function MonitorTab({
 
       {model && (
         <>
+          <AnalysisStudio model={model} client={client} live={live} />
+
           <ClientAnalysis model={model} client={client} />
 
           <section className="card monitor-plan">

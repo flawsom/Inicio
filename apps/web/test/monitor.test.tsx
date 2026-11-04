@@ -155,6 +155,9 @@ describe('the live monitor', () => {
     expect(reads).toBe(1);
     expect(container.textContent).toContain('Dog cushion field test');
     expect(container.textContent).toContain('Which cushion shape?');
+    expect(container.textContent).toContain('The signal room');
+    expect(container.textContent).toContain('Confidence bands');
+    expect(container.textContent).toContain('How the field is moving');
     expect(container.textContent).toContain('Client analysis brief');
     expect(container.textContent).toContain('The one-page answer');
     expect(container.textContent).toContain('Report plan for this questionnaire');
