@@ -36,6 +36,13 @@ import type { AttachmentCapability, Definition } from './api';
 const UPLOAD_TYPES = new Set(['image', 'audio', 'video', 'file']);
 const GEO_TYPES = new Set(['geopoint', 'geotrace', 'geoshape']);
 
+/** One page of the interview: one question, or one deliberate `field-list` group. */
+interface Screen {
+  key: string;
+  title: string;
+  questions: Question[];
+}
+
 /** What a question's file control is doing right now, kept per question name. */
 interface AttachmentProgress {
   name: string;
@@ -143,6 +150,7 @@ export function RespondentForm({
   // repainted. The server keeps the authoritative copy in the response's answers.
   const onceValues = useRef<Record<string, unknown>>({});
   const [localMetadata, setLocalMetadata] = useState<Record<string, string>>({});
+  const [screenIndex, setScreenIndex] = useState(0);
   const metadata = pluginMetadata ?? localMetadata;
   const setMetadata = (name: string, value: string): void => {
     if (onPluginMetadataChange) {
@@ -175,6 +183,73 @@ export function RespondentForm({
     if (!onFieldVisible) return;
     for (const name of visibleSignature.split('\n')) if (name !== '') onFieldVisible(name);
   }, [visibleSignature, onFieldVisible]);
+
+  /**
+   * Pagination follows the workbook, not the section headings.
+   *
+   * A `field-list` group is one screen because the author deliberately asked for
+   * those fields together (the intro block, C2's hours/km pair, B6's amount + none
+   * checkbox). Every other question is its own screen, so a `quick` select can
+   * advance and a failed relevance can skip without dragging later pages with it.
+   */
+  const screens = useMemo<Screen[]>(() => {
+    const visible = (question: Question): boolean =>
+      rendered(question) && question.type !== 'calculate';
+    const pages: Screen[] = [];
+    const groupById = new Map((form.groups ?? []).map((group) => [group.id, group]));
+    const emittedGroups = new Set<string>();
+    const ordered = [...form.questions].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    for (const question of ordered) {
+      if (!visible(question)) continue;
+      const group = question.groupId ? groupById.get(question.groupId) : undefined;
+      const fieldList = group && /\bfield-list\b/i.test(group.appearance ?? '');
+      if (fieldList && group) {
+        if (emittedGroups.has(group.id)) continue;
+        emittedGroups.add(group.id);
+        const questions = ordered.filter(
+          (candidate) => candidate.groupId === group.id && visible(candidate),
+        );
+        pages.push({
+          key: `group:${group.id}`,
+          title: group.label?.[definition.defaultLanguage] ?? Object.values(group.label ?? {})[0] ?? group.name,
+          questions,
+        });
+        continue;
+      }
+      pages.push({
+        key: `question:${question.id}`,
+        title: group
+          ? group.label?.[definition.defaultLanguage] ?? Object.values(group.label ?? {})[0] ?? group.name
+          : definition.title,
+        questions: [question],
+      });
+    }
+    return pages;
+  }, [definition.defaultLanguage, definition.title, form, evaluation.states]);
+
+  useEffect(() => {
+    setScreenIndex((current) => Math.max(0, Math.min(current, screens.length - 1)));
+  }, [screens.length]);
+  useEffect(() => {
+    setScreenIndex(0);
+  }, [definition]);
+
+  const current = screens[screenIndex] ?? null;
+  const blank = (value: unknown): boolean =>
+    value === null || value === undefined || value === '' || (Array.isArray(value) && value.length === 0);
+  const currentReady = current
+    ? current.questions.every((question) => {
+        const state = evaluation.states[question.name];
+        if (!state) return true;
+        return !(state.required && blank(state.value)) && state.error === null;
+      })
+    : true;
+  const allReady = evaluation.missing.length === 0 && evaluation.invalid.length === 0;
+  const advance = (): void => {
+    setScreenIndex((index) => Math.min(index + 1, Math.max(0, screens.length - 1)));
+  };
+  const goBack = (): void => setScreenIndex((index) => Math.max(0, index - 1));
   // Per question, because two file questions on one screen are two transfers, and a
   // single flag would make one of them claim the other's progress.
   const [uploads, setUploads] = useState<Record<string, AttachmentProgress>>({});
@@ -389,7 +464,15 @@ export function RespondentForm({
           <select
             value={typeof value === 'string' ? value : ''}
             disabled={disabled}
-            onChange={(e) => onChange(question.name, e.target.value)}
+            onChange={(e) => {
+              onChange(question.name, e.target.value);
+              const other = otherSpecifyCode(question);
+              // `quick` is SurveyCTO's "advance on selection" promise. It must not
+              // fire for an Other choice, because that choice opens its text box.
+              if (/\bquick\b/i.test(question.appearance ?? '') && (other === null || e.target.value !== other)) {
+                advance();
+              }
+            }}
             onBlur={onFlush}
           >
             <option value="">- choose -</option>
@@ -445,14 +528,7 @@ export function RespondentForm({
     );
   };
 
-  const sections: Array<{ key: string; title: string; questions: Question[] }> = [];
-  for (const group of form.groups ?? []) {
-    const questions = form.questions.filter((q) => q.groupId === group.id && rendered(q));
-    if (questions.length === 0) continue;
-    sections.push({ key: group.id, title: group.label?.[definition.defaultLanguage] ?? group.name, questions });
-  }
-  const topLevel = form.questions.filter((q) => !q.groupId && rendered(q));
-  if (topLevel.length > 0) sections.push({ key: 'ungrouped', title: definition.title, questions: topLevel });
+  const atEnd = screens.length === 0 || screenIndex >= screens.length - 1;
 
   return (
     <div className="collect">
@@ -465,15 +541,20 @@ export function RespondentForm({
         {status ? <div className="stack tight">{status}</div> : null}
       </header>
 
-      {sections.map((section) => (
-        <section key={section.key} className="card">
-          {form.groups.length > 0 && <h2>{section.title}</h2>}
-          {section.questions.map((question) => (
+      {current ? (
+        <section className="card" key={current.key}>
+          <div className="screen-progress muted small">
+            Step {screenIndex + 1} of {screens.length}
+          </div>
+          {form.groups.length > 0 && <h2>{current.title}</h2>}
+          {current.questions.map((question) => (
             <div key={question.id} className="field">
-              <label>
-                {label(question)}
-                {question.required === true && <span className="req"> *</span>}
-              </label>
+              {question.type !== 'note' && (
+                <label>
+                  {label(question)}
+                  {question.required === true && <span className="req"> *</span>}
+                </label>
+              )}
               {question.hint && <p className="muted small">{question.hint[definition.defaultLanguage]}</p>}
               {questionInput(question)}
               {problems?.missing.includes(question.name) && <p className="error small">This answer is required.</p>}
@@ -484,14 +565,35 @@ export function RespondentForm({
               )}
             </div>
           ))}
+          <div className="row wrap screen-nav">
+            {screenIndex > 0 && (
+              <button type="button" className="ghost" onClick={goBack}>
+                Back
+              </button>
+            )}
+            {!atEnd && (
+              <button type="button" onClick={advance} disabled={!currentReady}>
+                Next
+              </button>
+            )}
+          </div>
+          {!currentReady && <p className="muted small screen-blocked">Answer the required question before continuing.</p>}
         </section>
-      ))}
+      ) : (
+        <section className="card">
+          <p className="muted">There are no questions to answer.</p>
+        </section>
+      )}
 
       {notice}
 
-      {submit && (
+      {submit && atEnd && (
         <div className="card row wrap">
-          <button type="button" onClick={submit.onClick} disabled={submit.busy === true || submit.disabled === true}>
+          <button
+            type="button"
+            onClick={submit.onClick}
+            disabled={submit.busy === true || submit.disabled === true || !allReady}
+          >
             {submit.label}
           </button>
           {footer}

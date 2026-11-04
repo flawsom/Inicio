@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { ClientAnalysis } from './analysis';
 import { api } from './api';
 import { liveLabel, useLive } from './live';
 import {
@@ -477,7 +478,16 @@ function Activity({ model }: { model: MonitorModel }): JSX.Element {
   );
 }
 
-export function MonitorTab({ formId, publishedVersion }: { formId: string; publishedVersion: number | null }): JSX.Element {
+export function MonitorTab({
+  formId,
+  publishedVersion,
+  client,
+}: {
+  formId: string;
+  publishedVersion: number | null;
+  /** The organisation the questionnaire was commissioned for, shown on the brief. */
+  client?: string;
+}): JSX.Element {
   const { data, error, reload, status, live } = useLive(() => api.analytics(formId), {
     formId,
     aggregate: 'analytics',
@@ -579,6 +589,8 @@ export function MonitorTab({ formId, publishedVersion }: { formId: string; publi
 
       {model && (
         <>
+          <ClientAnalysis model={model} client={client} />
+
           <section className="card monitor-plan">
             <div className="monitor-plan-copy">
               <span className="eyebrow">Power BI handoff</span>

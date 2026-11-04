@@ -155,6 +155,8 @@ describe('the live monitor', () => {
     expect(reads).toBe(1);
     expect(container.textContent).toContain('Dog cushion field test');
     expect(container.textContent).toContain('Which cushion shape?');
+    expect(container.textContent).toContain('Client analysis brief');
+    expect(container.textContent).toContain('The one-page answer');
     expect(container.textContent).toContain('Report plan for this questionnaire');
     expect(container.textContent).toContain('not a .pbix');
     expect([...container.querySelectorAll('.monitor-kpi strong')][0].textContent).toBe('1');

@@ -1163,7 +1163,11 @@ function FormView({ form, onBack }: { form: FormSummary; onBack: () => void }): 
 
       {tab === 'monitor' && (
         <Suspense fallback={<p className="muted">Opening the live monitor…</p>}>
-          <MonitorTab formId={form.id} publishedVersion={published?.version ?? null} />
+          <MonitorTab
+            formId={form.id}
+            publishedVersion={published?.version ?? null}
+            client={form.organisation}
+          />
         </Suspense>
       )}
       {tab === 'data' && (

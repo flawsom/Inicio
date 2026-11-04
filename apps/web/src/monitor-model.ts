@@ -38,6 +38,17 @@ export interface MonitorNumeric {
   median: number;
   min: number;
   max: number;
+  /** Sample standard deviation, for the shape of the distribution. */
+  sd: number;
+  q1: number;
+  q3: number;
+  iqr: number;
+  /** Tukey 1.5×IQR fences, included so the brief can name an outlier rule. */
+  lowFence: number;
+  highFence: number;
+  outliers: number;
+  /** Descriptive skew indicator, not a normality test. */
+  skew: number;
   bins: MonitorBin[];
 }
 
@@ -212,6 +223,25 @@ function weightedMedian(entries: Array<{ value: number; count: number }>): numbe
   return valueAt((total + 1) / 2);
 }
 
+function weightedQuantile(entries: Array<{ value: number; count: number }>, quantile: number): number {
+  const sorted = [...entries].sort((a, b) => a.value - b.value);
+  const total = sorted.reduce((sum, entry) => sum + entry.count, 0);
+  if (total === 0) return 0;
+  const at = (rank: number): number => {
+    let seen = 0;
+    for (const entry of sorted) {
+      seen += entry.count;
+      if (seen > rank) return entry.value;
+    }
+    return sorted.at(-1)?.value ?? 0;
+  };
+  const position = (total - 1) * quantile;
+  const lower = Math.floor(position);
+  const upper = Math.min(total - 1, Math.ceil(position));
+  const fraction = position - lower;
+  return at(lower) + (at(upper) - at(lower)) * fraction;
+}
+
 function numericStats(entries: Array<{ value: number; count: number }>): MonitorNumeric | null {
   if (entries.length === 0) return null;
   const n = entries.reduce((sum, entry) => sum + entry.count, 0);
@@ -220,6 +250,25 @@ function numericStats(entries: Array<{ value: number; count: number }>): Monitor
   const values = entries.map((entry) => entry.value);
   const min = Math.min(...values);
   const max = Math.max(...values);
+  const mean = weighted / n;
+  const median = weightedMedian(entries);
+  const q1 = weightedQuantile(entries, 0.25);
+  const q3 = weightedQuantile(entries, 0.75);
+  const iqr = q3 - q1;
+  const lowFence = q1 - 1.5 * iqr;
+  const highFence = q3 + 1.5 * iqr;
+  let squared = 0;
+  let cubed = 0;
+  let outliers = 0;
+  for (const entry of entries) {
+    const deviation = entry.value - mean;
+    squared += deviation * deviation * entry.count;
+    cubed += deviation * deviation * deviation * entry.count;
+    if (entry.value < lowFence || entry.value > highFence) outliers += entry.count;
+  }
+  const variance = n > 1 ? squared / (n - 1) : 0;
+  const sd = Math.sqrt(variance);
+  const skew = squared > 0 ? cubed / n / Math.pow(squared / n, 1.5) : 0;
   const binCount = Math.min(6, Math.max(1, new Set(values).size));
   const width = max === min ? 0 : (max - min) / binCount;
   const bins: MonitorBin[] = Array.from({ length: binCount }, (_, index) => ({
@@ -231,7 +280,7 @@ function numericStats(entries: Array<{ value: number; count: number }>): Monitor
     const index = width === 0 ? 0 : Math.min(binCount - 1, Math.floor((entry.value - min) / width));
     bins[index].count += entry.count;
   }
-  return { n, mean: weighted / n, median: weightedMedian(entries), min, max, bins };
+  return { n, mean, median, min, max, sd, q1, q3, iqr, lowFence, highFence, outliers, skew, bins };
 }
 
 function parseDate(value: unknown): Date | null {

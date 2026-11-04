@@ -303,6 +303,126 @@ describe('the Word to XLSForm compiler', () => {
     expect(second?.label.english).toBe('How would you rate the store? SA');
   });
 
+  it('compiles X/Y statement rotation as two real pages and a harmonised answer', () => {
+    const result = compileDocx(docx([
+      paragraph('PROJECT: ROTATION TEST'),
+      paragraph('D1. Please rate each statement. ROTATE STATEMENTS'),
+      table([
+        ['Statement', '1', '2', '3'],
+        ['The app is easy to use', '', '', ''],
+        ['Support is helpful', '', '', ''],
+      ]),
+    ]), { projectNumber: 1608 });
+    const def = result.definition;
+    expect(byName(def, 'ad_num1').rules?.calculate).toBe('once(random())');
+    expect(byName(def, 'rot').rules?.calculate).toContain('string(int(');
+    expect(def.groups.find((group) => group.name === 'bg_d1_x')?.rules?.visibleIf).toContain("selected(${rot}, '1')");
+    expect(def.groups.find((group) => group.name === 'bg_d1_y')?.rules?.visibleIf).toContain("selected(${rot}, '2')");
+    expect(byName(def, 'd1_x1').label.english).toBe('The app is easy to use');
+    expect(byName(def, 'd1_y1').label.english).toBe('The app is easy to use');
+    expect(byName(def, 'd1_1').rules?.calculate).toBe('coalesce(${d1_x1}, ${d1_y1})');
+    expect(result.report.rules.find((rule) => rule.id === 10)?.status).toBe('applied');
+  });
+
+  it('compiles MaxDiff as a most/least pair with a real exclusion', () => {
+    const result = compileDocx(docx([
+      paragraph('PROJECT: MAXDIFF TEST'),
+      paragraph('D2. Which promo is most likely and least likely? MaxDiff'),
+      table([
+        ['Most Likely to buy', '', 'Least Likely to buy'],
+        ['1', 'Promo A', '1'],
+        ['2', 'Promo B', '2'],
+        ['3', 'Promo C', '3'],
+      ]),
+    ]), { projectNumber: 1608 });
+    const def = result.definition;
+    expect(byName(def, 'd2_most').type).toBe('select_one');
+    expect(byName(def, 'd2_least').type).toBe('select_one');
+    expect(byName(def, 'd2_least').rules?.choiceFilter).toBe('not(selected(${d2_most}, filter))');
+    expect(def.choiceLists['d2']?.map((choice) => choice.value)).toEqual(['1', '2', '3']);
+    expect(def.groups.find((group) => group.name === 'bg_d2')?.appearance).toBe('field-list');
+  });
+
+  it('compiles rank columns with unique choices and duplicate filtering', () => {
+    const result = compileDocx(docx([
+      paragraph('PROJECT: RANK TEST'),
+      paragraph('D3. Please rank these items.'),
+      table([
+        ['Item', 'Rank 1', 'Rank 2'],
+        ['Alpha', '1', '1'],
+        ['Beta', '2', '2'],
+        ['Gamma', '3', '3'],
+      ]),
+    ]), { projectNumber: 1608 });
+    const def = result.definition;
+    expect(def.choiceLists['d3']?.map((choice) => choice.value)).toEqual(['1', '2', '3']);
+    expect(byName(def, 'd3_2').rules?.choiceFilter).toBe('not(selected(${d3_1}, filter))');
+    expect(byName(def, 'd3_1').appearance).toBe('quick');
+  });
+
+  it('reads regional language columns when the source supplies translations', () => {
+    const result = compileDocx(docx([
+      paragraph('PROJECT: TRANSLATION TEST'),
+      paragraph('D4. Which option do you prefer? SA'),
+      table([
+        ['English', 'Marathi', 'Hindi'],
+        ['Alpha', 'अल्फा', 'अल्फा हिंदी'],
+        ['Beta', 'बीटा', 'बीटा हिंदी'],
+      ]),
+    ]), { projectNumber: 1608 });
+    const question = byName(result.definition, 'd4');
+    expect(question.label.english).toContain('Which option do you prefer?');
+    const choices = result.definition.choiceLists['d4']!;
+    expect(choices[0]?.label.Marathi).toBe('अल्फा');
+    expect(choices[0]?.label.Hindi).toBe('अल्फा हिंदी');
+    const survey = result.book.sheets.find((sheet) => sheet.name === 'survey')!;
+    expect(survey.rows[0]).toEqual(expect.arrayContaining(['label:Marathi', 'label:Hindi']));
+    const choiceSheet = result.book.sheets.find((sheet) => sheet.name === 'choices')!;
+    expect(choiceSheet.rows[0]).toEqual(expect.arrayContaining(['label:Marathi', 'label:Hindi']));
+  });
+
+  it('emits caller-supplied translations without inventing a regional column', () => {
+    const result = compileDocx(docx([
+      paragraph('PROJECT: CALLER TRANSLATION'),
+      paragraph('D5. Do you agree? SA'),
+      table([
+        ['Yes', '1'],
+        ['No', '2'],
+      ]),
+    ]), {
+      projectNumber: 1608,
+      translations: { d5: { Marathi: 'तुम्ही सहमत आहात का?' } },
+      choiceTranslations: { d5: { '1': { Marathi: 'होय' }, '2': { Marathi: 'नाही' } } },
+    });
+    const question = byName(result.definition, 'd5');
+    expect(question.label.Marathi).toBe('तुम्ही सहमत आहात का?');
+    expect(result.definition.choiceLists['d5']?.[0]?.label.Marathi).toBe('होय');
+    expect(result.book.sheets.find((sheet) => sheet.name === 'survey')?.rows[0]).toContain('label:Marathi');
+  });
+
+  it('splits E1 consideration from E1B usage and E2A most from E2B other reasons', () => {
+    const result = compileDocx(docx([
+      paragraph('PROJECT: SPLIT TEST'),
+      paragraph('E1. Before choosing Bounce, which of these did you consider or actually use? mark all ROTATE OPTIONS'),
+      paragraph('Yulu'),
+      paragraph('Zypp'),
+      paragraph('Other: ______'),
+      paragraph('E2a. Which of these mattered most in choosing Bounce? ROTATE OPTIONS mark all that apply'),
+      paragraph('Lower cost'),
+      paragraph('Vehicle available'),
+      paragraph('Other: ______'),
+    ]), { projectNumber: 1608 });
+    const def = result.definition;
+    expect(byName(def, 'e1').type).toBe('select_multiple');
+    expect(byName(def, 'e1b').type).toBe('select_multiple');
+    expect(byName(def, 'e1b').validation?.constraint).toContain("selected(.,9)");
+    expect(def.choiceLists['e1b']?.map((choice) => choice.value)).not.toContain('5');
+    expect(def.choiceLists['e1b']?.find((choice) => choice.value === '9')?.label.english).toBe('None');
+    expect(byName(def, 'e2a').type).toBe('select_one');
+    expect(byName(def, 'e2b').type).toBe('select_multiple');
+    expect(byName(def, 'e2b').rules?.choiceFilter).toBe('not(selected(${e2a}, filter))');
+  });
+
   it('infers a project title from a headed document and warns when there is none', () => {
     const headed = compileDocx(docx([
       paragraph('Bounce - Rider Survey Instrument'),

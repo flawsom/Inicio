@@ -199,7 +199,17 @@ async function typeInto(input: HTMLInputElement, value: string): Promise<void> {
 
 /** Hand the file control a file, the way a picker does. */
 async function pickFile(name = 'photo.jpg'): Promise<void> {
-  const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
+  // The runner shows one screen at a time: walk past the household-head page to
+  // the photo page before handing the control a file.
+  if (!container.querySelector('input[type="file"][accept*="image"]')) {
+    const next = [...container.querySelectorAll('button')].find((el) => el.textContent?.trim() === 'Next');
+    if (!next) throw new Error('the form rendered no Next button');
+    await act(async () => {
+      next.click();
+    });
+    await settle();
+  }
+  const input = container.querySelector('input[type="file"][accept*="image"]') as HTMLInputElement | null;
   if (!input) throw new Error('the form rendered no file control');
   const file = new File([new Uint8Array(11)], name, { type: 'image/jpeg' });
   Object.defineProperty(input, 'files', { configurable: true, value: [file] });

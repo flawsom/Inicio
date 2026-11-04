@@ -55,6 +55,15 @@ export interface DocxCompileOptions {
   languageNames?: boolean;
   /** Emit a 10 digit version stamp even when the caller supplies no version. */
   stampVersion?: boolean;
+  /**
+   * Translations keyed by question code and then language name. These are for
+   * callers that keep the translations outside the Word file. A label supplied
+   * here is only emitted when it is actually present; the compiler never
+   * invents a regional translation.
+   */
+  translations?: Record<string, Record<string, string>>;
+  /** Choice translations keyed by question code, then choice value, then language. */
+  choiceTranslations?: Record<string, Record<string, Record<string, string>>>;
 }
 
 export interface DocxCompileResult {
@@ -137,6 +146,18 @@ function cleanPrompt(input: string): string {
     .trim();
 }
 
+function cleanLabel(input: string): string {
+  return cleanPrompt(input)
+    .replace(/PROGRAMMER\s+TO\s+ASK\s+(?:ONLY\s+)?(?:IF|AS\s+PER)[^.]*\.\s*/gi, '')
+    .replace(/PROGRAMMER\s+TO\s+(?:ALLOW|KEEP|OPEN)[^.]*\.?\s*/gi, '')
+    .replace(/PROGRAMMER\s+TO\s+[^.]*\.\s*/gi, '')
+    .replace(/INTERVIEWER\s+TO\s+[^.]*\.\s*/gi, '')
+    .replace(/\bRECORD\s+(?:ACTUAL\s+AGE|VERBATIM|IN\s+NUMBERS)(?:\s+AND\s+POST\s+CODE)?[^.]*\.?\s*/gi, '')
+    .replace(/\bGroup\s+(?=RECORD|$)/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function normaliseCode(input: string): string {
   return input
     .replace(/[^A-Za-z0-9_]/g, '_')
@@ -156,15 +177,25 @@ function tableText(table: DocxTable): string {
   return table.rows.map((_, index) => rowText(table, index)).filter(Boolean).join('\n');
 }
 
-const SECTION_TEXT = /^(?:introduction|main questionnaire|questionnaire|screener|sub\s*section\b|section\b|module\b|part\b|customer profiling|concept evaluation|purchase behaviour\b|spontaneous ad recalls?|aware (?:non[- ]?)?trier diagnostics|in store experience evaluation|deep dive\b)/i;
+const SECTION_TEXT = /^(?:(?:\d+\.\s*)?(?:introduction|main questionnaire|questionnaire|screener|sub\s*section\b|section\b|module\b|part\b|churned[- ]rider\b)|customer profiling|concept evaluation|purchase behaviour\b|spontaneous ad recalls?|aware (?:non[- ]?)?trier diagnostics|in store experience evaluation|deep dive\b|zo\.\s*user\s+classification|grid\s+[a-z]\.?\s+user\s+classification)/i;
+const NOTE_TEXT = /^(?:interviewer\s+(?:to\s+)?read(?:\s+out)?|interviewer\s+read\s+out|message\s+to\s+display|read\s*[:–-]\s*)\b/i;
+const SKIP_TEXT = /^(?:why\s+we\s+ask\b|those\s+coded\b|ask\s+all\s+questions\b|programmer\s+(?:instruction|note)\b)/i;
 
 /** A section banner is never a respondent field, even when it sits in a table. */
 function isSectionText(input: string): boolean {
   const text = cleanPrompt(input);
-  if (text === '' || text.length > 140 || text.includes('?') || /_{3,}/.test(text)) return false;
+  if (text === '' || text.length > 160 || text.includes('?') || /_{3,}/.test(text)) return false;
   if (SECTION_TEXT.test(text)) return true;
   // Word questionnaires often format a banner as a one-cell table in capitals.
   return text === text.toUpperCase() && /[A-Z]{3}/.test(text) && !/\b(?:SA|MA|TERMINATE|CONTINUE)\b/.test(text);
+}
+
+/** A banner changes the branch of the questionnaire; it is never an option. */
+function sectionAfter(text: string): 'screener' | 'main' | null {
+  const value = cleanPrompt(text);
+  if (/\bscreener\b|\bsection\s*1\b/i.test(value)) return 'screener';
+  if (/\bmodule\b|\bmain\s+questionnaire\b|\bsection\s*2\b|\bsection\s*9\b|churned[- ]rider/i.test(value)) return 'main';
+  return null;
 }
 
 function isHeading(paragraph: DocxParagraph): boolean {
@@ -176,20 +207,44 @@ function isHeading(paragraph: DocxParagraph): boolean {
 
 function looksLikeQuestion(text: string): boolean {
   const value = cleanPrompt(text);
-  if (value === '') return false;
+  if (value === '' || isSectionText(value) || NOTE_TEXT.test(value) || SKIP_TEXT.test(value)) return false;
   if (value.length > 500 && !value.includes('?')) return false;
-  return /^[A-Z]{1,6}\d+[a-z]?(?:[._]\d+[a-z]?)?[.)\s:]/i.test(value)
-    || /\?\s*(?:SA|MA|$)/i.test(value)
-    || /_{3,}/.test(value)
-    || /\b(?:SA|MA)\b/.test(value);
+  if (/^[A-Z]{1,6}\d+[A-Za-z]{0,2}(?:[._]\d+[A-Za-z]?)?[.\s:]/.test(value)) return true;
+  // `B1)` and `B2)` are continuation questions under B7, not answer options.
+  if (/^[A-Z]\d+\)\s+/.test(value) && /PROGRAMMER|\?|how\s+(?:much|many)|_{2,}/i.test(value)) return true;
+  if (/^[A-Z][.)]\s+/.test(value) && /\?|\b(?:SA|MA)\b|_{3,}/.test(value)) return true;
+  if (/\?\s*(?:SA|MA|$)/i.test(value) || /\b(?:SA|MA)\b/.test(value)) return true;
+  // A blank is not enough on its own: `Other: ______` and `Yes, paid in full:
+  // INR ______` are options, not questions. Require a question opening as well.
+  return /_{3,}/.test(value)
+    && /^(?:what|how|why|which|who|when|where|do|does|did|are|is|was|were|have|has|can|could|would|will|should|please|if|in\s+total|at\s+your|on\s+a|before|after)\b/i.test(value);
 }
 
 function questionCode(text: string): string | null {
   const cleaned = cleanPrompt(text)
     .replace(/^[^A-Za-z0-9]+/, '')
     .replace(/^PROGRAMMER\s+INSTRUCTION\s*:\s*/i, '');
-  const match = /^([A-Z]{1,6}\d+[a-z]?(?:[._]\d+[a-z]?)?)[.)\s:]/i.exec(cleaned);
-  return match?.[1] ? normaliseCode(match[1]) : null;
+  // `D5. D5A.` repeats the code in the wording. The second, more specific one
+  // is the field the client's workbook uses.
+  const repeated = /^([A-Z]{1,6}\d+)[.)]\s*([A-Z]{1,6}\d+[A-Za-z]{0,2})[.)]\s+/i.exec(cleaned);
+  if (repeated?.[2]) return normaliseCode(repeated[2]);
+  const parenthesised = /^([A-Z]{1,6}\d+)\)\s+/.exec(cleaned);
+  if (parenthesised?.[1]) return normaliseCode(parenthesised[1]);
+  // `D2. A How convenient...` is field D2A, not D2 plus an option. `B7. A)` is
+  // B7A; the following `B1)`/`B2)` are resolved against that parent later.
+  const match = /^([A-Z]{1,6}\d+[A-Za-z]{0,2})(?:[.)]\s*([A-Z])\b|[.\s:])/i.exec(cleaned);
+  if (!match?.[1]) return null;
+  return normaliseCode(`${match[1]}${match[2] ?? ''}`);
+}
+
+/** A lettered continuation is named against the previous numbered field. */
+function continuedQuestionCode(text: string, previous: string | null): string | null {
+  if (!previous) return null;
+  const match = /^([A-Z])(\d+)?[.)]?\s+/.exec(cleanPrompt(text));
+  if (!match?.[1]) return null;
+  const base = /^([a-z]+\d+)/.exec(previous)?.[1];
+  if (!base) return null;
+  return normaliseCode(`${base}${match[1]}${match[2] ?? ''}`);
 }
 
 /**
@@ -208,7 +263,7 @@ function questionStart(text: string): string {
 }
 
 function withoutCode(text: string): string {
-  return cleanPrompt(text).replace(/^[A-Z]{1,6}\d+[a-z]?(?:[._]\d+[a-z]?)?[.)\s:]+\s*/i, '');
+  return cleanPrompt(text).replace(/^[A-Z]{1,6}\d+[A-Za-z]{0,2}(?:[._]\d+[A-Za-z]?)?[.)\s:]+\s*/i, '');
 }
 
 export interface RawOption {
@@ -216,6 +271,8 @@ export interface RawOption {
   value: string;
   instruction: string;
   row: string[];
+  /** Labels found in a document table with language columns, keyed by language. */
+  translations?: LocalizedText;
 }
 
 export interface RawQuestion {
@@ -224,8 +281,16 @@ export interface RawQuestion {
   options: RawOption[];
   section: 'screener' | 'main';
   where: string;
+  /** An interviewer instruction, emitted as a note rather than an answer. */
+  note?: boolean;
+  /** A churned-rider banner routes the questions below it to the churned branch. */
+  branch?: 'churned';
   /** A statement-grid row carries the group it belongs to and whether it is the first. */
   matrix?: { key: string; label: string; first: boolean };
+  /** Prompt translations supplied by the source or the caller. */
+  translations?: LocalizedText;
+  /** True when this row came from a table whose language columns were read. */
+  translatedTable?: boolean;
 }
 
 export interface NccsGrid {
@@ -356,7 +421,71 @@ function parseMatrixTable(table: DocxTable): ParsedMatrix | null {
   return null;
 }
 
+const KNOWN_LANGUAGES = [
+  'English', 'Marathi', 'Tamil', 'Telugu', 'Kannada', 'Hindi', 'Bengali', 'Odia',
+  'Gujarati', 'Punjabi', 'Malayalam', 'Urdu', 'Assamese',
+] as const;
+
+/** A table header such as `English | Marathi | Hindi` is an option translation grid. */
+function languageHeader(table: DocxTable): { row: number; languages: Array<{ language: string; column: number }> } | null {
+  for (let rowIndex = 0; rowIndex < Math.min(table.rows.length, 4); rowIndex += 1) {
+    const cells = (table.rows[rowIndex] ?? []).map((cell) => cell.text.replace(/\s+/g, ' ').trim());
+    const languages: Array<{ language: string; column: number }> = [];
+    cells.forEach((cell, column) => {
+      const language = KNOWN_LANGUAGES.find((name) => new RegExp(`^${escapeRegex(name)}(?:\\s*\\([^)]*\\))?$`, 'i').test(cell));
+      if (language && !languages.some((entry) => entry.language.toLowerCase() === language.toLowerCase())) {
+        languages.push({ language, column });
+      }
+    });
+    if (languages.length >= 2) return { row: rowIndex, languages };
+  }
+  return null;
+}
+
+/**
+ * Read one row from a table whose columns are languages. The first language is
+ * the source language; every other non-empty cell becomes a real translation.
+ * A code column may sit before or after the language columns.
+ */
+function languageOptions(table: DocxTable, header: { row: number; languages: Array<{ language: string; column: number }> }): RawOption[] {
+  const options: RawOption[] = [];
+  const seen = new Set<string>();
+  for (let rowIndex = header.row + 1; rowIndex < table.rows.length; rowIndex += 1) {
+    const row = table.rows[rowIndex] ?? [];
+    const cells = row.map((cell) => cell.text.replace(/\s+/g, ' ').trim());
+    const translations: LocalizedText = {};
+    for (const { language, column } of header.languages) {
+      const value = cells[column] ?? '';
+      if (value !== '') translations[language] = value;
+    }
+    const sourceLanguage = header.languages[0]?.language ?? '';
+    const label = translations[sourceLanguage] ?? Object.values(translations)[0] ?? '';
+    if (label === '') continue;
+    const usedColumns = new Set(header.languages.map((entry) => entry.column));
+    const codeAt = cells.findIndex((cell, column) => !usedColumns.has(column) && /^\d{1,3}$/.test(cell));
+    const value = codeAt >= 0 ? cells[codeAt]! : String(rowIndex - header.row);
+    // Reusing a code would make an invalid XLSForm choice list; skip a repeated
+    // translation row rather than silently changing the respondent's answer code.
+    if (seen.has(value)) continue;
+    seen.add(value);
+    const instruction = cells.filter((cell, column) => !usedColumns.has(column) && column !== codeAt).filter(Boolean).join(' ').trim();
+    options.push({
+      label,
+      value,
+      instruction,
+      row: cells,
+      ...(Object.keys(translations).length > 0 ? { translations } : {}),
+    });
+  }
+  return options;
+}
+
 function parseOptions(table: DocxTable, startRow = 0): RawOption[] {
+  const translated = languageHeader(table);
+  if (translated && startRow <= translated.row) {
+    const options = languageOptions(table, translated);
+    if (options.length > 0) return options;
+  }
   const options: RawOption[] = [];
   const seen = new Set<string>();
   for (let i = startRow; i < table.rows.length; i += 1) {
@@ -421,7 +550,7 @@ function tableQuestion(table: DocxTable, pending: string | null, section: 'scree
   if (options.length === 0 && isSectionText(cleaned)) return null;
   return {
     code: questionCode(cleaned),
-    prompt: cleaned,
+    prompt: cleanLabel(cleaned),
     options,
     section,
     where,
@@ -431,16 +560,28 @@ function tableQuestion(table: DocxTable, pending: string | null, section: 'scree
 function paragraphOption(text: string, index: number): RawOption | null {
   let label = cleanPrompt(text);
   if (label === '' || label.length > 240) return null;
-  if (/^(?:why we ask|note|instruction|interviewer|programmer|please|show|read|good|introduction|section|module|those|this|ask|questionnaire|main)\b/i.test(label)) {
+  if (isSectionText(label) || NOTE_TEXT.test(label) || SKIP_TEXT.test(label)) return null;
+  if (/^(?:note|instruction|please|show|read|good|introduction|section|module|those|this|ask|questionnaire|main)\b/i.test(label)) {
     return null;
   }
+  // These are interview instructions, not answer options. The bracket labels
+  // that follow them are the real post-code options.
+  if (/^(?:record\s+(?:amount|actual|verbatim|in\s+numbers)|or\s*$)/i.test(label)) return null;
   let instruction = '';
-  const trailing = /\s+(CONTINUE(?:\s+AS\s+[A-Z ]+)?|TERMINATE.*)$/i.exec(label);
+  const trailing = /\s+(CONTINUE(?:\s+AS\s+[A-Z ]+)?|TERMINATE.*)$/.exec(label);
   if (trailing?.[0]) {
     instruction = trailing[1]!.trim();
     label = label.slice(0, trailing.index).trim();
   }
-  label = label.replace(/\s+if never.*$/i, '').trim();
+  label = label
+    .replace(/\s+if never.*$/i, '')
+    .replace(/\s*PROGRAMMER\s+TO\b.*$/i, '')
+    .replace(/\s*PROGRAMMER\s+INSTRUCTION\b.*$/i, '')
+    .replace(/\s*INTERVIEWER\s+TO\b.*$/i, '')
+    .replace(/\s*:?\s*_{3,}\s*/g, ' ')
+    .replace(/\bINR\s*(?=per\b|\/|\.|$)/gi, 'INR ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (label === '' || /\?$/.test(label)) return null;
   return { label, value: String(index + 1), instruction, row: [text] };
 }
@@ -451,41 +592,85 @@ export function extractQuestionnaire(document: DocxDocument): {
   intro: IntroTable[];
   nccsGrids: NccsGrid[];
   brandTables: DocxTable[];
-  rankTables: DocxTable[];
+  rankTables: Array<{ table: DocxTable; prompt: string | null }>;
+  rotationTables: Array<{ table: DocxTable; prompt: string; where: string }>;
   diagnostics: CompilerDiagnostic[];
 } {
   const questions: RawQuestion[] = [];
   const intro: IntroTable[] = [];
   const nccsGrids: NccsGrid[] = [];
   const brandTables: DocxTable[] = [];
-  const rankTables: DocxTable[] = [];
+  const rankTables: Array<{ table: DocxTable; prompt: string | null }> = [];
+  const rotationTables: Array<{ table: DocxTable; prompt: string; where: string }> = [];
   const diagnostics: CompilerDiagnostic[] = [];
+  let pendingRotation: { prompt: string; where: string } | null = null;
   const gridTables: DocxTable[] = [];
   let pending: string | null = null;
+  let pendingCode: string | null = null;
   let pendingSection: 'screener' | 'main' = 'main';
+  let pendingBranch: 'churned' | undefined;
   let proseOptions: string[] = [];
   let section: 'screener' | 'main' = 'main';
+  let branch: 'churned' | undefined;
+  let lastCode: string | null = null;
+  let noteCount = 0;
   let blockIndex = 0;
 
   const flushProse = (): void => {
     if (!pending) return;
     if (isSectionText(pending)) {
       pending = null;
+      pendingCode = null;
       proseOptions = [];
       return;
     }
+    const code = pendingCode ?? questionCode(pending);
     const options = proseOptions
       .map((text, index) => paragraphOption(text, index))
-      .filter((option): option is RawOption => option !== null);
+      .filter((option): option is RawOption => option !== null)
+      // Codes are assigned after discarding instructions such as `Record Amount,
+      // INR/day: ____ or`, so a paragraph instrument does not start at code 2.
+      .map((option, index) => ({ ...option, value: String(index + 1) }));
     questions.push({
-      code: questionCode(pending),
+      code,
       prompt: pending,
       options,
       section: pendingSection,
+      ...(pendingBranch ? { branch: pendingBranch } : {}),
       where: `paragraph before ${blockIndex}`,
     });
+    if (code) lastCode = code;
     pending = null;
+    pendingCode = null;
     proseOptions = [];
+  };
+
+  const startQuestion = (text: string): void => {
+    flushProse();
+    const started = questionStart(text);
+    pending = started;
+    pendingCode = questionCode(started) ?? continuedQuestionCode(started, lastCode);
+    // B7 is written as `B7. A) ...`, then `B1)` and `B2)` for its two follow-up
+    // amounts. The client workbook names those `b7b1` and `b7b2`; without this
+    // they would collide with the real B1/B2 fields earlier in the module.
+    const followUp = /^B([12])\)\s+/i.exec(started.trim());
+    if (followUp && lastCode && /^b7(?:a|b1)$/i.test(lastCode)) pendingCode = `b7b${followUp[1]}`;
+    pendingSection = section;
+    pendingBranch = branch;
+  };
+
+  const addNote = (text: string): void => {
+    flushProse();
+    noteCount += 1;
+    questions.push({
+      code: `n_${noteCount}`,
+      prompt: text,
+      options: [],
+      section,
+      ...(branch ? { branch } : {}),
+      where: `paragraph before ${blockIndex}`,
+      note: true,
+    });
   };
 
   for (const block of document.blocks) {
@@ -493,17 +678,47 @@ export function extractQuestionnaire(document: DocxDocument): {
     if (block.kind === 'paragraph') {
       const text = cleanPrompt(block.paragraph.text);
       if (text === '') continue;
-      if (isHeading(block.paragraph) || (!pending && isSectionText(text))) {
+
+      if (SKIP_TEXT.test(text)) {
         flushProse();
-        if (/screener|section\s*1/i.test(text)) section = 'screener';
-        else if (/main questionnaire|section\s*2|questionnaire|module\s+[a-z0-9]/i.test(text)) section = 'main';
         continue;
       }
+      if (NOTE_TEXT.test(text)) {
+        addNote(text);
+        continue;
+      }
+      // Section banners terminate the current choice list before they can become
+      // an option. This is the Bounce failure: `ZO. USER CLASSIFICATION` and
+      // `2. Module A` were being appended to S2 and S3 as codes 6.
+      const nextSection = sectionAfter(text);
+      if (nextSection || isHeading(block.paragraph) || isSectionText(text)) {
+        flushProse();
+        if (/churned[-\s]+rider/i.test(text)) branch = 'churned';
+        else if (nextSection || /\bmodule\b|\bsection\s+\d/i.test(text)) branch = undefined;
+        if (nextSection) section = nextSection;
+        continue;
+      }
+
+      if (/\bROTATE\s+STATEMENTS?\b/i.test(text) && looksLikeQuestion(text)) {
+        pendingRotation = { prompt: text, where: `paragraph before ${blockIndex}` };
+      }
+
+      // A paragraph such as `I don't think there is much difference; ... estimate`
+      // is a conditional numeric follow-up, not a fourth answer option.
+      if (pendingCode && /estimate|rough amount|save more\/less/i.test(text)) {
+        const base: string | undefined = /^([a-z]+\d+)/.exec(lastCode ?? pendingCode)?.[1];
+        if (base) {
+          startQuestion(text);
+          pendingCode = `${base}a`;
+          continue;
+        }
+      }
+
+      // The benchmark papers prefix screener questions with `SQ` (or a bare
+      // `S`) and do not always write a separate Screener banner.
       if (/\b(?:SQ|S)\d/i.test(text) && !/main questionnaire/i.test(text)) section = 'screener';
       if (looksLikeQuestion(text)) {
-        flushProse();
-        pending = questionStart(text);
-        pendingSection = section;
+        startQuestion(text);
         continue;
       }
       if (pending) {
@@ -523,6 +738,18 @@ export function extractQuestionnaire(document: DocxDocument): {
 
     const table = block.table;
     const where = `table ${blockIndex}`;
+    if (pendingRotation) {
+      // The table is the grid behind the ROTATE STATEMENTS paragraph. Keep the
+      // prompt as a raw question so the main pass can bind it to this table, but
+      // do not turn the statement labels into ordinary options here.
+      if (readStatementGrid(table, pendingRotation.prompt)) {
+        flushProse();
+        rotationTables.push({ table, prompt: pendingRotation.prompt, where: pendingRotation.where });
+        pendingRotation = null;
+        continue;
+      }
+      pendingRotation = null;
+    }
     const introTable = isIntroTable(table);
     if (introTable) {
       flushProse();
@@ -542,38 +769,45 @@ export function extractQuestionnaire(document: DocxDocument): {
     }
     if (parseBrandGrid(table, where)) {
       // The table carries its own column prompts. A paragraph immediately above
-      // it is a section heading, not a separate field.
-      pending = null;
-      proseOptions = [];
+      // it is a section heading, not a separate field. A brand matrix is a main
+      // questionnaire block even when the screener banner was never closed.
+      if (/\b(?:MQ2|brand|aided|aware)/i.test(pending ?? '')) {
+        section = 'main';
+        pendingSection = 'main';
+      }
+      flushProse();
       brandTables.push(table);
       continue;
     }
-    if (parseRankGrid(table)) {
-      pending = null;
-      proseOptions = [];
-      rankTables.push(table);
+    if (parseRankGrid(table) && readRankTable(table, '')) {
+      const prompt = pending;
+      flushProse();
+      rankTables.push({ table, prompt });
       continue;
     }
     const matrix = parseMatrixTable(table);
     if (matrix) {
+      flushProse();
       matrix.rows.forEach((entry, index) => {
+        const code = questionCode(entry.label);
         questions.push({
-          code: questionCode(entry.label),
+          code,
           prompt: entry.label,
           options: matrix.options,
           section,
           where: `${where} matrix`,
           matrix: { key: `matrix_${blockIndex}`, label: matrix.prompt, first: index === 0 },
         });
+        if (code) lastCode = code;
       });
-      pending = null;
-      proseOptions = [];
       continue;
     }
     const question = tableQuestion(table, pending, section, where);
     if (question) {
+      question.branch = branch;
       questions.push(question);
       pending = null;
+      pendingCode = null;
       proseOptions = [];
       continue;
     }
@@ -582,10 +816,11 @@ export function extractQuestionnaire(document: DocxDocument): {
         severity: 'warning',
         code: 'unreadable-table',
         message: 'A question paragraph was followed by a table with no numeric answer codes, so the table was not turned into choices.',
-        where: pending.slice(0, 80),
+        where: String(pending).slice(0, 80),
       });
     }
     pending = null;
+    pendingCode = null;
     proseOptions = [];
   }
   flushProse();
@@ -601,7 +836,7 @@ export function extractQuestionnaire(document: DocxDocument): {
     }
   }
 
-  return { questions, intro, nccsGrids, brandTables, rankTables, diagnostics };
+  return { questions, intro, nccsGrids, brandTables, rankTables, rotationTables, diagnostics };
 }
 
 function collectNccsAllowed(document: DocxDocument): string[] {
@@ -706,12 +941,28 @@ class FormBuilder {
       const attrs = { filter: value, ...(extra?.(option, index) ?? {}) };
       return {
         value,
-        label: this.text(option.label),
+        label: this.text(option.label, option.translations),
         extra: attrs,
       } satisfies Choice;
     });
     this.choiceLists[name] = list;
     return name;
+  }
+
+  /** Apply explicit caller translations without inventing any missing language. */
+  translateChoices(
+    code: string | null | undefined,
+    options: RawOption[],
+    tables: DocxCompileOptions['choiceTranslations'],
+  ): void {
+    if (!code || !tables) return;
+    const valuesForCode = tables[code];
+    if (!valuesForCode) return;
+    for (const option of options) {
+      const values = valuesForCode[option.value];
+      if (!values) continue;
+      option.translations = { ...(option.translations ?? {}), ...values };
+    }
   }
 
   note(code: string, message: string, where?: string): void {
@@ -778,8 +1029,10 @@ function ageBounds(label: string): { min: number; max: number } | null {
   const text = label.toLowerCase();
   const range = /(\d{1,3})\s*(?:-|–|to)\s*(\d{1,3})/.exec(text);
   if (range) return { min: Number(range[1]), max: Number(range[2]) };
+  const under = /\b(?:under|below|less\s+than|up\s+to)\s*(\d{1,3})/.exec(text);
+  if (under) return { min: 0, max: Number(under[1]) - 1 };
   const below = /(\d{1,3})\s*(?:years?\s*)?(?:and\s*)?(?:below|or\s*less|less)/.exec(text);
-  if (below) return { min: 0, max: Number(below[1]) };
+  if (below) return { min: 0, max: Number(below[1]) - 1 };
   const above = /(\d{1,3})\s*(?:years?\s*)?(?:and\s*)?(?:above|or\s*above|or\s*more|\+)/.exec(text);
   if (above) return { min: Number(above[1]), max: 120 };
   return null;
@@ -795,7 +1048,7 @@ function addAge(builder: FormBuilder, raw: RawQuestion, groupId: string | null, 
   builder.question({
     name,
     type: 'integer',
-    label: builder.text(withoutCode(raw.prompt)),
+    label: builder.text(cleanLabel(withoutCode(raw.prompt))),
     required: true,
     groupId,
     validation: { constraint: 'string-length(.) = 2', message: builder.text('Please enter age in 2 digit number') },
@@ -900,12 +1153,17 @@ function addNccs(builder: FormBuilder, education: RawQuestion, durables: RawQues
 }
 
 function exclusiveOption(options: RawOption[]): RawOption | undefined {
-  return options.find((option) => /^(?:none|none of these|no one|don't know|not interested)$/i.test(option.label.trim()));
+  return options.find((option) => /^(?:none|none of these|no one|no issues|nothing else|don't know|not interested)$/i.test(option.label.trim()));
 }
 
-function addExclusive(builder: FormBuilder, question: Question, options: RawOption[]): void {
-  if (question.type !== 'select_one' && question.type !== 'select_multiple') return;
-  const exclusive = exclusiveOption(options);
+function addExclusive(builder: FormBuilder, question: Question, options: RawOption[], preferredCode?: string): void {
+  // `count-selected()` is a multi-select rule. A single-select answer cannot
+  // select two options, and writing this constraint on one would make the
+  // workbook look guarded while the guard can never fire.
+  if (question.type !== 'select_multiple') return;
+  const exclusive = preferredCode
+    ? options.find((option) => option.value === preferredCode)
+    : exclusiveOption(options);
   if (!exclusive) return;
   const code = exclusive.value.replace(/'/g, "''");
   question.validation = {
@@ -915,7 +1173,7 @@ function addExclusive(builder: FormBuilder, question: Question, options: RawOpti
 }
 
 function addOtherSpecify(builder: FormBuilder, question: Question, options: RawOption[], groupId: string | null): void {
-  const other = options.find((option) => /other|specify/i.test(option.label) && !/none/i.test(option.label));
+  const other = options.find((option) => /^others?\b/i.test(option.label.trim()) && !/none/i.test(option.label));
   if (!other) return;
   const code = /^\d{1,3}$/.test(other.value) ? other.value : '99';
   question.appearance = [question.appearance, `custom-specify-other(other='${code}')`].filter(Boolean).join(' ');
@@ -930,26 +1188,386 @@ function addOtherSpecify(builder: FormBuilder, question: Question, options: RawO
   extracted.rules = { ...extracted.rules, visibleIf: `selected(\${${question.name}}, '${code}')` };
 }
 
-function addSimpleQuestion(builder: FormBuilder, raw: RawQuestion, groupId: string | null, used: Set<string>, mainRelevance?: string): void {
+function numericBounds(label: string): { min: number; max: number } | null {
+  const value = label.toLowerCase().replace(/rs\.?|inr|,|₹/g, ' ').replace(/\s+/g, ' ').trim();
+  const range = /(\d+)\s*(?:-|–|to)\s*(\d+)/.exec(value);
+  if (range) return { min: Number(range[1]), max: Number(range[2]) };
+  const below = /\b(?:under|below|less than|up to)\s*(\d+)/.exec(value);
+  if (below) return { min: 0, max: Number(below[1]) - 1 };
+  const above = /\b(?:over|above|more than)\s*(\d+)/.exec(value);
+  if (above) return { min: Number(above[1]) + 1, max: 999999 };
+  return null;
+}
+
+function numericPrompt(prompt: string): boolean {
+  return /\bPROGRAMMER\s+TO\s+ALLOW\s+(?:ONLY\s+)?NUMBERS\b|\bRECORD\s+(?:ACTUAL\s+AGE|IN\s+NUMBERS)\b|\bINR\s*[/:]?\s*_{2,}|\b(?:Number|Months|Days|Hours|Km)\s*:\s*_{2,}|\bhow\s+much\s+(?:more|less)\b|\bhow\s+many\s+more\b/i.test(prompt);
+}
+
+function numericConstraint(prompt: string): string | null {
+  if (/hours\s*:/i.test(prompt) || /\bhours\b/i.test(prompt)) return '(.) >= 1 and (.) <= 24';
+  if (/\bkm\b/i.test(prompt)) return '(.) >= 1 and (.) <= 999';
+  if (/days\s+a\s+week/i.test(prompt)) return '(.) >= 1 and (.) <= 7';
+  if (/break\s*down|breakdown/i.test(prompt)) return '(.) >= 0 and (.) <= 99';
+  if (/\bmonths?\s*:/i.test(prompt)) return '(.) >= 1 and (.) <= 120';
+  if (/minimum\s+2\s+digits/i.test(prompt)) return '(.) >= 10';
+  if (/minimum\s+3\s+digits\s+and\s+maximum\s+5\s+digits/i.test(prompt)) return '(.) >= 0 and (.) <= 99999';
+  if (/minimum\s+3\s+digits/i.test(prompt)) return '(.) >= 100';
+  if (/maximum\s+3\s+digits/i.test(prompt)) return '(.) <= 999';
+  return null;
+}
+
+function addNumericPostcode(builder: FormBuilder, name: string, options: RawOption[], groupId: string | null, relevance: string | undefined): void {
+  const bounds = options.map((option) => ({ option, bounds: numericBounds(option.label) })).filter((entry) => entry.bounds !== null);
+  if (bounds.length === 0) return;
+  const ref = `\${${name}}`;
+  const code = bounds
+    .slice()
+    .reverse()
+    .reduce<string | null>((fallback, entry) => {
+      const bound = entry.bounds!;
+      const test = `${ref} >= ${bound.min} and ${ref} <= ${bound.max}`;
+      return fallback === null ? `if(${test}, '${entry.option.value}', '')` : `if(${test}, '${entry.option.value}', ${fallback})`;
+    }, null);
+  const display = bounds
+    .slice()
+    .reverse()
+    .reduce<string | null>((fallback, entry) => {
+      const bound = entry.bounds!;
+      const test = `${ref} >= ${bound.min} and ${ref} <= ${bound.max}`;
+      const label = entry.option.label.replace(/'/g, "''");
+      return fallback === null ? `if(${test}, '${label}', '')` : `if(${test}, '${label}', ${fallback})`;
+    }, null);
+  const rows: Array<[string, string, string]> = [
+    [`${name}_po`, code ?? "''", 'Post-code'],
+    [`${name}_po_dis`, display ?? "''", 'Post-code display'],
+  ];
+  for (const [calcName, calculation, label] of rows) {
+    builder.calc(calcName, calculation, groupId, label, {
+      ...(relevance ? { rules: { calculate: calculation, visibleIf: relevance } } : {}),
+    });
+  }
+}
+
+function addNumericFollowUps(builder: FormBuilder, question: Question, options: RawOption[], groupId: string | null, used: Set<string>): void {
+  for (const option of options) {
+    const label = option.label;
+    // The inline Other box is handled by `custom-specify-other`; a second text
+    // field with the same `_oth` suffix would collide with its calculate row.
+    if (/^others?\b/i.test(label.trim())) continue;
+    // `INR 10 to 20 less/day` is a choice label, not a blank amount. Only a
+    // fill-in cue should turn an option into a numeric follow-up.
+    const numeric = /paid in full|pay extra|\bINR\s*:?\s*_{2,}/i.test(label);
+    const text = /\bspecify\b|\bhometown\b|main reason/i.test(label);
+    if (!numeric && !text) continue;
+    const suffix = /paid in full|pay extra/i.test(label) ? 'paid' : /main reason/i.test(label) ? 'b' : 'oth';
+    const name = builder.uniqueName(suffix === 'b' ? `${question.name}b` : `${question.name}_${suffix}`, used);
+    const relevance = `selected(\${${question.name}}, '${option.value.replace(/'/g, "''")}')`;
+    const display = numeric
+      ? label.replace(/^.*?(?:paid in full|pay extra)\s*:?\s*/i, 'Paid in full: INR ').replace(/\bINR\s*INR\b/i, 'INR')
+      : 'Please specify';
+    builder.question({
+      name,
+      type: numeric ? 'integer' : 'text',
+      label: builder.text(display),
+      required: true,
+      groupId,
+      rules: { visibleIf: relevance },
+      ...(numeric ? { validation: { constraint: '(.) >= 0 and (.) <= 99999', message: builder.text('Please enter a whole number') } } : {}),
+    });
+  }
+}
+
+function addDualNumeric(builder: FormBuilder, raw: RawQuestion, name: string, groupId: string | null, used: Set<string>, mainRelevance: string | undefined): boolean {
+  const prompt = cleanLabel(withoutCode(raw.prompt));
+  const pair = /hours\s*:\s*_+.*?km\s*:\s*_+/i.test(raw.prompt)
+    ? [{ suffix: '_h', label: 'Hours', constraint: '(.) >= 1 and (.) <= 24' }, { suffix: '_k', label: 'Km', constraint: '(.) >= 1 and (.) <= 999' }]
+    : /days\s*:\s*_+.*?(?:inr\/day|inr)\s*:\s*_+/i.test(raw.prompt)
+      ? [{ suffix: 'a', label: 'Days a week', constraint: '(.) >= 1 and (.) <= 7' }, { suffix: 'b', label: 'INR/day', constraint: '(.) >= 0 and (.) <= 999999' }]
+      : null;
+  if (!pair) return false;
+  const group = builder.group(builder.uniqueName(`bg_${name}`, used), prompt, { appearance: 'field-list', ...(mainRelevance ? { rules: { visibleIf: mainRelevance } } : {}) });
+  for (const part of pair) {
+    builder.question({
+      name: `${name}${part.suffix}`,
+      type: 'integer',
+      label: builder.text(part.label),
+      required: true,
+      groupId: group.id,
+      ...(mainRelevance ? { rules: { visibleIf: mainRelevance } } : {}),
+      validation: { constraint: part.constraint, message: builder.text(`Please enter a valid ${part.label.toLowerCase()}`) },
+    });
+  }
+  return true;
+}
+
+function addExclusiveNumeric(builder: FormBuilder, raw: RawQuestion, name: string, options: RawOption[], groupId: string | null, used: Set<string>, mainRelevance: string | undefined): boolean {
+  const exclusive = options.find((option) => /did\s+not\s+work|none/i.test(option.label));
+  // The instruction lives on the option in the Word file and is removed from the
+  // choice text by the parser. A numeric field whose only choice is `None` or
+  // `Did not work before` is the exclusive-None pattern.
+  if (!exclusive) return false;
+  const group = builder.group(builder.uniqueName(`bg_${name}`, used), cleanLabel(withoutCode(raw.prompt)), {
+    appearance: 'field-list',
+    ...(mainRelevance ? { rules: { visibleIf: mainRelevance } } : {}),
+  });
+  const code = '9';
+  const amountConstraint = numericConstraint(raw.prompt);
+  builder.question({
+    name,
+    type: 'integer',
+    label: builder.text(cleanLabel(withoutCode(raw.prompt))),
+    required: false,
+    groupId: group.id,
+    validation: {
+      constraint: amountConstraint ? `${amountConstraint} or (.) = 0` : '(.) >= 0 and (.) <= 999999',
+      message: builder.text('Please enter a whole number'),
+    },
+  });
+  const listName = builder.choiceList(`${name}_none`, [{ ...exclusive, value: code, label: exclusive.label.replace(/PROGRAMMER.*$/i, '').trim() }]);
+  builder.question({
+    name: `${name}_none`,
+    type: 'select_multiple',
+    label: builder.text('.'),
+    choices: { listName },
+    required: false,
+    groupId: group.id,
+    validation: {
+      constraint: `(\${${name}} >= 0 and count-selected(.) = 0) or (\${${name}} = '' and selected(., '${code}'))`,
+      message: builder.text('Choose the amount or the exclusive option, not both'),
+    },
+  });
+  return true;
+}
+
+function resolveQuestionRef(builder: FormBuilder, candidate: string): string {
+  const name = candidate.toLowerCase();
+  if (builder.questions.some((question) => question.name === name)) return name;
+  // `ASK IF CODED ... IN D5` means the actual D5A split field; `... IN E1` means
+  // E1B, the usage half of the consideration/usage pair.
+  for (const alternate of [`${name}a`, `${name}b`]) {
+    if (builder.questions.some((question) => question.name === alternate)) return alternate;
+  }
+  return name;
+}
+
+/**
+ * Turn the uppercase instructions into a relevance expression instead of leaving
+ * them in the respondent's label. This is deliberately a small, explicit grammar:
+ * `ASK [ONLY] IF [NOT] CODED a [OR b] [IN Q]` is what the client instruments use.
+ */
+function instructionRelevance(prompt: string, ownName: string, builder: FormBuilder): string | undefined {
+  const match = /ASK\s+(?:ONLY\s+)?IF\s+(NOT\s+)?CODED\s+([\d\s,o/r]+?)(?:\s+IN\s+([A-Za-z][A-Za-z0-9_]*))?(?:[.:]|$)/i.exec(prompt);
+  if (!match) return undefined;
+  const codes = [...new Set((match[2] ?? '').match(/\d+/g) ?? [])];
+  if (codes.length === 0) return undefined;
+  let reference = match[3]?.toLowerCase();
+  if (!reference) {
+    // `B1)`/`B2)` follow B7A. Their own names are b7b1/b7b2, so the parent is b7.
+    const parent = /^(.+?)b[12]$/i.exec(ownName)?.[1];
+    reference = parent ?? ownName.replace(/[a-z]$/i, '');
+  }
+  const question = resolveQuestionRef(builder, reference);
+  const selections = codes.map((code) => `selected(\${${question}}, '${code}')`).join(' or ');
+  return match[1] ? `not(${selections})` : selections;
+}
+
+/** `PROGRAMMER TO ASK AS PER OPTIONS CODED IN A2` becomes a count constraint. */
+function instructionConstraint(prompt: string, builder: FormBuilder): { constraint: string; message: string } | undefined {
+  const match = /AS\s+PER\s+OPTIONS\s+CODED\s+IN\s+([A-Za-z][A-Za-z0-9_]*)/i.exec(prompt);
+  if (!match?.[1]) return undefined;
+  const reference = resolveQuestionRef(builder, match[1]);
+  return {
+    constraint: `(count-selected(.) = 1 and \${${reference}} = 1) or (count-selected(.) = 2 and \${${reference}} = 2) or (count-selected(.) >= 3 and \${${reference}} = 3)`,
+    message: `Please match the number selected in ${match[1].toUpperCase()}`,
+  };
+}
+
+function optionPrompt(text: string): string {
+  return cleanLabel(withoutCode(text))
+    .replace(/\bROTATE\s+(?:OPTIONS?|CATEGORIES|MOTIVATORS?|STATEMENTS?)\b.*$/i, '')
+    .replace(/\bmark\s+all(?:\s+that\s+apply)?\b.*$/i, '')
+    .replace(/\bSA\b|\bMA\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function randomizedFor(options: RawOption[]): string | undefined {
+  const trailing = [...options].reverse().findIndex((option) => !/other|none|nothing|no issues|did not work|don't know/i.test(option.label));
+  if (trailing < 0) return `randomized(0,${options.length})`;
+  return `randomized(0,${Math.max(0, trailing)})`;
+}
+
+/**
+ * E1 in the client instruments asks two different questions in one sentence:
+ * what the rider considered, and what the rider actually used. They are two
+ * answer fields, not one multi-select whose meaning changes with the analyst.
+ */
+function addConsiderationSplit(
+  builder: FormBuilder,
+  raw: RawQuestion,
+  groupId: string | null,
+  used: Set<string>,
+  mainRelevance?: string,
+): Question | null {
+  const cue = /\bconsider(?:ed)?\b[\s\S]*?\bactually\s+use\b/i.test(raw.prompt);
+  if (!cue || !raw.code || !/^e1$/i.test(raw.code.replace(/[^a-z0-9]/gi, ''))) return null;
+  const considerName = builder.uniqueName('e1', used);
+  const useName = builder.uniqueName('e1b', used);
+  const considered = raw.options.filter((option) => !/^nobody$/i.test(option.label.trim()));
+  // `Nothing else` belongs to the consideration field. The usage field gets a
+  // single explicit `None`, so the two exclusives cannot conflict.
+  const usedOptions = considered
+    .filter((option) => !/^nothing else$/i.test(option.label.trim()))
+    .map((option) => ({ ...option }));
+  const noneCode = usedOptions.some((option) => option.value === '9') ? '99' : '9';
+  usedOptions.push({ label: 'None', value: noneCode, instruction: '', row: ['None'] });
+  const considerList = builder.choiceList(considerName, considered);
+  const useList = builder.choiceList(useName, usedOptions);
+  const consider = builder.question({
+    name: considerName,
+    type: 'select_multiple',
+    label: builder.text('Before choosing Bounce, which of these did you consider?', raw.translations),
+    choices: { listName: considerList },
+    appearance: randomizedFor(considered),
+    required: true,
+    groupId,
+    ...(mainRelevance ? { rules: { visibleIf: mainRelevance } } : {}),
+  });
+  addExclusive(builder, consider, considered);
+  addOtherSpecify(builder, consider, considered, groupId);
+  const use = builder.question({
+    name: useName,
+    type: 'select_multiple',
+    label: builder.text('Before choosing Bounce, which of these did you actually use?', raw.translations),
+    choices: { listName: useList },
+    appearance: randomizedFor(usedOptions),
+    required: true,
+    groupId,
+    ...(mainRelevance ? { rules: { visibleIf: mainRelevance } } : {}),
+  });
+  addExclusive(builder, use, usedOptions, noneCode);
+  addOtherSpecify(builder, use, usedOptions, groupId);
+  return use;
+}
+
+/**
+ * E2a/E2B is a most-important pick followed by the remaining reasons. Compiling
+ * it as a single multi-select loses which reason was ranked first.
+ */
+function addReasonsSplit(
+  builder: FormBuilder,
+  raw: RawQuestion,
+  groupId: string | null,
+  used: Set<string>,
+  mainRelevance?: string,
+): Question | null {
+  const cue = /\bmattered?\s+most\b/i.test(raw.prompt) && /\bmark\s+all\b/i.test(raw.prompt);
+  if (!cue || !raw.code || !/^e2a$/i.test(raw.code.replace(/[^a-z0-9]/gi, ''))) return null;
+  const first = builder.uniqueName('e2a', used);
+  const rest = builder.uniqueName('e2b', used);
+  const listName = builder.choiceList(first, raw.options);
+  const pick = builder.question({
+    name: first,
+    type: 'select_one',
+    label: builder.text('Which of these mattered most in choosing Bounce?', raw.translations),
+    choices: { listName },
+    appearance: randomizedFor(raw.options),
+    required: true,
+    groupId,
+    ...(mainRelevance ? { rules: { visibleIf: mainRelevance } } : {}),
+  });
+  addOtherSpecify(builder, pick, raw.options, groupId);
+  const restList = builder.choiceList(rest, raw.options);
+  const other = builder.question({
+    name: rest,
+    type: 'select_multiple',
+    label: builder.text('What are the other reasons in choosing Bounce?', raw.translations),
+    choices: { listName: restList },
+    appearance: randomizedFor(raw.options),
+    required: true,
+    groupId,
+    rules: {
+      ...(mainRelevance ? { visibleIf: mainRelevance } : {}),
+      choiceFilter: `not(selected(\${${first}}, filter))`,
+    },
+  });
+  addOtherSpecify(builder, other, raw.options, groupId);
+  return other;
+}
+
+function addSimpleQuestion(builder: FormBuilder, raw: RawQuestion, groupId: string | null, used: Set<string>, mainRelevance?: string): Question | null {
+  if (raw.note) {
+    return builder.question({
+      name: builder.uniqueName(raw.code ?? 'n_note', used),
+      type: 'note',
+      label: builder.text(raw.prompt.replace(/^INTERVIEWER\s+(?:TO\s+)?READ(?:\s+OUT)?\s*[:\-–]\s*/i, ''), raw.translations),
+      required: false,
+      groupId,
+      ...(mainRelevance ? { rules: { visibleIf: mainRelevance } } : {}),
+    });
+  }
   const base = raw.code ?? slug(withoutCode(raw.prompt)).slice(0, 60);
   const name = builder.uniqueName(base, used);
   const options = raw.options;
-  const prompt = withoutCode(raw.prompt);
+  const prompt = cleanLabel(withoutCode(raw.prompt));
+  const isNumeric = numericPrompt(raw.prompt);
+  const directive = instructionRelevance(raw.prompt, name, builder);
+  const relevance = mainRelevance && directive
+    ? `(${mainRelevance}) and (${directive})`
+    : mainRelevance ?? directive;
+  if (isNumeric && addDualNumeric(builder, raw, name, groupId, used, relevance)) return null;
+  if (isNumeric && addExclusiveNumeric(builder, raw, name, options, groupId, used, relevance)) return null;
+  if (isNumeric) {
+    const q: Question = {
+      id: `q_${name}`,
+      order: builder.takeOrder(),
+      name,
+      type: 'integer',
+      label: builder.text(prompt, raw.translations),
+      required: true,
+      groupId,
+      ...(relevance ? { rules: { visibleIf: relevance } } : {}),
+      ...(numericConstraint(raw.prompt) ? { validation: { constraint: numericConstraint(raw.prompt)!, message: builder.text('Please enter a valid number') } } : {}),
+    };
+    builder.questions.push(q);
+    addNumericPostcode(builder, name, options, groupId, mainRelevance);
+    return q;
+  }
+  // A 0–10 recommendation scale is a choice list even when the Word document
+  // only states the two endpoints.
+  if (options.length === 0 && /0\s*=\s*not\s+at\s+all.*10\s*=\s*extremely/i.test(raw.prompt)) {
+    const listName = name;
+    builder.choiceLists[listName] = Array.from({ length: 11 }, (_, value) => ({
+      value: String(value),
+      label: builder.text(value === 0 ? '0 = not at all' : value === 10 ? '10 = extremely' : String(value)),
+      extra: { filter: String(value) },
+    }));
+    return builder.question({
+      order: builder.takeOrder(),
+      name,
+      type: 'select_one',
+      label: builder.text(prompt, raw.translations),
+      choices: { listName },
+      appearance: 'quick',
+      required: true,
+      groupId,
+      ...(relevance ? { rules: { visibleIf: relevance } } : {}),
+    });
+  }
   // A statement-grid row is one select per statement, even if the statement text
   // happens to contain a word the single-question heuristics look for.
-  const isMulti = !raw.matrix && /\bMA\b|SELECT\s+(?:ALL|MULTIPLE)|MULTIPLE\s+RESPONSES/i.test(raw.prompt);
+  const isMulti = !raw.matrix && /\bMA\b|\bmark\s+all\b|\bselect\s+all\b|SELECT\s+(?:ALL|MULTIPLE)|MULTIPLE\s+RESPONSES/i.test(raw.prompt);
   const isRank = !raw.matrix && /\bRANK\b|ORDER\s+OF\s+PRIORITY/i.test(raw.prompt);
   let type: QuestionType = options.length > 0 ? (isRank ? 'rank' : isMulti ? 'select_multiple' : 'select_one') : 'text';
   if (options.length === 0 && /\b(?:age|years?)\b/i.test(prompt)) type = 'integer';
-  if (type === 'text' && !looksLikeQuestion(raw.prompt) && prompt.length < 8) return;
+  if (type === 'text' && !looksLikeQuestion(raw.prompt) && prompt.length < 8) return null;
 
-  const relevance = mainRelevance;
   const q: Question = {
     id: `q_${name}`,
     order: builder.takeOrder(),
     name,
     type,
-    label: builder.text(prompt),
+    label: builder.text(prompt, raw.translations),
     required: true,
     groupId,
     ...(relevance ? { rules: { visibleIf: relevance } } : {}),
@@ -957,6 +1575,10 @@ function addSimpleQuestion(builder: FormBuilder, raw: RawQuestion, groupId: stri
   if (options.length > 0) {
     const listName = builder.choiceList(name, options);
     q.choices = { listName };
+    if (type === 'select_multiple') {
+      const count = instructionConstraint(raw.prompt, builder);
+      if (count) q.validation = { constraint: count.constraint, message: builder.text(count.message) };
+    }
     const rotate = /\b(?:ROTATE|RANDOMI[ZS]E)\b/i.test(raw.prompt);
     if (rotate) {
       const trailing = [...options].reverse().findIndex((option) => !/other|none|don't know/i.test(option.label));
@@ -969,6 +1591,7 @@ function addSimpleQuestion(builder: FormBuilder, raw: RawQuestion, groupId: stri
     addOtherSpecify(builder, q, options, groupId);
   }
   builder.questions.push(q);
+  if (options.length > 0) addNumericFollowUps(builder, q, options, groupId, used);
   if (type === 'rank') {
     // `rank` is a real XLSForm type, but the benchmark tables express the same
     // interaction as one select per rank. Keep the canonical type and report the
@@ -980,6 +1603,7 @@ function addSimpleQuestion(builder: FormBuilder, raw: RawQuestion, groupId: stri
       where: raw.where,
     });
   }
+  return q;
 }
 
 function addScreenerGate(builder: FormBuilder, gateExpressions: string[], groupId: string | null): string | null {
@@ -1042,64 +1666,408 @@ function addBrandGrid(builder: FormBuilder, table: DocxTable, groupId: string | 
   }
 }
 
-function addSplitRotation(builder: FormBuilder, table: DocxTable, groupId: string | null, used: Set<string>, mainRelevance?: string): void {
-  const rows = table.rows.map((row) => row.map((cell) => cell.text.trim()));
-  const statements = rows.slice(1).map((row) => row[0] ?? '').filter((text) => text.length > 3);
-  if (statements.length < 2) {
-    builder.note('rotation-unreadable', 'A statement rotation table was found, but fewer than two statements could be read.', tableText(table).slice(0, 80));
-    return;
-  }
-  const seed = builder.uniqueName('ad_num1', used);
-  builder.calc(seed, 'once(random())', groupId, 'Rotation Draw');
-  builder.calc('rot', `string(int(\${${seed}}*2)+1)`, groupId, 'Rotation');
-  builder.diagnostics.push({
-    severity: 'info',
-    code: 'rotation-partial',
-    message: 'X/Y statement rotation compiled as a rotation draw and a visible order flag. Per-statement reverse groups require a reviewed statement grid.',
-  });
-  void mainRelevance;
+interface StatementGrid {
+  prompt: string;
+  statements: RawOption[];
+  scale: RawOption[];
+  code: string | null;
 }
 
-function addRankGrid(builder: FormBuilder, table: DocxTable, groupId: string | null, used: Set<string>, mainRelevance?: string): void {
-  const rows = table.rows.map((row) => row.map((cell) => cell.text.trim()));
-  const header = rows[0] ?? [];
-  const rankColumns = header
-    .map((cell, index) => ({ cell, index }))
-    .filter(({ cell }) => /rank\s*[1-9]/i.test(cell) || /most|least/i.test(cell));
-  const items = rows.slice(1).map((row) => row[0] ?? '').filter((text) => text.length > 2);
-  if (rankColumns.length === 0 || items.length === 0) {
-    builder.note('rank-unreadable', 'A ranking table was found, but its rank columns or items could not be read.', tableText(table).slice(0, 80));
+function scaleOptions(from: number, to: number): RawOption[] {
+  return Array.from({ length: Math.max(0, to - from + 1) }, (_, index) => {
+    const value = from + index;
+    return { label: String(value), value: String(value), instruction: '', row: [String(value)] };
+  });
+}
+
+function looksLikeScaleCell(text: string): boolean {
+  return /^\d{1,2}$/.test(text) || /agree|disagree|likely|unlikely|satisf|poor|good|excellent|important|never|always|often|sometimes|yes|no/i.test(text);
+}
+
+/** Read a statement grid, including the paragraph-table form used by client instruments. */
+function readStatementGrid(table: DocxTable, fallbackPrompt = ''): StatementGrid | null {
+  const rows = table.rows.map((row) => row.map((cell) => cell.text.replace(/\s+/g, ' ').trim()));
+  if (rows.length < 2) return null;
+  let headerAt = -1;
+  let promptBoundary = -1;
+  let scale: RawOption[] = [];
+  for (let index = 0; index < Math.min(rows.length, 4); index += 1) {
+    const header = rows[index] ?? [];
+    const labels = header.slice(1).filter((cell) => cell !== '');
+    if (labels.length < 2 || (!labels.every(looksLikeScaleCell) && labels.filter((cell) => looksLikeScaleCell(cell)).length < 2)) continue;
+    const codes = header.slice(1).filter((cell) => cell !== '');
+    if (codes.every((cell) => /^\d{1,2}$/.test(cell))) {
+      headerAt = index;
+      promptBoundary = index;
+      scale = codes.map((cell) => ({ label: cell, value: cell, instruction: '', row: [cell] }));
+      break;
+    }
+    // A scale written as labels above a code row (`Strongly disagree ...` /
+    // `1 | 2 | ...`) is still a readable statement grid.
+    const nextCodes = (rows[index + 1] ?? []).slice(1).filter((cell) => cell !== '');
+    if (labels.every(looksLikeScaleCell) && nextCodes.length >= labels.length && nextCodes.every((cell) => /^\d{1,2}$/.test(cell))) {
+      headerAt = index + 1;
+      promptBoundary = index;
+      scale = nextCodes.slice(0, labels.length).map((cell, offset) => ({ label: labels[offset]!, value: cell, instruction: '', row: [labels[offset]!, cell] }));
+      break;
+    }
+  }
+  const promptRows = rows.slice(0, Math.max(0, promptBoundary)).map((row) => row[0] ?? '').filter((text) => text !== '');
+  const prompt = promptRows.at(-1) ?? fallbackPrompt;
+  let statementRows = headerAt >= 0 ? rows.slice(headerAt + 1) : rows;
+  // A simple two-column table (`item | code`) uses the prompt's scale rather than
+  // treating the item code as a rating. This is the PQ10 shape.
+  if (scale.length === 0) {
+    const range = /\b(\d{1,2})\s*(?:-|–|to)\s*(\d{1,2})\b/i.exec(prompt)
+      ?? /\b(\d{1,2})\s*=\s*[^\n]+?\b(\d{1,2})\s*=/i.exec(prompt);
+    if (range) scale = scaleOptions(Number(range[1]), Number(range[2]));
+    if (scale.length < 2) {
+      const zeroToTen = /0\s*=.*10\s*=/i.test(prompt);
+      if (zeroToTen) scale = scaleOptions(0, 10);
+    }
+    // Exclude prompt rows and section banners from the statement list.
+    statementRows = rows.filter((row) => {
+      const first = row[0] ?? '';
+      return first.length > 3 && !isSectionText(first) && !/^programmer|^interviewer|^maxdiff/i.test(first) && !questionCode(first);
+    });
+  }
+  const statements = statementRows
+    .filter((row) => (row[0] ?? '').length > 3 && !isSectionText(row[0] ?? '') && !/^others?\s*(?:\(|:|specify)/i.test(row[0] ?? ''))
+    .map((row, index) => ({
+      label: row[0]!,
+      value: String(index + 1),
+      instruction: '',
+      row,
+    }));
+  if (statements.length < 2 || scale.length < 2) return null;
+  return {
+    prompt: cleanLabel(withoutCode(prompt)) || 'Statements',
+    statements,
+    scale,
+    code: questionCode(prompt),
+  };
+}
+
+function ensureRotationDraw(builder: FormBuilder, groupId: string | null): string {
+  const existing = builder.questions.find((question) => question.name === 'ad_num1');
+  if (!existing) builder.calc('ad_num1', 'once(random())', groupId, 'Rotation Draw');
+  const existingRot = builder.questions.find((question) => question.name === 'rot');
+  if (existingRot) return existingRot.name;
+  const seed = builder.questions.find((question) => question.name === 'ad_num1')!;
+  builder.calc('rot', `string(int(\${${seed.name}}*2)+1)`, groupId, 'Rotation');
+  return 'rot';
+}
+
+function addStatementGrid(
+  builder: FormBuilder,
+  grid: StatementGrid,
+  groupId: string | null,
+  used: Set<string>,
+  mainRelevance: string | undefined,
+  rotate: boolean,
+): string | null {
+  const base = builder.uniqueName(grid.code ?? slug(grid.prompt).slice(0, 40) ?? 'statement', used);
+  const listName = builder.choiceList(base, grid.scale);
+  if (!rotate) {
+    const group = builder.group(builder.uniqueName(`bg_${base}`, used), grid.prompt, {
+      appearance: 'field-list',
+      ...(mainRelevance ? { rules: { visibleIf: mainRelevance } } : {}),
+    });
+    grid.statements.forEach((statement, index) => {
+      builder.question({
+        name: builder.uniqueName(`${base}_${index + 1}`, used),
+        type: 'select_one',
+        label: builder.text(statement.label),
+        choices: { listName },
+        required: true,
+        groupId: group.id,
+        ...(mainRelevance ? { rules: { visibleIf: mainRelevance } } : {}),
+      });
+    });
+    return group.id;
+  }
+  const rot = ensureRotationDraw(builder, groupId);
+  const xVisible = mainRelevance ? `${mainRelevance} and selected(\${${rot}}, '1')` : `selected(\${${rot}}, '1')`;
+  const yVisible = mainRelevance ? `${mainRelevance} and selected(\${${rot}}, '2')` : `selected(\${${rot}}, '2')`;
+  const xGroup = builder.group(builder.uniqueName(`bg_${base}_x`, used), grid.prompt, {
+    appearance: 'field-list',
+    rules: { visibleIf: xVisible },
+  });
+  const yGroup = builder.group(builder.uniqueName(`bg_${base}_y`, used), grid.prompt, {
+    appearance: 'field-list',
+    rules: { visibleIf: yVisible },
+  });
+  for (const [statement, index] of grid.statements.map((value, index) => [value, index] as const)) {
+    const x = builder.uniqueName(`${base}_x${index + 1}`, used);
+    builder.question({
+      name: x,
+      type: 'select_one',
+      label: builder.text(statement.label),
+      choices: { listName },
+      required: true,
+      groupId: xGroup.id,
+      rules: { visibleIf: xVisible },
+    });
+    const y = builder.uniqueName(`${base}_y${index + 1}`, used);
+    builder.question({
+      name: y,
+      type: 'select_one',
+      label: builder.text(statement.label),
+      choices: { listName },
+      required: true,
+      groupId: yGroup.id,
+      rules: { visibleIf: yVisible },
+    });
+    builder.calc(`${base}_${index + 1}`, `coalesce(\${${x}}, \${${y}})`, groupId, statement.label, {
+      ...(mainRelevance ? { rules: { calculate: `coalesce(\${${x}}, \${${y}})`, visibleIf: mainRelevance } } : {}),
+    });
+  }
+  return xGroup.id;
+}
+
+function statementGridFromRaw(raw: RawQuestion): StatementGrid | null {
+  if (raw.matrix || raw.options.length < 2) return null;
+  const prompt = cleanLabel(withoutCode(raw.prompt));
+  if (!/\brank\s+on\s+a\s+scale\b|\brating\b|\brate\b|\bhow\s+much\s+do\s+you\s+agree\b|\beach\s+statement\b/i.test(prompt)) return null;
+  let scale: RawOption[] = [];
+  const range = /\b(\d{1,2})\s*(?:-|–|to)\s*(\d{1,2})\b/i.exec(raw.prompt)
+    ?? /\b(\d{1,2})\s*=\s*[^\n]+?\b(\d{1,2})\s*=/i.exec(raw.prompt);
+  if (range) scale = scaleOptions(Number(range[1]), Number(range[2]));
+  if (scale.length < 2 && /0\s*=.*10\s*=/i.test(raw.prompt)) scale = scaleOptions(0, 10);
+  if (scale.length < 2) return null;
+  const statements = raw.options.filter((option) => !/^others?\s*(?:\(|:|specify)/i.test(option.label.trim()));
+  if (statements.length < 2) return null;
+  return { prompt, statements, scale, code: raw.code };
+}
+
+function addSplitRotation(
+  builder: FormBuilder,
+  table: DocxTable,
+  groupId: string | null,
+  used: Set<string>,
+  mainRelevance?: string,
+  fallbackPrompt = '',
+): boolean {
+  const grid = readStatementGrid(table, fallbackPrompt);
+  if (!grid) {
+    builder.note('rotation-unreadable', 'A rotation table was found, but no complete scale/statement grid could be read.', tableText(table).slice(0, 100));
+    return false;
+  }
+  addStatementGrid(builder, grid, groupId, used, mainRelevance, true);
+  builder.diagnostics.push({
+    severity: 'info',
+    code: 'rotation-applied',
+    message: `X/Y statement rotation compiled: ${grid.statements.length} statements, ${grid.scale.length} scale points, two field-list pages.`,
+  });
+  return true;
+}
+
+interface RankItem { label: string; value: string; }
+
+/** The last question written above a table's rank header is the field it belongs to. */
+function tableQuestionCode(table: DocxTable): string | null {
+  let code: string | null = null;
+  for (const row of table.rows) {
+    const text = row.map((cell) => cell.text.replace(/\s+/g, ' ').trim()).find(Boolean) ?? '';
+    const found = questionCode(text);
+    if (found) code = found;
+    if (/^rank\s*[1-9]\b/i.test(text)) break;
+  }
+  return code;
+}
+
+function itemCode(row: string[], itemAt: number): string {
+  const numeric = row.find((cell) => /^\d{1,3}$/.test(cell));
+  return numeric ?? String(itemAt + 1);
+}
+
+/** Read a MaxDiff, rank-column or rank-these-items table without guessing a missing block design. */
+function readRankTable(table: DocxTable, fallbackCode: string): {
+  kind: 'maxdiff' | 'rank' | 'rank-list';
+  items: RankItem[];
+  rankCount: number;
+  groupLabel: string;
+  mostLabel?: string;
+  leastLabel?: string;
+} | null {
+  const rows = table.rows.map((row) => row.map((cell) => cell.text.replace(/\s+/g, ' ').trim()));
+  for (let headerAt = 0; headerAt < Math.min(rows.length, 40); headerAt += 1) {
+    const header = rows[headerAt] ?? [];
+    const mostColumn = header.findIndex((cell) => /\bmost\b/i.test(cell));
+    const leastColumn = header.findIndex((cell) => /\bleast\b/i.test(cell));
+    if (mostColumn >= 0 && leastColumn >= 0 && mostColumn !== leastColumn) {
+      let itemAt = header.findIndex((cell, index) => index !== mostColumn && index !== leastColumn && cell !== '');
+      if (itemAt < 0) {
+        // The two headed cells are often separated by a blank middle cell. Use
+        // the first data row to identify the item column instead of guessing 0.
+        const data = rows[headerAt + 1] ?? [];
+        itemAt = data.findIndex((cell, index) => index !== mostColumn && index !== leastColumn && cell !== '' && !/^\d{1,3}$/.test(cell));
+      }
+      const items = rows.slice(headerAt + 1)
+        .map((row, index) => ({ row, index }))
+        .filter(({ row }) => (row[itemAt] ?? '') !== '' && !/^\d+$/.test(row[itemAt] ?? ''))
+        .map(({ row, index }) => ({ label: row[itemAt]!, value: itemCode(row, index) }));
+      if (items.length > 0) {
+        const prompt = rows.slice(0, headerAt).map((row) => row[0] ?? '').find((text) => questionCode(text) !== null) ?? '';
+        return {
+          kind: 'maxdiff',
+          items,
+          rankCount: items.length,
+          groupLabel: cleanLabel(withoutCode(prompt)) || 'Most and least likely',
+          mostLabel: header[mostColumn] || 'Most likely',
+          leastLabel: header[leastColumn] || 'Least likely',
+        };
+      }
+    }
+    const rankColumns = header
+      .map((cell, index) => ({ cell, index }))
+      .filter(({ cell }) => /^rank\s*[1-9]\b/i.test(cell));
+    if (rankColumns.length > 0) {
+      const items = rows.slice(headerAt + 1)
+        .filter((row) => (row[0] ?? '').length > 2)
+        .map((row, index) => ({ label: row[0]!, value: String(index + 1) }));
+      if (items.length > 0) {
+        const promptRows = rows.slice(0, headerAt).map((row) => row[0] ?? '').filter((text) => /\?|rank/i.test(text));
+        const prompt = promptRows.at(-1) ?? '';
+        return {
+          kind: 'rank',
+          items,
+          rankCount: rankColumns.length,
+          groupLabel: cleanLabel(withoutCode(prompt)) || `Top ${rankColumns.length}`,
+        };
+      }
+    }
+  }
+  // A client often writes the rank scale in the prompt and puts one code beside
+  // each item. That is a valid rank-these-items table; the numeric column is the
+  // item code, not the rank.
+  const items = rows
+    .map((row, index) => ({ row, index }))
+    .filter(({ row }) => {
+      const first = row[0] ?? '';
+      return first.length > 2
+        && !/\b(?:rank|most|least|option)\b/i.test(first)
+        && !/^(?:interviewer|programmer|randomize|fq\d|[a-z]\d+[.)])/i.test(first)
+        && (row[1] ?? '').trim() !== '';
+    })
+    .map(({ row, index }) => ({ label: row[0]!, value: itemCode(row, index) }));
+  if (items.length >= 2) {
+    const promptRows = rows.map((row) => row[0] ?? '').filter((text) => /\?|rank/i.test(text));
+    const prompt = promptRows.at(-1) ?? '';
+    const maxRank = Math.max(
+      ...([...prompt.matchAll(/\brank\s*(?:of\s*)?(\d+)\b/gi)].map((match) => Number(match[1]))),
+      /top\s+(\d+)\b/i.exec(prompt)?.[1] ? Number(/\btop\s+(\d+)\b/i.exec(prompt)![1]) : 0,
+    );
+    return {
+      kind: 'rank-list',
+      items,
+      // A full rank-these-items table ranks every item unless the prompt
+      // explicitly asks for a shorter top-N. The first `rank 1` alone is not a
+      // rank count.
+      rankCount: Math.min(items.length, Number.isFinite(maxRank) && maxRank > 1 ? maxRank : items.length),
+      groupLabel: cleanLabel(withoutCode(prompt)) || 'Rank these items',
+    };
+  }
+  void fallbackCode;
+  return null;
+}
+
+function addRankGrid(
+  builder: FormBuilder,
+  table: DocxTable,
+  groupId: string | null,
+  used: Set<string>,
+  mainRelevance?: string,
+  requestedBase?: string,
+): void {
+  const firstPrompt = table.rows[0]?.map((cell) => cell.text.trim()).join(' ') ?? '';
+  const base = builder.uniqueName(
+    requestedBase ?? tableQuestionCode(table) ?? questionCode(firstPrompt) ?? slug(firstPrompt).slice(0, 32) ?? 'rank',
+    used,
+  );
+  const parsed = readRankTable(table, base);
+  if (!parsed) {
+    builder.note('rank-unreadable', 'A ranking table was found, but no complete item/rank grid could be read.', tableText(table).slice(0, 100));
     return;
   }
+  const listName = builder.choiceList(base, parsed.items.map((item) => ({
+    label: item.label,
+    value: item.value,
+    instruction: '',
+    row: [item.label, item.value],
+  })));
+  const rulesFor = (previous: string[]): Question['rules'] | undefined => {
+    if (previous.length === 0) return mainRelevance ? { visibleIf: mainRelevance } : undefined;
+    const filter = previous.map((prior) => `not(selected(\${${prior}}, filter))`).join(' and ');
+    return {
+      ...(mainRelevance ? { visibleIf: mainRelevance } : {}),
+      choiceFilter: filter,
+    };
+  };
+  if (parsed.kind === 'maxdiff') {
+    const group = builder.group(builder.uniqueName(`bg_${base}`, used), parsed.groupLabel, {
+      appearance: 'field-list',
+      ...(mainRelevance ? { rules: { visibleIf: mainRelevance } } : {}),
+    });
+    const most = builder.uniqueName(`${base}_most`, used);
+    const least = builder.uniqueName(`${base}_least`, used);
+    builder.question({
+      name: most,
+      type: 'select_one',
+      label: builder.text(parsed.mostLabel ?? 'Most likely'),
+      choices: { listName },
+      required: true,
+      groupId: group.id,
+      ...(mainRelevance ? { rules: { visibleIf: mainRelevance } } : {}),
+    });
+    builder.question({
+      name: least,
+      type: 'select_one',
+      label: builder.text(parsed.leastLabel ?? 'Least likely'),
+      choices: { listName },
+      required: true,
+      groupId: group.id,
+      rules: {
+        ...(mainRelevance ? { visibleIf: mainRelevance } : {}),
+        choiceFilter: `not(selected(\${${most}}, filter))`,
+      },
+      validation: {
+        constraint: `not(\${${most}} = .)`,
+        message: builder.text('Most and least must be different options'),
+      },
+    });
+    builder.diagnostics.push({
+      severity: 'info',
+      code: 'maxdiff-applied',
+      message: 'MaxDiff most/least pair compiled from its table. Repeat this table once per block to collect multiple blocks.',
+    });
+    return;
+  }
+  const group = builder.group(builder.uniqueName(`bg_${base}`, used), parsed.groupLabel, {
+    appearance: 'field-list',
+    ...(mainRelevance ? { rules: { visibleIf: mainRelevance } } : {}),
+  });
   const previous: string[] = [];
-  rankColumns.forEach((column, index) => {
-    const name = builder.uniqueName(`rank_${index + 1}`, used);
-    const list = items.map((item, itemIndex) => ({
-      value: String(itemIndex + 1),
-      label: builder.text(item),
-      extra: { filter: String(itemIndex + 1) },
-    }));
-    builder.choiceLists[name] = list;
-    const constraints = previous.length > 0
-      ? `if(${previous.map((prior) => `\${${prior}} != ''`).join(' and ')}, ${previous.map((prior) => `\${${name}} != \${${prior}}`).join(' and ')}, 1 = 1)`
-      : undefined;
+  for (let index = 0; index < parsed.rankCount; index += 1) {
+    const name = builder.uniqueName(`${base}_${index + 1}`, used);
     builder.question({
       name,
       type: 'select_one',
-      label: builder.text(column.cell || `Rank ${index + 1}`),
-      choices: { listName: name },
-      ...(constraints ? { validation: { constraint: constraints, message: builder.text('Duplicate Ranking not Possible') } } : {}),
-      ...(mainRelevance ? { rules: { visibleIf: mainRelevance } } : {}),
+      label: builder.text(`RANK ${index + 1}`),
+      choices: { listName },
+      appearance: 'quick',
       required: true,
-      groupId,
+      groupId: group.id,
+      ...(rulesFor(previous) ? { rules: rulesFor(previous) } : {}),
     });
     previous.push(name);
-  });
+  }
   builder.diagnostics.push({
     severity: 'info',
-    code: 'rank-partial',
-    message: 'Ranking columns were compiled as one select per rank with duplicate protection. A MaxDiff choice set needs a reviewed block design.',
+    code: 'rank-applied',
+    message: `Rank ${parsed.rankCount} compiled with duplicate filtering and an explicit rank block.`,
   });
+  void groupId;
 }
 
 function addConstantSum(builder: FormBuilder, table: DocxTable, groupId: string | null, used: Set<string>, mainRelevance?: string): void {
@@ -1155,6 +2123,23 @@ export function compileDocxDocument(document: DocxDocument, options: DocxCompile
   const builder = new FormBuilder(defaultLanguage, languages);
   const extraction = extractQuestionnaire(document);
   const used = new Set<string>();
+  for (const raw of extraction.questions) {
+    const promptTranslations = raw.code ? options.translations?.[raw.code] : undefined;
+    if (promptTranslations) raw.translations = { ...(raw.translations ?? {}), ...promptTranslations };
+    builder.translateChoices(raw.code, raw.options, options.choiceTranslations);
+    for (const map of [raw.translations, ...raw.options.map((option) => option.translations)]) {
+      for (const language of Object.keys(map ?? {})) {
+        if (!builder.languages.includes(language)) builder.languages.push(language);
+      }
+    }
+  }
+  for (const codeMap of Object.values(options.choiceTranslations ?? {})) {
+    for (const values of Object.values(codeMap)) {
+      for (const language of Object.keys(values)) {
+        if (!builder.languages.includes(language)) builder.languages.push(language);
+      }
+    }
+  }
   const rules = new Map<number, CompilerRuleStatus>(COMPILER_RULES.map((rule) => [rule.id, { ...rule, status: 'not-detected' }]));
   const mark = (id: number, status: CompilerRuleStatus['status'], evidence?: string): void => {
     const rule = rules.get(id);
@@ -1188,17 +2173,25 @@ export function compileDocxDocument(document: DocxDocument, options: DocxCompile
   metadataRows(builder);
   mark(2, 'applied', 'Eight paradata rows written before the first user field.');
 
+  const mainQuestions = extraction.questions.filter((question) => question.section === 'main');
+  const screenerQuestions = extraction.questions.filter((question) => question.section === 'screener');
+  // The read-out before the first screener is an introduction, not a main-section
+  // note. Keeping it in `main_q` hid it behind the gate and put it after S1–S3.
+  const introNoteIndex = mainQuestions.findIndex((question) => question.note && /\bGOOD\b|Coral Research|I am from/i.test(question.prompt));
+  const introNote = introNoteIndex >= 0 ? mainQuestions.splice(introNoteIndex, 1)[0] : null;
+
   if (extraction.intro.length > 0) {
     addIntro(builder, extraction.intro[0]!);
     mark(3, 'applied', extraction.intro[0]!.fields.join(', '));
   }
-
-  const mainQuestions = extraction.questions.filter((question) => question.section === 'main');
-  const screenerQuestions = extraction.questions.filter((question) => question.section === 'screener');
+  if (introNote) addSimpleQuestion(builder, introNote, null, used);
   const gateExpressions: string[] = [];
   let screenerGroup: Group | null = null;
   if (screenerQuestions.length > 0) {
-    screenerGroup = builder.group('screener', 'Screener', { appearance: 'field-list' });
+    // A screener is a sequence of gates, not a page. `field-list` here was the
+    // Bounce failure: it put every later question on the screener's page and
+    // made `quick` and the per-question relevance impossible to honour.
+    screenerGroup = builder.group('screener', 'Screener');
   }
 
   const rawByName = new Map<string, RawQuestion>();
@@ -1229,14 +2222,16 @@ export function compileDocxDocument(document: DocxDocument, options: DocxCompile
 
   const addAgeIfPresent = (raw: RawQuestion, groupId: string | null): boolean => {
     const isAge = /\b(?:age|years?)\b/i.test(raw.prompt)
-      && raw.options.some((option) => ageBounds(option.label) !== null)
-      && /VERBATIM|RECORD\s+IN\s+NUMBERS|POST\s+CODE/i.test(raw.prompt);
+      && raw.options.some((option) => ageBounds(option.label) !== null);
     if (!isAge) return false;
     const before = builder.questions.length;
     addAge(builder, raw, groupId, used);
     if (builder.questions.length > before) {
       mark(4, 'applied', `${raw.code ?? 'age'} and ${builder.questions.length - before} derived rows`);
-      gateExpressions.push('selected(${age_term}, \'1\')');
+      // An age field inside the main gate cannot also decide that gate: the
+      // calculation would depend on itself and the whole survey would disappear.
+      // Screener ages may terminate; main-section ages are descriptive.
+      if (raw.section === 'screener') gateExpressions.push('selected(${age_term}, \'1\')');
     }
     return true;
   };
@@ -1248,6 +2243,9 @@ export function compileDocxDocument(document: DocxDocument, options: DocxCompile
     return true;
   };
 
+  let screenerRelevance: string | undefined;
+  const currentRouting: Array<{ question: string; value: string }> = [];
+  const churnedRouting: Array<{ question: string; value: string }> = [];
   for (const raw of screenerQuestions) {
     const groupId = groupFor(raw, screenerGroup?.id ?? null);
     if (addAgeIfPresent(raw, groupId)) continue;
@@ -1259,22 +2257,51 @@ export function compileDocxDocument(document: DocxDocument, options: DocxCompile
     if (raw.options.length === 0) {
       builder.note('screener-no-options', 'A screener question has no numeric answer table, so it was compiled as text and cannot gate the questionnaire.', raw.where);
     }
-    const before = builder.questions.length;
-    addSimpleQuestion(builder, raw, groupId, used);
-    const created = builder.questions[before];
+    const created = addSimpleQuestion(builder, raw, groupId, used, screenerRelevance);
     if (!created) continue;
     if (raw.matrix) created.appearance = [raw.matrix.first ? 'label' : 'list-nolabel', created.appearance].filter(Boolean).join(' ');
     rawByName.set(created.name, raw);
+    for (const option of raw.options) {
+      if (/current\s+user/i.test(option.instruction)) currentRouting.push({ question: created.name, value: option.value });
+      if (/churned/i.test(option.instruction)) churnedRouting.push({ question: created.name, value: option.value });
+    }
     if (raw.options.length > 0) {
       const disallowed = raw.options.filter((option) => /TERMINATE/i.test(option.instruction));
-      const allowed = raw.options.filter((option) => !/TERMINATE/i.test(option.instruction));
-      if (disallowed.length > 0 && allowed.length > 0) {
+      const allowed = disallowed.length > 0
+        ? raw.options.filter((option) => !/TERMINATE/i.test(option.instruction))
+        : raw.options;
+      if (allowed.length > 0) {
         const expression = allowed.length === 1
           ? `selected(\${${created.name}}, '${allowed[0]!.value}')`
           : `(${allowed.map((option) => `selected(\${${created.name}}, '${option.value}')`).join(' or ')})`;
-        gateExpressions.push(expression);
+        if (disallowed.length > 0) gateExpressions.push(expression);
+        // Every screener step requires the previous answer, not only the steps
+        // that happen to contain a terminate code. A blank S1 must not reveal S2.
+        screenerRelevance = screenerRelevance ? `${screenerRelevance} and ${expression}` : expression;
       }
     }
+  }
+
+  const routingExpression = (routing: Array<{ question: string; value: string }>): string =>
+    routing.map((entry) => `selected(\${${entry.question}}, '${entry.value}')`).join(' or ');
+  let segmentName: string | null = null;
+  if (currentRouting.length > 0 || churnedRouting.length > 0) {
+    const current = routingExpression(currentRouting) || "''";
+    const churned = routingExpression(churnedRouting) || "''";
+    const segmentGroup = screenerGroup?.id ?? null;
+    // `ZO. USER CLASSIFICATION` is a segment router, not a note. Keeping it as a
+    // calculation is what lets Section 9 be asked only of churners.
+    builder.calc('z0', `if(${current}, '1', if(${churned}, '2', ''))`, segmentGroup, 'User classification');
+    builder.calc('z0_dis', `if(${current}, 'Current', if(${churned}, 'Churners', ''))`, segmentGroup, 'Segment display');
+    builder.question({
+      name: 'n_z0',
+      type: 'note',
+      label: builder.text('SEGMENT : ${z0_dis}'),
+      required: false,
+      groupId: segmentGroup,
+      rules: { visibleIf: "selected(${z0}, '1') or selected(${z0}, '2')" },
+    });
+    segmentName = 'z0';
   }
 
   const educationRaw = nccs.education;
@@ -1291,19 +2318,40 @@ export function compileDocxDocument(document: DocxDocument, options: DocxCompile
   }
 
   let globName: string | null = null;
-  if (gateExpressions.length > 0) {
-    globName = addScreenerGate(builder, gateExpressions, screenerGroup?.id ?? null);
-    mark(6, 'applied', `${gateExpressions.length} screener condition(s)`);
+  if (gateExpressions.length > 0 || screenerQuestions.length > 0 || mainQuestions.length > 0) {
+    globName = addScreenerGate(builder, gateExpressions.length > 0 ? gateExpressions : ['1 = 1'], screenerGroup?.id ?? null);
+    if (gateExpressions.length > 0) mark(6, 'applied', `${gateExpressions.length} screener condition(s)`);
   }
 
-  const mainGroup = mainQuestions.length > 0 ? builder.group('main_q', 'Main Questionnaire', {
-    ...(globName ? { rules: { visibleIf: `selected(\${${globName}}, '1')` } } : {}),
-  }) : null;
+  const mainGroup = mainQuestions.length > 0 ? builder.group(
+    globName && screenerQuestions.length > 0 ? 'bg_term' : 'main_q',
+    'Main Questionnaire',
+    {
+      ...(globName ? { rules: { visibleIf: `selected(\${${globName}}, '1')` } } : {}),
+    },
+  ) : null;
   const mainRelevance = globName ? `selected(\${${globName}}, '1')` : undefined;
 
+  /** Keep the master gate in step with an age/NCCS condition found later in the main section. */
+  const refreshGate = (): void => {
+    if (!globName || gateExpressions.length === 0) return;
+    const gate = builder.questions.find((question) => question.name === globName);
+    if (gate) gate.rules = { ...gate.rules, calculate: `if(${gateExpressions.join(' and ')}, '1', '')` };
+    if (mainGroup) mainGroup.rules = { ...mainGroup.rules, visibleIf: `selected(\${${globName}}, '1')` };
+  };
+
   for (const raw of mainQuestions) {
-    const groupId = groupFor(raw, mainGroup?.id ?? null, mainRelevance);
-    if (addAgeIfPresent(raw, groupId)) continue;
+    const branchRelevance = raw.branch === 'churned' && segmentName
+      ? `selected(\${${segmentName}}, '2')`
+      : undefined;
+    const rawRelevance = mainRelevance && branchRelevance
+      ? `(${mainRelevance}) and (${branchRelevance})`
+      : mainRelevance ?? branchRelevance;
+    const groupId = groupFor(raw, mainGroup?.id ?? null, rawRelevance);
+    if (addAgeIfPresent(raw, groupId)) {
+      refreshGate();
+      continue;
+    }
     if (addNccsIfPresent(raw, groupId)) continue;
     if (/items do you have|durables/i.test(raw.prompt) && nccs.education) {
       nccs.durables = raw;
@@ -1313,26 +2361,72 @@ export function compileDocxDocument(document: DocxDocument, options: DocxCompile
       }
       continue;
     }
-    if (extraction.brandTables.length > 0 && raw.options.length > 3 && /\b(?:MQ2|brand|aided|aware)/i.test(raw.prompt)) {
+    if (extraction.brandTables.length > 0 && /\b(?:MQ2|brand|aided|aware)/i.test(raw.prompt)) {
       addBrandGrid(builder, extraction.brandTables.shift()!, mainGroup?.id ?? null, used, mainRelevance);
       mark(8, 'applied', raw.prompt.slice(0, 80));
       continue;
     }
-    if (extraction.rankTables.length > 0 && /\b(?:RANK|most|least|MaxDiff)/i.test(raw.prompt)) {
-      addRankGrid(builder, extraction.rankTables.shift()!, mainGroup?.id ?? null, used, mainRelevance);
+    const rankIndex = extraction.rankTables.findIndex((entry) =>
+      raw.code !== null &&
+      (questionCode(entry.prompt ?? '') === raw.code || tableQuestionCode(entry.table) === raw.code),
+    );
+    if (rankIndex >= 0) {
+      const entry = extraction.rankTables.splice(rankIndex, 1)[0]!;
+      addRankGrid(builder, entry.table, mainGroup?.id ?? null, used, mainRelevance, raw.code ?? undefined);
       mark(11, 'applied', raw.prompt.slice(0, 80));
       continue;
     }
-    if (/\b(?:sum|total|equal|100%|percentage)\b/i.test(raw.prompt) && raw.options.length === 0) {
+    if (/\b(?:constant\s+sum|must\s+(?:equal|sum)|equal(?:s)?\s+100|sum\s+to|total\s+(?:must|should))\b/i.test(raw.prompt) && raw.options.length === 0) {
       addConstantSum(builder, { rows: raw.options.map((option) => option.row.map((text) => ({ text, paragraphs: [], bold: false }))) }, mainGroup?.id ?? null, used, mainRelevance);
       continue;
     }
-    const before = builder.questions.length;
-    addSimpleQuestion(builder, raw, groupId, used, mainRelevance);
-    const created = builder.questions[before];
+    const rotationIndex = /\bROTATE\s+STATEMENTS?\b/i.test(raw.prompt)
+      ? extraction.rotationTables.findIndex((entry) => !raw.code || questionCode(entry.prompt) === raw.code)
+      : -1;
+    const rotationIndexResolved = rotationIndex >= 0 ? rotationIndex : (extraction.rotationTables.length > 0 && /\bROTATE\s+STATEMENTS?\b/i.test(raw.prompt) ? 0 : -1);
+    if (rotationIndexResolved >= 0) {
+      const rotation = extraction.rotationTables.splice(rotationIndexResolved, 1)[0]!;
+      if (addSplitRotation(builder, rotation.table, mainGroup?.id ?? null, used, rawRelevance, rotation.prompt)) {
+        mark(10, 'applied', raw.prompt.slice(0, 80));
+      } else {
+        mark(10, 'needs-review', raw.prompt.slice(0, 80));
+      }
+      refreshGate();
+      continue;
+    }
+    const promptGrid = statementGridFromRaw(raw);
+    if (promptGrid) {
+      const rotated = /\bROTATE\s+STATEMENTS?\b/i.test(raw.prompt);
+      addStatementGrid(builder, promptGrid, groupId, used, rawRelevance, rotated);
+      if (rotated) {
+        mark(10, 'applied', raw.prompt.slice(0, 80));
+      } else {
+        builder.diagnostics.push({
+          severity: 'info',
+          code: 'rotation-source-missing',
+          message: 'A statement grid was found without an explicit ROTATE STATEMENTS instruction; it is compiled as one grid rather than inventing X/Y pages.',
+          where: raw.where,
+        });
+        mark(10, 'needs-review', raw.prompt.slice(0, 80));
+      }
+      refreshGate();
+      continue;
+    }
+    if (addConsiderationSplit(builder, raw, groupId, used, rawRelevance)) {
+      mark(7, 'applied', 'E1 consideration and E1B usage split');
+      refreshGate();
+      continue;
+    }
+    if (addReasonsSplit(builder, raw, groupId, used, rawRelevance)) {
+      mark(7, 'applied', 'E2A most-important and E2B other-reasons split');
+      refreshGate();
+      continue;
+    }
+    const created = addSimpleQuestion(builder, raw, groupId, used, rawRelevance);
     if (raw.matrix && created) {
       created.appearance = [raw.matrix.first ? 'label' : 'list-nolabel', created.appearance].filter(Boolean).join(' ');
     }
+    refreshGate();
   }
 
   // A brand or ranking grid is a table-level pattern. It has no ordinary prompt
@@ -1341,30 +2435,18 @@ export function compileDocxDocument(document: DocxDocument, options: DocxCompile
     addBrandGrid(builder, table, mainGroup?.id ?? null, used, mainRelevance);
     mark(8, 'applied', 'brand grid emitted from its table');
   }
-  for (const table of extraction.rankTables) {
-    addRankGrid(builder, table, mainGroup?.id ?? null, used, mainRelevance);
+  for (const entry of extraction.rankTables) {
+    addRankGrid(builder, entry.table, mainGroup?.id ?? null, used, mainRelevance, questionCode(entry.prompt ?? '') ?? undefined);
     mark(11, 'applied', 'ranking grid emitted from its table');
   }
 
-  // X/Y rotation is introduced by a paragraph and carried by the table that
-  // follows it. The table itself usually has only statements, so searching the
-  // table for the word ROTATE would miss every real questionnaire.
-  let rotationTable: DocxTable | null = null;
-  for (let i = 0; i < document.blocks.length; i += 1) {
-    const block = document.blocks[i];
-    if (block?.kind !== 'paragraph' || !/\bROTATE\b/i.test(block.paragraph.text)) continue;
-    for (let j = i + 1; j < document.blocks.length; j += 1) {
-      const next = document.blocks[j];
-      if (next?.kind === 'table') {
-        rotationTable = next.table;
-        break;
-      }
+  // A rotation table that did not have a matching raw prompt is still compiled
+  // here. It is bound to the cue that introduced it, not to whichever table
+  // happens to be next in the document.
+  for (const rotation of extraction.rotationTables) {
+    if (addSplitRotation(builder, rotation.table, mainGroup?.id ?? null, used, mainRelevance, rotation.prompt)) {
+      mark(10, 'applied', rotation.prompt.slice(0, 80));
     }
-    if (rotationTable) break;
-  }
-  if (rotationTable) {
-    addSplitRotation(builder, rotationTable, mainGroup?.id ?? null, used, mainRelevance);
-    mark(10, 'partial', 'Rotation draw compiled; statement page order needs review.');
   }
 
   if (nccs.education && nccs.durables && extraction.nccsGrids[0] && rules.get(5)?.status === 'not-detected') {
@@ -1400,6 +2482,9 @@ export function compileDocxDocument(document: DocxDocument, options: DocxCompile
     groups: builder.groups,
     questions: builder.questions,
     choiceLists: builder.choiceLists,
+    ...(globName
+      ? { triggers: [{ type: 'complete' as const, when: `not(selected(\${${globName}}, '1'))` }] }
+      : {}),
     settings: {
       xlsform: {
         formId,
@@ -1442,9 +2527,22 @@ export function compileDocxDocument(document: DocxDocument, options: DocxCompile
 }
 
 function detectLanguages(document: DocxDocument): string[] {
-  const text = document.blocks.map((block) => block.kind === 'paragraph' ? block.paragraph.text : tableText(block.table)).join('\n');
-  const known = ['Marathi', 'Tamil', 'Telugu', 'Kannada', 'Hindi', 'Bengali', 'Odia'];
-  return known.filter((language) => new RegExp(`\\b${escapeRegex(language)}\\b`, 'i').test(text));
+  const found = new Set<string>();
+  for (const block of document.blocks) {
+    if (block.kind === 'table') {
+      const header = languageHeader(block.table);
+      for (const entry of header?.languages ?? []) found.add(entry.language);
+      continue;
+    }
+    // A paragraph such as `Marathi: ...` is an explicit translation. Merely
+    // mentioning a language in respondent copy is not one, so the compiler does
+    // not emit empty regional columns for it.
+    const text = block.paragraph.text;
+    for (const language of KNOWN_LANGUAGES) {
+      if (new RegExp(`(?:^|[\\n|])\\s*${escapeRegex(language)}\\s*:`, 'i').test(text)) found.add(language);
+    }
+  }
+  return [...found];
 }
 
 export function compileDocx(bytes: Uint8Array, options: DocxCompileOptions = {}): DocxCompileResult {

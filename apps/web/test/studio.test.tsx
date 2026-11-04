@@ -151,6 +151,14 @@ function previewField(labelText: string): HTMLElement | null {
   return (fields.find((el) => el.querySelector('label')?.textContent?.includes(labelText)) as HTMLElement) ?? null;
 }
 
+async function next(scope: HTMLElement = panel('Preview')): Promise<void> {
+  await click(buttonIn(scope, 'Next'));
+}
+
+async function back(scope: HTMLElement = panel('Preview')): Promise<void> {
+  await click(buttonIn(scope, 'Back'));
+}
+
 const noop = (): void => undefined;
 
 async function click(el: HTMLElement): Promise<void> {
@@ -243,19 +251,23 @@ describe('the definition studio', () => {
     expect(preview.textContent).toContain('Consent given?');
     // Required, so the marker the respondent sees is there too.
     expect(preview.querySelector('.req')?.textContent).toBe(' *');
-    // `school_name` is only relevant when consent is `yes`: the rule is evaluated by
-    // the engine, on the answers in the preview, not painted from the definition.
+    // The runner is screen-by-screen: the second question is not rendered until the
+    // first screen is complete. That is the same page model the collection app uses.
     expect(previewField('School name')).toBeNull();
 
     const consent = preview.querySelector('select') as HTMLSelectElement;
     expect([...consent.options].map((o) => o.textContent)).toEqual(['- choose -', 'Yes', 'No']);
 
     await choose(consent, 'yes');
+    // `school_name` is only relevant when consent is `yes`: the rule is evaluated by
+    // the engine, on the answers in the preview, not painted from the definition.
+    await next();
     const shown = previewField('School name');
     expect(shown).not.toBeNull();
     expect(shown?.textContent).toContain('As printed on the board');
 
-    await choose(consent, '');
+    await back();
+    await choose(panel('Preview').querySelector('select') as HTMLSelectElement, '');
     expect(previewField('School name')).toBeNull();
   });
 
@@ -265,6 +277,7 @@ describe('the definition studio', () => {
 
     const preview = panel('Preview');
     await choose(preview.querySelector('select') as HTMLSelectElement, 'yes');
+    await next();
     await edit(preview.querySelector('input[type="text"]') as HTMLInputElement, 'Govt High School');
 
     // The only requests this screen makes are the read that opened it.
@@ -293,17 +306,26 @@ describe('the definition studio', () => {
     expect(panel('Definition').textContent).toContain('3 question(s) · valid JSON');
     expect(sheetTab('survey').textContent?.trim()).toBe('survey 5 rows');
     expect(panel('XLSForm').textContent).toContain('visits');
+
+    // Give consent, then walk the runner to the newly added page.
+    await choose(panel('Preview').querySelector('select') as HTMLSelectElement, 'yes');
+    await next();
+    await next();
     expect(previewField('Visits this week')).not.toBeNull();
 
-    // Renaming a label moves the preview, which is the thing a preview is for. The
-    // consent answer is given first so `school_name` is on screen to be renamed.
-    await choose(panel('Preview').querySelector('select') as HTMLSelectElement, 'yes');
+    // Renaming a label moves the preview, which is the thing a preview is for.
+    await back();
+    await back();
+    await next();
     await edit(
       textarea(),
       edited({
         questions: DEFINITION.questions.map((q) => (q.id === 'q2' ? { ...q, label: { en: 'School name (official)' } } : q)),
       }),
     );
+    // A definition edit starts the preview at its first screen again; the answers
+    // survive, so one Next returns to the renamed question.
+    await next();
     expect(panel('Preview').textContent).toContain('School name (official)');
     expect(panel('XLSForm').textContent).toContain('School name (official)');
   });
@@ -401,9 +423,10 @@ describe('the definition studio', () => {
     await mount();
     const preview = panel('Preview');
     await choose(preview.querySelector('select') as HTMLSelectElement, 'yes');
+    await next();
 
     const inPreview = [...preview.querySelectorAll('.field')].map((el) => el.outerHTML);
-    expect(inPreview.length).toBe(2);
+    expect(inPreview.length).toBe(1);
 
     // The same component, mounted the way the collection page mounts it, over the
     // same definition and the same answers. If a field ever renders differently in
@@ -414,6 +437,10 @@ describe('the definition studio', () => {
     const otherRoot = createRoot(other);
     await act(async () => {
       otherRoot.render(<RespondentForm definition={DEFINITION} answers={{ consent: 'yes' }} onChange={noop} />);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      buttonIn(other, 'Next').click();
       await Promise.resolve();
     });
     const asRespondent = [...other.querySelectorAll('.field')].map((el) => el.outerHTML);
