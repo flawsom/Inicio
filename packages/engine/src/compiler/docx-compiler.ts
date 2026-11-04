@@ -1461,7 +1461,7 @@ function addReasonsSplit(
   used: Set<string>,
   mainRelevance?: string,
 ): Question | null {
-  const cue = /\bmattered?\s+most\b/i.test(raw.prompt) && /\bmark\s+all\b/i.test(raw.prompt);
+  const cue = /\bmattered?\s+most\b/i.test(raw.prompt);
   if (!cue || !raw.code || !/^e2a$/i.test(raw.code.replace(/[^a-z0-9]/gi, ''))) return null;
   const first = builder.uniqueName('e2a', used);
   const rest = builder.uniqueName('e2b', used);
@@ -1797,7 +1797,7 @@ function addStatementGrid(
     appearance: 'field-list',
     rules: { visibleIf: yVisible },
   });
-  for (const [statement, index] of grid.statements.map((value, index) => [value, index] as const)) {
+  const xNames = grid.statements.map((statement, index) => {
     const x = builder.uniqueName(`${base}_x${index + 1}`, used);
     builder.question({
       name: x,
@@ -1808,7 +1808,14 @@ function addStatementGrid(
       groupId: xGroup.id,
       rules: { visibleIf: xVisible },
     });
+    return x;
+  });
+  // The Y page presents the same statements in reverse order. Names stay tied to
+  // the source statement index, so the coalesced answer is still the same field.
+  const yNames: string[] = [];
+  for (const [statement, index] of grid.statements.map((value, index) => [value, index] as const).reverse()) {
     const y = builder.uniqueName(`${base}_y${index + 1}`, used);
+    yNames[index] = y;
     builder.question({
       name: y,
       type: 'select_one',
@@ -1818,6 +1825,10 @@ function addStatementGrid(
       groupId: yGroup.id,
       rules: { visibleIf: yVisible },
     });
+  }
+  for (const [statement, index] of grid.statements.map((value, index) => [value, index] as const)) {
+    const x = xNames[index]!;
+    const y = yNames[index]!;
     builder.calc(`${base}_${index + 1}`, `coalesce(\${${x}}, \${${y}})`, groupId, statement.label, {
       ...(mainRelevance ? { rules: { calculate: `coalesce(\${${x}}, \${${y}})`, visibleIf: mainRelevance } } : {}),
     });
@@ -2531,7 +2542,11 @@ function detectLanguages(document: DocxDocument): string[] {
   for (const block of document.blocks) {
     if (block.kind === 'table') {
       const header = languageHeader(block.table);
-      for (const entry of header?.languages ?? []) found.add(entry.language);
+      if (!header) continue;
+      for (const entry of header.languages) {
+        const supplied = block.table.rows.slice(header.row + 1).some((row) => (row[entry.column]?.text ?? '').trim() !== '');
+        if (supplied) found.add(entry.language);
+      }
       continue;
     }
     // A paragraph such as `Marathi: ...` is an explicit translation. Merely

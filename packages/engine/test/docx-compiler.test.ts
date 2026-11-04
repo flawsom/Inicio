@@ -320,6 +320,10 @@ describe('the Word to XLSForm compiler', () => {
     expect(def.groups.find((group) => group.name === 'bg_d1_y')?.rules?.visibleIf).toContain("selected(${rot}, '2')");
     expect(byName(def, 'd1_x1').label.english).toBe('The app is easy to use');
     expect(byName(def, 'd1_y1').label.english).toBe('The app is easy to use');
+    expect(def.questions.filter((question) => question.groupId === 'g_bg_d1_y').map((question) => question.label.english)).toEqual([
+      'Support is helpful',
+      'The app is easy to use',
+    ]);
     expect(byName(def, 'd1_1').rules?.calculate).toBe('coalesce(${d1_x1}, ${d1_y1})');
     expect(result.report.rules.find((rule) => rule.id === 10)?.status).toBe('applied');
   });
@@ -379,6 +383,20 @@ describe('the Word to XLSForm compiler', () => {
     expect(survey.rows[0]).toEqual(expect.arrayContaining(['label:Marathi', 'label:Hindi']));
     const choiceSheet = result.book.sheets.find((sheet) => sheet.name === 'choices')!;
     expect(choiceSheet.rows[0]).toEqual(expect.arrayContaining(['label:Marathi', 'label:Hindi']));
+  });
+
+  it('does not emit a regional column when the source header has no translated text', () => {
+    const result = compileDocx(docx([
+      paragraph('PROJECT: BLANK TRANSLATION'),
+      paragraph('D6. Which option do you prefer? SA'),
+      table([
+        ['English', 'Marathi'],
+        ['Alpha', ''],
+        ['Beta', ''],
+      ]),
+    ]), { projectNumber: 1608 });
+    const survey = result.book.sheets.find((sheet) => sheet.name === 'survey')!;
+    expect(survey.rows[0]).not.toContain('label:Marathi');
   });
 
   it('emits caller-supplied translations without inventing a regional column', () => {
