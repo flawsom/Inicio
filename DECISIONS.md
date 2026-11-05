@@ -1890,3 +1890,82 @@ not from this checkout, so the reply target set in the workspace reaches the mes
 messages the live origin sends only once the same variable is set there (`MAIL_REPLY_TO` on the Vercel
 project). The footer and the welcome's reply invitation both key off it, so until then the live product's
 messages still name no reply target — honestly, rather than naming one that would bounce.
+
+## D50 — The visual builder is a view over the JSON, not a second definition
+
+**What shipped.** The Builder panel under the JSON already listed questions and could add, remove, reorder
+and duplicate them, but content and choices still had to be typed into the JSON. It now edits a question's
+localized label and hint, export name, type, section, required flag and required message; adds, relabels,
+reorders and removes inline or shared choice options; manages sections; and writes the engine's visibility,
+read-only, calculate, choice-filter and validation expressions. Every control still calls the parent's
+`onEdit` with a complete `FormDefinition`, which is serialised into the JSON textarea; the workbook and the
+respondent preview are readers of that text, not listeners on a builder store. That is the property the whole
+screen exists to protect. A builder-owned model would pass a screenshot review and then disagree with the
+thing the API stores on the first edit that touched an older field.
+
+**Three refusals are deliberate.** Changing the editing language never copies the default text into the new
+language: the input is blank with the existing text as a placeholder, because a translation that silently
+copies English is worse than a visible gap. A conditional `required` expression is rendered as a checked,
+disabled control with the expression named, and every unrelated content edit preserves it; a checkbox must
+not flatten a rule it cannot edit. And adding a choice question creates an empty choice list rather than two
+invented answers — the analyser reports the missing choices, the author decides what belongs there, which is
+the same rule that keeps a removed question's stale relevance expression on screen instead of tidying it away.
+
+**What holds it.** The transform suite is 16 tests, including bilingual labels, conditional requirements,
+converting a text question into a select with options, editing a shared list once, duplicate identity, section
+removal preserving its questions, and the newly exposed enable/calculate rules. Two jsdom paths run in
+`studio.test.tsx`: editing a label and adding an option changes the JSON and the respondent's select with no
+request, and adding a select question into a new section writes choices the analyser can see. **Not measured:**
+a real pointer drag on physical hardware and the new editor's rendered layout at each breakpoint; the reorder
+buttons call the same transform as the drag, but that is an equivalence argument, not a pointer test.
+
+## D51 — Every questionnaire becomes the same analysable dossier, and no respondent is invented
+
+**What shipped.** `scripts/build-powerbi-report.mjs` compiles any `.docx`, canonical
+`FormDefinition` JSON, directory of Word files or manifest into a seven-page Power BI
+Project. The input goes through the existing DOCX compiler when it is Word, then
+`analyzeDefinition()` derives the sections, question types, required and answerable counts,
+routing anchors, validation constraints, choice load, a planning-burden heuristic and one
+analysis family per question. `scripts/powerbi/tmdl.mjs` writes the TMDL model and
+`scripts/powerbi/pbir.mjs` writes the PBIR pages and theme. There is no study-name branch
+and no five-study shortcut: the five examples in `reports/power-bi` are outputs of the same
+pipeline, not the pipeline's shape.
+
+**The artifact is a PBIP, not a PBIX.** Microsoft's own documentation says conversion
+between PBIX and PBIP is a Desktop operation, and the Linux community CLI can compile a
+report-only PBIX but not one carrying a model. Reimplementing the proprietary report and
+VertiPaq containers was not a credible delivery. The generated `.pbip` opens in Desktop
+and can be saved as a PBIX there; the Fabric deployment path already accepts a Desktop-made
+PBIX or a PBIR report folder. This is the same boundary recorded in `docs/POWER-BI.md`, not
+a new limitation hidden behind the generator.
+
+**Responses stay empty unless they are real.** `Responses` and `Answers` always carry their
+schema, and carry zero rows unless `--responses` and `--answers` name real CSVs. The cover,
+the readiness page and the manifest all say so. A report that looks complete before
+fieldwork is useful as a design instrument and dangerous as a result; keeping the response
+layer empty is the line between the two. The planning burden is labelled a heuristic for
+the same reason: it is derived from question type, choice load and routing, not measured
+interview time.
+
+**Why the public shape is seven pages.** The report answers the questions an analyst asks
+before fieldwork, in the order they are asked: what is this instrument, how is it routed,
+what will each question require analytically, what exactly is in it, and what is still
+missing. A page of charts for every question would be a wall, not an analysis; an executive
+summary alone would hide the instrument. The fixed 1280 × 720 canvas, Georgia display type
+and warm-paper palette are a deliberate editorial treatment, not decoration layered over
+defaults: every page uses the same measure/field grammar and the same visual hierarchy.
+
+**Two defects the validator found that the generator's tests could not.** The first PBIR
+validation pass rejected all five projects for a custom theme whose `name` omitted the
+`.json` suffix its filename carried, card visuals using `color` in `value`/`label` objects
+where the schema requires `fontColor`, columns placed in the measure-only `Y` role of a
+clustered bar chart, a `totals` formatting object that visual does not support, and small
+text boxes below the readable-height floor. Each was fixed at the generator, and the chart
+values became real measures (`Plotted section questions`, `Plotted section minutes`, and so
+on) instead of columns asked to behave as measures. The report tests now assert the measure
+role, the absence of `totals`, the `fontColor` keys and the shape-backed rules. All five
+projects then passed the Microsoft validator with 0 errors and 0 warnings; all 65 TMDL
+files parsed with no unknown nodes, and 310 visual field references resolved against their
+models. **Not measured:** opening the reports in Power BI Desktop or a Fabric workspace,
+because neither is available in this environment; the schema and cross-reference checks are
+not a substitute for a visual render.

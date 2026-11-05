@@ -1,0 +1,55 @@
+table RoutingAnchors
+	measure 'Plotted inbound references' = SUM('RoutingAnchors'[Inbound refs])
+		formatString: #,##0
+	column Rank
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: Rank
+	column QuestionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionKey
+	column Question
+		dataType: string
+		summarizeBy: none
+		sourceColumn: QuestionText
+	column Section
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SectionText
+	column Type
+		dataType: string
+		summarizeBy: none
+		sourceColumn: TypeText
+	column 'Inbound refs'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: InboundReferences
+	column 'Rule kinds'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: RuleKinds
+	partition RoutingAnchors = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [Rank = Int64.Type, QuestionKey = text, QuestionText = text, SectionText = text, TypeText = text, InboundReferences = Int64.Type, RuleKinds = text],
+				        {
+				            {1, "q_glob_term", "Global Termination", "Screener", "Calculated / audit", 66, "calculation"},
+				            {2, "q_z0", "User classification", "Screener", "Calculated / audit", 9, "calculation"},
+				            {3, "q_s1", "In which city do you currently do your deliveries? SA", "Screener", "Single choice", 4, "referenced"},
+				            {4, "q_s2", "Do you currently use a Bounce scooter for deliveries? SA", "Screener", "Single choice", 4, "visibility"},
+				            {5, "q_a5", "Are you originally from this city, or did you move here f…", "Main Questionnaire", "Single choice", 2, "visibility"},
+				            {6, "q_a6", "What is your age?", "Main Questionnaire", "Whole number", 2, "constraint"},
+				            {7, "q_b1", "How much do you pay Bounce per day for the scooter? menti…", "Main Questionnaire", "Whole number", 2, "visibility, constraint"},
+				            {8, "q_b7a", "A) Compared with your situation before Bounce, do you fee…", "Main Questionnaire", "Single choice", 2, "visibility"},
+				            {9, "q_e1", "Before choosing Bounce, which of these did you consider?", "Main Questionnaire", "Multi-select", 2, "visibility, constraint"},
+				            {10, "q_e2a", "Which of these mattered most in choosing Bounce?", "Main Questionnaire", "Single choice", 2, "visibility"}
+				        }
+				    )
+				in
+				    Source

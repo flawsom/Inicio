@@ -1,0 +1,58 @@
+table RoutingHotspots
+	column Rank
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: Rank
+	column QuestionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionKey
+	column Question
+		dataType: string
+		summarizeBy: none
+		sourceColumn: QuestionText
+	column Section
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SectionText
+	column Type
+		dataType: string
+		summarizeBy: none
+		sourceColumn: TypeText
+	column 'Logic refs'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: LogicReferences
+	column 'Rule kinds'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: RuleKinds
+	column 'Rule sample'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: RuleSample
+	partition RoutingHotspots = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [Rank = Int64.Type, QuestionKey = text, QuestionText = text, SectionText = text, TypeText = text, LogicReferences = Int64.Type, RuleKinds = text, RuleSample = text],
+				        {
+				            {1, "q_q56_4", "RANK 4", "Now that you have seen all three…", "Single choice", 4, "visibility, choice filter", "selected(${glob_term}, '1')"},
+				            {2, "q_q56_3", "RANK 3", "Now that you have seen all three…", "Single choice", 3, "visibility, choice filter", "selected(${glob_term}, '1')"},
+				            {3, "q_last_2", "Last", "Main Questionnaire", "Single choice", 2, "visibility, choice filter", "selected(${glob_term}, '1')"},
+				            {4, "q_q56_2", "RANK 2", "Now that you have seen all three…", "Single choice", 2, "visibility, choice filter", "selected(${glob_term}, '1')"},
+				            {5, "q_sech", "NCCS", "Please look at the screen and tel…", "Calculated / audit", 2, "calculation", null},
+				            {6, "q_mq12a_all", "Total Awareness", "Main Questionnaire", "Calculated / audit", 2, "calculation", null},
+				            {7, "q_sq4_2_oth", "sq4_2_oth", "Main Questionnaire", "Calculated / audit", 1, "visibility, calculation", "selected(${sq4_2}, '99')"},
+				            {8, "q_pq5a_oth", "pq5a_oth", "Main Questionnaire", "Calculated / audit", 1, "visibility, calculation", "selected(${pq5a}, '99')"},
+				            {9, "q_dq1a_oth", "dq1a_oth", "Main Questionnaire", "Calculated / audit", 1, "visibility, calculation", "selected(${dq1a}, '99')"},
+				            {10, "q_s0", "Centres", "Main Questionnaire", "Single choice", 1, "visibility", "selected(${glob_term}, '1')"}
+				        }
+				    )
+				in
+				    Source

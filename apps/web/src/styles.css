@@ -1587,8 +1587,130 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
   cursor: pointer;
 }
 
-.studio-builder-logic { display: grid; gap: var(--sp-2, 6px); }
+.studio-builder-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-4);
+}
+.studio-builder-toolbar p { margin: 2px 0 0; max-width: 60ch; }
+.studio-builder-toolbar select { width: auto; }
+
+.studio-builder-sections {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--panel);
+}
+.studio-builder-sections > summary,
+.studio-builder-logic > summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.studio-builder-sections > p { margin: var(--sp-2) 0; }
+.studio-builder-section-list { display: grid; gap: var(--sp-2); margin: var(--sp-2) 0; }
+.studio-builder-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--sp-2);
+}
+
+.studio-builder-editor {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--line-control, currentColor);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--panel);
+}
+.studio-builder-editor-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.studio-builder-editor-head h3 {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: var(--text-lg);
+  letter-spacing: -0.015em;
+}
+.studio-builder-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2) var(--sp-3);
+}
+.studio-builder-field { display: grid; gap: 4px; min-width: 0; }
+.studio-builder-field.wide { grid-column: 1 / -1; }
+.studio-builder-field input,
+.studio-builder-field select { width: 100%; }
+
+.studio-builder-requirement {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.studio-builder-requirement input[type='checkbox'] { width: auto; accent-color: var(--accent-solid); }
+
+.studio-builder-choices {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--sp-3) 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.studio-builder-choices legend {
+  padding: 0 var(--sp-1) 0 0;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+}
+.studio-builder-choices p { margin: 0; }
+.studio-builder-option-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.studio-builder-option {
+  display: grid;
+  grid-template-columns: auto minmax(64px, 0.55fr) minmax(0, 1.45fr) auto;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) 0;
+  border-top: 1px solid var(--line);
+}
+.studio-builder-option:first-child { border-top: 0; }
+.studio-builder-option > input { width: 100%; }
+.studio-builder-option-index { min-width: 1.2em; font-family: var(--font-mono); text-align: right; }
+
+.studio-builder-logic {
+  display: grid;
+  gap: var(--sp-2, 6px);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+}
+.studio-builder-logic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2) var(--sp-3);
+  padding-top: var(--sp-2);
+}
 .studio-builder-logic input { width: 100%; }
+.studio-builder-logic p { margin: 0; }
+
+.studio-builder-row.dragging { opacity: 0.55; }
+.studio-builder-row.selected { background: var(--panel-2); }
 
 /*
  * The builder on a phone.
@@ -1606,6 +1728,17 @@ tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, transparent); 
 @media (max-width: 640px) {
   .studio-builder-row { flex-wrap: wrap; }
   .studio-builder-label { flex: 1 1 100%; order: -1; }
+  .studio-builder-index { display: none; }
+  .studio-builder-field,
+  .studio-builder-logic-grid { grid-template-columns: minmax(0, 1fr); }
+  .studio-builder-field.wide { grid-column: auto; }
+  .studio-builder-section { grid-template-columns: minmax(0, 1fr); }
+  .studio-builder-option {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+  }
+  .studio-builder-option > input,
+  .studio-builder-option > .row { grid-column: 2; }
 }
 
 /* ---------------------------------------------------------------- the monitor */

@@ -1,0 +1,55 @@
+table RoutingAnchors
+	measure 'Plotted inbound references' = SUM('RoutingAnchors'[Inbound refs])
+		formatString: #,##0
+	column Rank
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: Rank
+	column QuestionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionKey
+	column Question
+		dataType: string
+		summarizeBy: none
+		sourceColumn: QuestionText
+	column Section
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SectionText
+	column Type
+		dataType: string
+		summarizeBy: none
+		sourceColumn: TypeText
+	column 'Inbound refs'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: InboundReferences
+	column 'Rule kinds'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: RuleKinds
+	partition RoutingAnchors = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [Rank = Int64.Type, QuestionKey = text, QuestionText = text, SectionText = text, TypeText = text, InboundReferences = Int64.Type, RuleKinds = text],
+				        {
+				            {1, "q_interviewer_instruction_show_screen", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "Screener", "Single choice", 16, "referenced"},
+				            {2, "q_interviewer_instruction_show_screen_2", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "Screener", "Single choice", 15, "visibility"},
+				            {3, "q_sq7a", "How often do you purchase powdered salt for your househol…", "Screener", "Single choice", 14, "visibility"},
+				            {4, "q_sq7b", "How often do you use powdered salt for preparing any dish…", "Screener", "Single choice", 13, "visibility"},
+				            {5, "q_sq8c", "How often do you purchase crystal salt for your household…", "Screener", "Single choice", 12, "visibility"},
+				            {6, "q_glob_term", "Global Termination", "Screener", "Calculated / audit", 11, "calculation"},
+				            {7, "q_rotation_grid_for_centre_vizag_kolkata_bhubaneshwar_code", "ROTATION GRID- FOR CENTRE (VIZAG/KOLKATA/ BHUBANESHWAR) |…", "Screener", "Single choice", 6, "visibility"},
+				            {8, "q_rotation_grid_for_centre_hubli_code", "ROTATION GRID- FOR CENTRE (HUBLI) | Code", "Screener", "Single choice", 5, "visibility"},
+				            {9, "q_cq1", "How much do you like or dislike this promo? SA", "Screener", "Single choice", 4, "visibility"},
+				            {10, "q_cq2", "How unique do you find this promo? SA", "Screener", "Single choice", 3, "visibility"}
+				        }
+				    )
+				in
+				    Source

@@ -1,0 +1,55 @@
+table RoutingAnchors
+	measure 'Plotted inbound references' = SUM('RoutingAnchors'[Inbound refs])
+		formatString: #,##0
+	column Rank
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: Rank
+	column QuestionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionKey
+	column Question
+		dataType: string
+		summarizeBy: none
+		sourceColumn: QuestionText
+	column Section
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SectionText
+	column Type
+		dataType: string
+		summarizeBy: none
+		sourceColumn: TypeText
+	column 'Inbound refs'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: InboundReferences
+	column 'Rule kinds'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: RuleKinds
+	partition RoutingAnchors = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [Rank = Int64.Type, QuestionKey = text, QuestionText = text, SectionText = text, TypeText = text, InboundReferences = Int64.Type, RuleKinds = text],
+				        {
+				            {1, "q_glob_term", "Global Termination", "Screener", "Calculated / audit", 26, "calculation"},
+				            {2, "q_sq3b", "Please tell me your age.", "Screener", "Single choice", 13, "referenced"},
+				            {3, "q_interviewer_instruction_show_screen", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "Screener", "Single choice", 12, "visibility"},
+				            {4, "q_interviewer_instruction_show_screen_2", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "Screener", "Single choice", 11, "visibility"},
+				            {5, "q_interviewer_instruction_show_screen_3", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "Screener", "Single choice", 11, "visibility"},
+				            {6, "q_interviewer_instruction_show_screen_4", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "Screener", "Single choice", 10, "visibility"},
+				            {7, "q_interviewer_instruction_show_screen_instruction", "INTERVIEWER INSTRUCTION: SHOW SCREEN | INSTRUCTION", "Screener", "Single choice", 9, "visibility"},
+				            {8, "q_sq6c", "Which of the following items do you regularly use during…", "Screener", "Multi-select", 8, "visibility"},
+				            {9, "q_sq6f_2", "And which brand of agarbatti do you use most often? SA", "Screener", "Single choice", 3, "visibility"},
+				            {10, "q_interviewer_instruction_show_scr_1", "RANK 1", "INTERVIEWER INSTRUCTION: SHOW SCREEN…", "Single choice", 2, "visibility"}
+				        }
+				    )
+				in
+				    Source

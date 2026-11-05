@@ -1,0 +1,71 @@
+table QuestionTypes
+	measure 'Plotted type questions' = SUM('QuestionTypes'[Questions])
+		formatString: #,##0
+	column TypeKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: TypeKey
+	column Type
+		dataType: string
+		summarizeBy: none
+		sortByColumn: TypeOrder
+		sourceColumn: TypeText
+	column TypeOrder
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: TypeOrder
+	column Questions
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: QuestionCount
+	column Answerable
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: AnswerableCount
+	column Required
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: RequiredCount
+	column Routed
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: RoutedCount
+	column Constraints
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: ConstraintCount
+	column Choices
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: ChoiceCount
+	column 'Est. minutes'
+		dataType: double
+		formatString: 0.0
+		summarizeBy: none
+		sourceColumn: EstimatedMinutes
+	partition QuestionTypes = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [TypeKey = text, TypeText = text, TypeOrder = Int64.Type, QuestionCount = Int64.Type, AnswerableCount = Int64.Type, RequiredCount = Int64.Type, RoutedCount = Int64.Type, ConstraintCount = Int64.Type, ChoiceCount = Int64.Type, EstimatedMinutes = number],
+				        {
+				            {"select_one", "Single choice", 0, 135, 135, 135, 134, 0, 652, 42.93333333333333},
+				            {"select_multiple", "Multi-select", 1, 2, 2, 2, 2, 0, 4, 0.9166666666666666},
+				            {"rank", "Ranking", 2, 1, 1, 1, 1, 0, 7, 0.6166666666666667},
+				            {"text", "Open text", 3, 55, 55, 55, 55, 0, 0, 40.333333333333336},
+				            {"integer", "Whole number", 5, 5, 5, 5, 4, 1, 0, 1.5666666666666667},
+				            {"note", "Note", 22, 3, 0, 0, 2, 0, 0, 0.1},
+				            {"calculate", "Calculated / audit", 23, 41, 0, 0, 28, 0, 0, 1.4}
+				        }
+				    )
+				in
+				    Source

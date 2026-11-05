@@ -1,0 +1,87 @@
+table Sections
+	measure 'Plotted section questions' = SUM('Sections'[Questions])
+		formatString: #,##0
+	measure 'Plotted section minutes' = SUM('Sections'[Est. minutes])
+		formatString: 0.0
+	column SectionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: SectionKey
+	column Section
+		dataType: string
+		summarizeBy: none
+		sortByColumn: SectionOrder
+		sourceColumn: SectionText
+	column SectionOrder
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: SectionOrder
+	column Questions
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: QuestionCount
+	column Answerable
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: AnswerableCount
+	column Required
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: RequiredCount
+	column Conditional
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: ConditionalCount
+	column Routed
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: RoutedCount
+	column Constraints
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: ConstraintCount
+	column Choices
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: ChoiceCount
+	column 'Est. minutes'
+		dataType: double
+		formatString: 0.0
+		summarizeBy: none
+		sourceColumn: EstimatedMinutes
+	column '% burden'
+		dataType: double
+		formatString: 0.0%
+		summarizeBy: none
+		sourceColumn: BurdenShare
+	column SectionFull
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: SectionFull
+	partition Sections = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [SectionKey = text, SectionText = text, SectionOrder = Int64.Type, QuestionCount = Int64.Type, AnswerableCount = Int64.Type, RequiredCount = Int64.Type, ConditionalCount = Int64.Type, RoutedCount = Int64.Type, ConstraintCount = Int64.Type, ChoiceCount = Int64.Type, EstimatedMinutes = number, BurdenShare = number, SectionFull = text],
+				        {
+				            {"g_bg_101", "Interviewer & Respondent Info", 1, 3, 3, 3, 0, 0, 2, 0, 2.1166666666666667, 0.1039279869067103, "Interviewer & Respondent Info"},
+				            {"g_main_q", "Main Questionnaire", 2, 38, 30, 30, 0, 33, 1, 165, 11.633333333333333, 0.5711947626841244, "Main Questionnaire"},
+				            {"g_bg_nccs", "Please look at the screen and tell me the highe…", 3, 8, 3, 2, 0, 0, 0, 17, 1.4666666666666666, 0.07201309328968902, "Please look at the screen and tell me the highest level of education of the Chief Wage Earner in your household? By Chief Wage Earner, I mean the person who contributes maximum to the expenses of your household. SA | CODE"},
+				            {"g_bg_pq10", "Rank on a scale of 1–10 how important the follo…", 4, 10, 10, 10, 0, 10, 0, 100, 3.8333333333333335, 0.18821603927986907, "Rank on a scale of 1–10 how important the following factors are to you when purchasing silver jewellery. (1 = Not Important, 10 = Extremely Important) Rating 1–10"},
+				            {"g_bg_q56", "Now that you have seen all three concepts, plea…", 5, 4, 4, 4, 0, 4, 0, 16, 1.2666666666666666, 0.062193126022913256, "Now that you have seen all three concepts, please rank them in order of your overall preference. Assign a rank of 1 to the concept you like the most, 2 to your next preferred concept, and 3 to the concept you like the least 3? SINGLE RANK FOR EACH CONCEPT"},
+				            {"unassigned", "Unassigned section", 6, 12, 0, 0, 0, 1, 0, 0, 0.05, 0.0024549918166939444, "Unassigned section"}
+				        }
+				    )
+				in
+				    Source

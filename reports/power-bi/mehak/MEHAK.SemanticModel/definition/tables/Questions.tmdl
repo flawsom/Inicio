@@ -1,0 +1,216 @@
+table Questions
+	column QuestionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionKey
+	column '#'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: QuestionOrder
+	column SectionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: SectionKey
+	column Section
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SectionText
+	column SectionOrder
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: SectionOrder
+	column QuestionName
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionName
+	column Question
+		dataType: string
+		summarizeBy: none
+		sourceColumn: QuestionText
+	column QuestionFull
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionFull
+	column TypeKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: TypeKey
+	column Type
+		dataType: string
+		summarizeBy: none
+		sourceColumn: TypeText
+	column FamilyKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: FamilyKey
+	column Answerable
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: AnswerableText
+	column AnswerableFlag
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: AnswerableFlag
+	column Required
+		dataType: string
+		summarizeBy: none
+		sourceColumn: RequiredText
+	column RequiredFlag
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: RequiredFlag
+	column RequiredMode
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: RequiredMode
+	column Logic
+		dataType: string
+		summarizeBy: none
+		sourceColumn: LogicText
+	column LogicFlag
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: LogicFlag
+	column Constraint
+		dataType: string
+		summarizeBy: none
+		sourceColumn: ConstraintText
+	column ConstraintFlag
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: ConstraintFlag
+	column ChoiceFilterFlag
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: ChoiceFilterFlag
+	column Choices
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: ChoiceCount
+	column Analysis
+		dataType: string
+		summarizeBy: none
+		sourceColumn: AnalysisText
+	column Chart
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: ChartText
+	column Caution
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: CautionText
+	column 'Est. sec'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: EstimatedSeconds
+	column Burden
+		dataType: string
+		summarizeBy: none
+		sourceColumn: BurdenBand
+	column 'Logic refs'
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: DependencyCount
+	column 'Inbound refs'
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: InboundReferences
+	column 'Rule kinds'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: RuleKinds
+	partition Questions = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [QuestionKey = text, QuestionOrder = Int64.Type, SectionKey = text, SectionText = text, SectionOrder = Int64.Type, QuestionName = text, QuestionText = text, QuestionFull = text, TypeKey = text, TypeText = text, FamilyKey = text, AnswerableText = text, AnswerableFlag = logical, RequiredText = text, RequiredFlag = logical, RequiredMode = text, LogicText = text, LogicFlag = logical, ConstraintText = text, ConstraintFlag = logical, ChoiceFilterFlag = logical, ChoiceCount = Int64.Type, AnalysisText = text, ChartText = text, CautionText = text, EstimatedSeconds = Int64.Type, BurdenBand = text, DependencyCount = Int64.Type, InboundReferences = Int64.Type, RuleKinds = text],
+				        {
+				            {"q_starttime", 1, "unassigned", "Unassigned section", 9007199254740991, "starttime", "starttime", "starttime", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_endtime", 2, "unassigned", "Unassigned section", 9007199254740991, "endtime", "endtime", "endtime", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_deviceid", 3, "unassigned", "Unassigned section", 9007199254740991, "deviceid", "deviceid", "deviceid", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_devicephonenum", 4, "unassigned", "Unassigned section", 9007199254740991, "devicephonenum", "devicephonenum", "devicephonenum", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_username", 5, "unassigned", "Unassigned section", 9007199254740991, "username", "username", "username", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_device_info", 6, "unassigned", "Unassigned section", 9007199254740991, "device_info", "device_info", "device_info", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, "calculation"},
+				            {"q_duration", 7, "unassigned", "Unassigned section", 9007199254740991, "duration", "duration", "duration", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, "calculation"},
+				            {"q_caseid", 8, "unassigned", "Unassigned section", 9007199254740991, "caseid", "caseid", "caseid", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_int_name", 9, "g_bg_101", "Interviewer & Respondent Info", 9, "int_name", "Interviewer Name", "Interviewer Name", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "—", false, "Set", true, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 43, "Heavy", 0, 0, "constraint"},
+				            {"q_resp_name", 10, "g_bg_101", "Interviewer & Respondent Info", 9, "resp_name", "Respondent Name", "Respondent Name", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "—", false, "Set", true, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 43, "Heavy", 0, 0, "constraint"},
+				            {"q_resp_no", 11, "g_bg_101", "Interviewer & Respondent Info", 9, "resp_no", "Respondent Phone no.", "Respondent Phone no.", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "—", false, "Set", true, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 43, "Heavy", 0, 0, "constraint"},
+				            {"q_resp_add", 12, "g_bg_101", "Interviewer & Respondent Info", 9, "resp_add", "Respondent Address", "Respondent Address", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "—", false, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 41, "Heavy", 0, 0, null},
+				            {"q_st_point", 13, "g_bg_101", "Interviewer & Respondent Info", 9, "st_point", "Starting Point", "Starting Point", "integer", "Whole number", "Numeric distribution", "Yes", true, "Required", true, "required", "—", false, "Set", true, false, 0, "Numeric distribution", "Histogram · n / median / IQR", "Do not report a mean without a distribution check; segment by routing if bases differ.", 18, "Moderate", 0, 0, "constraint"},
+				            {"q_sq3a", 14, "g_screener", "Screener", 15, "sq3a", "RECORD GENDER. (DO NOT ASK). SA", "RECORD GENDER. (DO NOT ASK). SA", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "—", false, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 41, "Heavy", 0, 0, null},
+				            {"q_sq3b", 15, "g_screener", "Screener", 15, "sq3b", "Please tell me your age.", "Please tell me your age.", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "—", false, "—", false, false, 1, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 14, "Light", 0, 13, null},
+				            {"q_interviewer_instruction_show_screen", 16, "g_screener", "Screener", 15, "interviewer_instruction_show_screen", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 7, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 21, "Moderate", 1, 12, "visibility"},
+				            {"q_interviewer_instruction_show_screen_2", 17, "g_screener", "Screener", 15, "interviewer_instruction_show_screen_2", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 23, "Moderate", 2, 11, "visibility"},
+				            {"q_interviewer_instruction_show_screen_3", 18, "g_screener", "Screener", 15, "interviewer_instruction_show_screen_3", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 5, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 3, 11, "visibility"},
+				            {"q_interviewer_instruction_show_screen_4", 19, "g_screener", "Screener", 15, "interviewer_instruction_show_screen_4", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 2, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 17, "Moderate", 4, 10, "visibility"},
+				            {"q_interviewer_instruction_show_screen_instruction", 20, "g_screener", "Screener", 15, "interviewer_instruction_show_screen_instruction", "INTERVIEWER INSTRUCTION: SHOW SCREEN | INSTRUCTION", "INTERVIEWER INSTRUCTION: SHOW SCREEN | INSTRUCTION", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 5, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 5, 9, "visibility"},
+				            {"q_sq6c", 21, "g_screener", "Screener", 15, "sq6c", "Which of the following items do you regularly use during your prayers at home? MA | INSTRUCTION", "Which of the following items do you regularly use during your prayers at home? MA | INSTRUCTION", "select_multiple", "Multi-select", "Multi-response frequency", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 6, "Multi-response frequency", "Horizontal bar · % of respondents", "Do not divide mentions by answers; the denominator is respondents.", 30, "Moderate", 6, 8, "visibility"},
+				            {"q_sq6c_oth", 22, "g_screener", "Screener", 15, "sq6c_oth", "sq6c_oth", "sq6c_oth", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility, calculation"},
+				            {"q_sq6d", 23, "g_screener", "Screener", 15, "sq6d", "Which of these statements best describes your role in deciding which agarbatti to purchase for your household? SA", "Which of these statements best describes your role in deciding which agarbatti to purchase for your household? SA", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 44, "Heavy", 7, 0, "visibility"},
+				            {"q_sq6e1_which_of_the_following_agarbatti_brands_are_you_aware_", 24, "g_screener", "Screener", 15, "sq6e1_which_of_the_following_agarbatti_brands_are_you_aware_", "SQ6e1. Which of the following agarbatti brands are you aware of? MA", "SQ6e1. Which of the following agarbatti brands are you aware of? MA", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 44, "Heavy", 7, 0, "visibility"},
+				            {"q_sq6e", 25, "g_screener", "Screener", 15, "sq6e", "Which of the following agarbatti brands have you used in the last 6 months? MA", "Which of the following agarbatti brands have you used in the last 6 months? MA", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 44, "Heavy", 7, 0, "visibility"},
+				            {"q_sq6f", 26, "g_screener", "Screener", 15, "sq6f", "Which brand of agarbatti are you using currently? SA", "Which brand of agarbatti are you using currently? SA", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 44, "Heavy", 7, 0, "visibility"},
+				            {"q_sq6f_2", 27, "g_screener", "Screener", 15, "sq6f_2", "And which brand of agarbatti do you use most often? SA", "And which brand of agarbatti do you use most often? SA", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 15, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 25, "Moderate", 7, 3, "visibility"},
+				            {"q_sq6f_2_oth", 28, "g_screener", "Screener", 15, "sq6f_2_oth", "sq6f_2_oth", "sq6f_2_oth", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility, calculation"},
+				            {"q_sq6i", 29, "g_screener", "Screener", 15, "sq6i", "Since when have you been using _______ (SHOW BRAND NAME CODED IN SQ6g) variant? SA", "Since when have you been using _______ (SHOW BRAND NAME CODED IN SQ6g) variant? SA", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 23, "Moderate", 8, 0, "visibility"},
+				            {"q_sq6j", 30, "g_screener", "Screener", 15, "sq6j", "Which pack size of _______ (SHOW BRAND NAME AND VARIANT CODED IN SQ6g AND SQ6h) do you usually purchase? SA", "Which pack size of _______ (SHOW BRAND NAME AND VARIANT CODED IN SQ6g AND SQ6h) do you usually purchase? SA", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 44, "Heavy", 9, 0, "visibility"},
+				            {"q_glob_term", 31, "g_screener", "Screener", 15, "glob_term", "Global Termination", "Global Termination", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 3, 26, "calculation"},
+				            {"q_s0", 32, "g_bg_term", "Main Questionnaire", 34, "s0", "Centre", "Centre", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 2, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 17, "Moderate", 1, 0, "visibility"},
+				            {"q_interviewer_instruction_show_screen_5", 33, "g_bg_term", "Main Questionnaire", 34, "interviewer_instruction_show_screen_5", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 6, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 20, "Moderate", 1, 0, "visibility"},
+				            {"q_sq2", 34, "g_bg_term", "Main Questionnaire", 34, "sq2", "Have you participated in any Market Research survey or Group discussion in the last three months? SA | INSTRUCTION", "Have you participated in any Market Research survey or Group discussion in the last three months? SA | INSTRUCTION", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 2, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 17, "Moderate", 1, 0, "visibility"},
+				            {"q_cq1", 35, "g_bg_term", "Main Questionnaire", 34, "cq1", "On which of the following occasions do you generally use agarbattis? MA", "On which of the following occasions do you generally use agarbattis? MA", "select_multiple", "Multi-select", "Multi-response frequency", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 8, "Multi-response frequency", "Horizontal bar · % of respondents", "Do not divide mentions by answers; the denominator is respondents.", 31, "Heavy", 1, 0, "visibility"},
+				            {"q_cq1_oth", 36, "g_bg_term", "Main Questionnaire", 34, "cq1_oth", "cq1_oth", "cq1_oth", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility, calculation"},
+				            {"q_cq2", 37, "g_bg_term", "Main Questionnaire", 34, "cq2", "When purchasing agarbattis, which are the factors that you consider before deciding on which one to buy? MA", "When purchasing agarbattis, which are the factors that you consider before deciding on which one to buy? MA", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 44, "Heavy", 1, 0, "visibility"},
+				            {"q_cq3", 38, "g_bg_term", "Main Questionnaire", 34, "cq3", "And which one of these is the most important factor when choosing an agarbatti? SA", "And which one of these is the most important factor when choosing an agarbatti? SA", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 44, "Heavy", 1, 0, "visibility"},
+				            {"q_n_1", 39, "g_bg_term", "Main Questionnaire", 34, "n_1", "NOW, I WILL SHOW YOU CARDS FEATURING DIFFERENT FRAGRANCES AND WHAT EACH FRAGRANCE STANDS FOR. HAVE A LOOK AT IT CAREFULLY & ANS…", "NOW, I WILL SHOW YOU CARDS FEATURING DIFFERENT FRAGRANCES AND WHAT EACH FRAGRANCE STANDS FOR. HAVE A LOOK AT IT CAREFULLY & ANSWER.", "note", "Note", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility"},
+				            {"q_fq1", 40, "g_bg_term", "Main Questionnaire", 34, "fq1", "Are you aware of _______ fragrance? READ OUT EACH FRAGRANCE NAME. SA", "Are you aware of _______ fragrance? READ OUT EACH FRAGRANCE NAME. SA", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 1, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 17, "Moderate", 1, 0, "visibility"},
+				            {"q_fq2", 41, "g_bg_term", "Main Questionnaire", 34, "fq2", "Have you ever come across this fragrance before, whether in a product or at any place? READ OUT EACH FRAGRANCE NAME. SA", "Have you ever come across this fragrance before, whether in a product or at any place? READ OUT EACH FRAGRANCE NAME. SA", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 29, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 25, "Moderate", 1, 0, "visibility"},
+				            {"q_n_2", 42, "g_bg_term", "Main Questionnaire", 34, "n_2", "NOW, I WILL SHOW YOU ALL THE FRAGRANCE NAMES THAT YOU ARE FAMILIAR WITH, ALONG WITH THEIR DESCRIPTIONS. PLEASE READ EACH FRAGRA…", "NOW, I WILL SHOW YOU ALL THE FRAGRANCE NAMES THAT YOU ARE FAMILIAR WITH, ALONG WITH THEIR DESCRIPTIONS. PLEASE READ EACH FRAGRANCE DESCRIPTION CAREFULLY AND ANSWER THE FOLLOWING QUESTIONS BASED ON YOUR OVERALL OPINION.", "note", "Note", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility"},
+				            {"q_fq18", 43, "g_bg_term", "Main Questionnaire", 34, "fq18", "If an agarbatti with each of the following fragrances were available in the market, how likely would you be to purchase it? SA…", "If an agarbatti with each of the following fragrances were available in the market, how likely would you be to purchase it? SA FOR EACH OPTIONS", "select_one", "Single choice", "Scale / rating", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 1, "Scale / rating", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit.", 17, "Moderate", 1, 0, "visibility"},
+				            {"q_n_3", 44, "g_bg_term", "Main Questionnaire", 34, "n_3", "Now, imagine a new Tamil Nadu-exclusive 3-in-1 agarbatti featuring the three fragrances you have selected. Please answer the fo…", "Now, imagine a new Tamil Nadu-exclusive 3-in-1 agarbatti featuring the three fragrances you have selected. Please answer the following questions.", "note", "Note", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility"},
+				            {"q_pq1", 45, "g_bg_term", "Main Questionnaire", 34, "pq1", "If an agarbatti pack is available with the top 3 of your most preferred fragrances ______________(SHOW OPTIONS CODED IN FQ3), h…", "If an agarbatti pack is available with the top 3 of your most preferred fragrances ______________(SHOW OPTIONS CODED IN FQ3), how likely would you be to purchase it? SA", "select_one", "Single choice", "Scale / rating", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 5, "Scale / rating", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_fq3", 46, "g_bg_term", "Main Questionnaire", 34, "fq3", "fragrances? SA", "fragrances? SA", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 5, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_fq3_2", 47, "g_bg_term", "Main Questionnaire", 34, "fq3_2", "fragrances fits with the Mangaldeep brand? SA", "fragrances fits with the Mangaldeep brand? SA", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 5, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_pq1a", 48, "g_bg_term", "Main Questionnaire", 34, "pq1a", "How often do you purchase agarbattis for your household? SA", "How often do you purchase agarbattis for your household? SA", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 6, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 20, "Moderate", 1, 0, "visibility"},
+				            {"q_pq1b", 49, "g_bg_term", "Main Questionnaire", 34, "pq1b", "From where do you usually purchase agarbattis for your household? SA", "From where do you usually purchase agarbattis for your household? SA", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 6, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 20, "Moderate", 1, 0, "visibility"},
+				            {"q_pq1b_oth", 50, "g_bg_term", "Main Questionnaire", 34, "pq1b_oth", "pq1b_oth", "pq1b_oth", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility, calculation"},
+				            {"q_pq1c", 51, "g_bg_term", "Main Questionnaire", 34, "pq1c", "How many packs of agarbattis do you typically buy in a single purchase? SA", "How many packs of agarbattis do you typically buy in a single purchase? SA", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 5, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_pq2a", 52, "g_bg_term", "Main Questionnaire", 34, "pq2a", "How many times in a day do you usually light agarbattis in your household? SA", "How many times in a day do you usually light agarbattis in your household? SA", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 4, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_pq2b", 53, "g_bg_term", "Main Questionnaire", 34, "pq2b", "How many agarbatti sticks do you usually light at one time?", "How many agarbatti sticks do you usually light at one time?", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 44, "Heavy", 1, 0, "visibility"},
+				            {"q_pq2c", 54, "g_bg_term", "Main Questionnaire", 34, "pq2c", "Which of the following best describes how agarbatti fragrances are used in your household?? SA", "Which of the following best describes how agarbatti fragrances are used in your household?? SA", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 3, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 18, "Moderate", 1, 0, "visibility"},
+				            {"q_pq3", 55, "g_bg_term", "Main Questionnaire", 34, "pq3", "Thanks for participating in the study; your feedback is valuable to us. Our client, ITC, may want to contact you to discuss a f…", "Thanks for participating in the study; your feedback is valuable to us. Our client, ITC, may want to contact you to discuss a few food products or personal care products and your habits regarding them or for some marketing activity. In that case, can we share your contact details (name, telephone number, and address) with them?", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 2, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 17, "Moderate", 1, 0, "visibility"},
+				            {"q_interviewer_instruction_show_scr_1", 56, "g_bg_interviewer_instruction_show_scr", "INTERVIEWER INSTRUCTION: SHOW SCREEN FQ17. Please rank the top 3 fragrances based on how well suited they are to the Mangaldeep brand, where rank 1 is the fragrance best suited to Mangaldeep, rank 2 is the next best suited, and rank 3 is the third best suited.", 59, "interviewer_instruction_show_scr_1", "RANK 1", "RANK 1", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 9, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 22, "Moderate", 1, 2, "visibility"},
+				            {"q_interviewer_instruction_show_scr_2", 57, "g_bg_interviewer_instruction_show_scr", "INTERVIEWER INSTRUCTION: SHOW SCREEN FQ17. Please rank the top 3 fragrances based on how well suited they are to the Mangaldeep brand, where rank 1 is the fragrance best suited to Mangaldeep, rank 2 is the next best suited, and rank 3 is the third best suited.", 59, "interviewer_instruction_show_scr_2", "RANK 2", "RANK 2", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, true, 9, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 22, "Moderate", 2, 0, "visibility, choice filter"},
+				            {"q_interviewer_instruction_show_scr_3", 58, "g_bg_interviewer_instruction_show_scr", "INTERVIEWER INSTRUCTION: SHOW SCREEN FQ17. Please rank the top 3 fragrances based on how well suited they are to the Mangaldeep brand, where rank 1 is the fragrance best suited to Mangaldeep, rank 2 is the next best suited, and rank 3 is the third best suited.", 59, "interviewer_instruction_show_scr_3", "RANK 3", "RANK 3", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, true, 9, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 22, "Moderate", 3, 0, "visibility, choice filter"},
+				            {"q_completed", 59, "unassigned", "Unassigned section", 9007199254740991, "completed", "Completed", "Completed", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 1, 0, "calculation"},
+				            {"q_note_term", 60, "unassigned", "Unassigned section", 9007199254740991, "note_term", "Thanks for your time. Please close the survey.", "Thanks for your time. Please close the survey.", "note", "Note", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility"}
+				        }
+				    )
+				in
+				    Source

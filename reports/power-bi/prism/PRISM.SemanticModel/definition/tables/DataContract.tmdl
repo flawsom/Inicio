@@ -1,0 +1,45 @@
+table DataContract
+	column SortOrder
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: SortOrder
+	column Artifact
+		dataType: string
+		summarizeBy: none
+		sourceColumn: Artifact
+	column Grain
+		dataType: string
+		summarizeBy: none
+		sourceColumn: Grain
+	column 'Key fields'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: KeyFields
+	column Status
+		dataType: string
+		summarizeBy: none
+		sourceColumn: Status
+	column Note
+		dataType: string
+		summarizeBy: none
+		sourceColumn: Note
+	partition DataContract = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [SortOrder = Int64.Type, Artifact = text, Grain = text, KeyFields = text, Status = text, Note = text],
+				        {
+				            {1, "Questions", "One row per instrument row", "QuestionKey, SectionKey, TypeKey", "Loaded", "Compiled from the submitted questionnaire."},
+				            {2, "Sections", "One row per declared section", "SectionKey", "Loaded", "Includes questions outside a declared group."},
+				            {3, "QuestionTypes", "One row per rendered type", "TypeKey", "Loaded", "Counts and control density by type."},
+				            {4, "AnalysisFamilies", "One row per analysis method", "FamilyKey", "Loaded", "The method is a plan, not a finding."},
+				            {5, "RoutingAnchors", "Top referenced questions", "QuestionKey", "Loaded", "Derived from rule-expression references."},
+				            {6, "RoutingHotspots", "Highest rule-load questions", "QuestionKey", "Loaded", "Outgoing references and rule kinds."},
+				            {7, "Responses", "One row per interview", "ResponseId", "Schema ready · no rows", "No synthetic responses were created."},
+				            {8, "Answers", "One row per answer", "ResponseId + QuestionKey", "Schema ready · no rows", "Answer-level analysis activates with fieldwork data."}
+				        }
+				    )
+				in
+				    Source

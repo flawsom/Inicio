@@ -1,0 +1,27 @@
+relationship QuestionsToSections
+	fromColumn: Questions.SectionKey
+	toColumn: Sections.SectionKey
+
+relationship QuestionsToTypes
+	fromColumn: Questions.TypeKey
+	toColumn: QuestionTypes.TypeKey
+
+relationship QuestionsToFamilies
+	fromColumn: Questions.FamilyKey
+	toColumn: AnalysisFamilies.FamilyKey
+
+relationship AnchorsToQuestions
+	fromColumn: RoutingAnchors.QuestionKey
+	toColumn: Questions.QuestionKey
+
+relationship HotspotsToQuestions
+	fromColumn: RoutingHotspots.QuestionKey
+	toColumn: Questions.QuestionKey
+
+relationship AnswersToQuestions
+	fromColumn: Answers.QuestionKey
+	toColumn: Questions.QuestionKey
+
+relationship AnswersToResponses
+	fromColumn: Answers.ResponseId
+	toColumn: Responses.ResponseId

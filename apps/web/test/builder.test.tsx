@@ -17,13 +17,27 @@
 import { describe, expect, it } from 'vitest';
 import { validateForm, type FormDefinition, type Question } from '@inicio/engine';
 import {
+  addChoice,
+  addGroup,
   addQuestion,
+  choiceListName,
+  choicesOf,
+  duplicateQuestion,
+  editingText,
+  moveChoice,
   moveQuestion,
   questionLabel,
   readDefinition,
+  removeChoice,
+  removeGroup,
   removeQuestion,
   reorderQuestion,
+  setChoiceLabel,
+  setChoiceValue,
+  setGroupLabel,
+  setQuestionContent,
   setQuestionLogic,
+  translationPlaceholder,
 } from '../src/studio';
 
 /** A three-question form, with one rule already written and one select to filter. */
@@ -141,5 +155,149 @@ describe('the builder', () => {
   it('reads a label the way the respondent reads it, and falls back rather than showing nothing', () => {
     expect(questionLabel(form().questions[0] as Question, 'en')).toBe('Consent');
     expect(questionLabel({ id: 'q_bare', name: 'bare', type: 'text', label: {} }, 'en')).toBe('bare');
+  });
+
+  it('edits content without touching another language or a conditional requirement', () => {
+    const bilingual: FormDefinition = {
+      ...form(),
+      languages: ['en', 'fr'],
+      groups: [{ id: 'g1', name: 'admin', label: { en: 'Administration', fr: 'Administration' } }],
+      questions: form().questions.map((question) =>
+        question.id === 'q_reason'
+          ? { ...question, required: "${consent} = 'no'", label: { en: 'Why not', fr: 'Pourquoi pas' } }
+          : question,
+      ),
+    };
+    const edited = setQuestionContent(
+      bilingual,
+      'q_reason',
+      { name: 'why_not', label: 'Pourquoi pas ?', hint: 'Expliquez', groupId: 'g1' },
+      'fr',
+    );
+    const reason = edited.questions.find((question) => question.id === 'q_reason') as Question;
+    expect(reason.name).toBe('why_not');
+    expect(reason.label).toEqual({ en: 'Why not', fr: 'Pourquoi pas ?' });
+    expect(reason.hint).toEqual({ fr: 'Expliquez' });
+    expect(reason.groupId).toBe('g1');
+    // The conditional expression is an author decision, not a checkbox to flatten.
+    expect(reason.required).toBe("${consent} = 'no'");
+
+    const cleared = setQuestionContent(edited, 'q_reason', { label: '' }, 'fr');
+    expect((cleared.questions.find((question) => question.id === 'q_reason') as Question).label).toEqual({
+      en: 'Why not',
+    });
+    expect(editingText({ en: 'Why not' }, 'fr')).toBe('');
+    expect(translationPlaceholder({ en: 'Why not' }, 'fr')).toBe('en: Why not');
+  });
+
+  it('turns a question into a choice field and edits its options in render order', () => {
+    const converted = setQuestionContent(form(), 'q_reason', { type: 'select_one' });
+    const reason = converted.questions.find((question) => question.id === 'q_reason') as Question;
+    expect(reason.choices).toEqual({ inline: [] });
+    expect(choicesOf(converted, reason)).toEqual([]);
+
+    const one = addChoice(converted, 'q_reason');
+    const two = addChoice(one, 'q_reason');
+    expect(choicesOf(two, two.questions.find((question) => question.id === 'q_reason') as Question).map((choice) => [
+      choice.value,
+      choice.label.en,
+    ])).toEqual([
+      ['1', 'Option 1'],
+      ['2', 'Option 2'],
+    ]);
+
+    const relabelled = setChoiceLabel(setChoiceValue(two, 'q_reason', 0, 'yes'), 'q_reason', 0, 'Yes');
+    const reordered = moveChoice(relabelled, 'q_reason', 0, 1);
+    const options = choicesOf(reordered, reordered.questions.find((question) => question.id === 'q_reason') as Question);
+    expect(options.map((choice) => [choice.value, choice.label.en])).toEqual([
+      ['2', 'Option 2'],
+      ['yes', 'Yes'],
+    ]);
+    const removed = removeChoice(reordered, 'q_reason', 0);
+    expect(choicesOf(removed, removed.questions.find((question) => question.id === 'q_reason') as Question)).toHaveLength(1);
+  });
+
+  it('edits a shared choice list once rather than copying it onto one question', () => {
+    const shared: FormDefinition = {
+      ...form(),
+      choiceLists: { districts: [{ value: 'n', label: { en: 'North' } }] },
+      questions: [
+        {
+          id: 'q_district',
+          name: 'district',
+          type: 'select_one',
+          label: { en: 'District' },
+          choices: { listName: 'districts' },
+        },
+      ],
+    };
+    const question = shared.questions[0] as Question;
+    expect(choiceListName(question)).toBe('districts');
+    expect(choicesOf(shared, question)).toEqual([{ value: 'n', label: { en: 'North' } }]);
+
+    const added = addChoice(shared, 'q_district');
+    expect(added.choiceLists.districts).toHaveLength(2);
+    expect(added.questions[0]?.choices).toEqual({ listName: 'districts' });
+  });
+
+  it('duplicates a question beside itself with fresh identity and independent inline choices', () => {
+    const original = duplicateQuestion(form(), 'q_consent').questions[1] as Question;
+    expect(original.id).not.toBe('q_consent');
+    expect(original.name).toBe('consent_copy');
+    expect(original.required).toBe(true);
+
+    const withChoices = setQuestionContent(form(), 'q_consent', { type: 'select_one' });
+    const withOne = addChoice(withChoices, 'q_consent');
+    const copied = duplicateQuestion(withOne, 'q_consent');
+    const source = copied.questions.find((question) => question.id === 'q_consent') as Question;
+    const copy = copied.questions.find((question) => question.name === 'consent_copy') as Question;
+    expect(copy.choices).not.toBe(source.choices);
+    expect(choicesOf(copied, copy)).toEqual(choicesOf(copied, source));
+  });
+
+  it('adds, relabels and removes a section without removing its questions', () => {
+    const withSection = addGroup(form(), 'Screening');
+    const group = withSection.groups[0];
+    expect(group?.id).toBe('g_1');
+    expect(group?.name).toBe('section');
+
+    const second = addGroup(withSection, 'Screening');
+    expect(second.groups[1]?.name).toBe('section_2');
+    const assigned = setQuestionContent(second, 'q_consent', { groupId: second.groups[0]?.id ?? null });
+    const relabelled = setGroupLabel(assigned, assigned.groups[0]?.id ?? '', 'Screening questions', 'en');
+    expect(relabelled.groups[0]?.label.en).toBe('Screening questions');
+
+    const removed = removeGroup(relabelled, relabelled.groups[0]?.id ?? '');
+    expect(removed.groups).toHaveLength(1);
+    expect(removed.questions.find((question) => question.id === 'q_consent')?.groupId).toBeNull();
+    expect(removed.questions).toHaveLength(3);
+  });
+
+  it('writes enable, calculate and localized validation messages without dropping the rest of the logic', () => {
+    const withRules = setQuestionLogic(
+      { ...form(), languages: ['en', 'fr'] },
+      'q_score',
+      {
+        visibleIf: '${consent} = "yes"',
+        enableIf: '${consent} = "yes"',
+        calculate: '${score} + 1',
+        constraint: '. >= 0',
+        constraintMessage: 'Pas négatif',
+      },
+      'fr',
+    );
+    const score = withRules.questions.find((question) => question.id === 'q_score') as Question;
+    expect(score.rules).toMatchObject({
+      visibleIf: '${consent} = "yes"',
+      enableIf: '${consent} = "yes"',
+      calculate: '${score} + 1',
+    });
+    expect(score.validation?.message).toEqual({ fr: 'Pas négatif' });
+
+    const onlyConstraint = setQuestionLogic(withRules, 'q_score', { enableIf: '   ' }, 'fr');
+    const after = onlyConstraint.questions.find((question) => question.id === 'q_score') as Question;
+    expect(after.rules?.enableIf).toBeUndefined();
+    expect(after.rules?.visibleIf).toBe('${consent} = "yes"');
+    expect(after.validation?.constraint).toBe('. >= 0');
   });
 });

@@ -1,0 +1,57 @@
+table AnalysisFamilies
+	measure 'Plotted family questions' = SUM('AnalysisFamilies'[Questions])
+		formatString: #,##0
+	column FamilyKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: FamilyKey
+	column 'Analysis family'
+		dataType: string
+		summarizeBy: none
+		sortByColumn: FamilyOrder
+		sourceColumn: FamilyText
+	column FamilyOrder
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: FamilyOrder
+	column Questions
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: QuestionCount
+	column Share
+		dataType: double
+		formatString: 0.0%
+		summarizeBy: none
+		sourceColumn: Share
+	column Method
+		dataType: string
+		summarizeBy: none
+		sourceColumn: MethodText
+	column Chart
+		dataType: string
+		summarizeBy: none
+		sourceColumn: ChartText
+	column Caution
+		dataType: string
+		summarizeBy: none
+		sourceColumn: CautionText
+	partition AnalysisFamilies = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [FamilyKey = text, FamilyText = text, FamilyOrder = Int64.Type, QuestionCount = Int64.Type, Share = number, MethodText = text, ChartText = text, CautionText = text],
+				        {
+				            {"Frequency distribution", "Frequency distribution", 1, 7, 0.14893617021276595, "Respondent frequency and share of eligible base; full distribution, not just the top box.", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample."},
+				            {"Ordered categorical", "Ordered categorical", 2, 12, 0.2553191489361702, "Ordered frequency, median and top-two-box; keep the full ordered distribution visible.", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale."},
+				            {"Scale / rating", "Scale / rating", 3, 2, 0.0425531914893617, "Mean, median, standard deviation and distribution; report the base and scale direction.", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit."},
+				            {"Numeric distribution", "Numeric distribution", 6, 2, 0.0425531914893617, "n, mean, median, IQR, range, histogram and outlier review; no inference without a design.", "Histogram · n / median / IQR", "Do not report a mean without a distribution check; segment by routing if bases differ."},
+				            {"Verbatim coding", "Verbatim coding", 8, 3, 0.06382978723404255, "Build a code frame from the verbatims, then report themes, mentions and representative exemplars.", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population."},
+				            {"Metadata / QA", "Metadata / QA", 12, 21, 0.44680851063829785, "Not a respondent question; use it for field operations, timestamps and audit checks.", "No chart · design metadata", "Never include administrative fields in a respondent base."}
+				        }
+				    )
+				in
+				    Source

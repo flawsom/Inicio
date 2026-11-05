@@ -1,0 +1,58 @@
+table RoutingHotspots
+	column Rank
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: Rank
+	column QuestionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionKey
+	column Question
+		dataType: string
+		summarizeBy: none
+		sourceColumn: QuestionText
+	column Section
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SectionText
+	column Type
+		dataType: string
+		summarizeBy: none
+		sourceColumn: TypeText
+	column 'Logic refs'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: LogicReferences
+	column 'Rule kinds'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: RuleKinds
+	column 'Rule sample'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: RuleSample
+	partition RoutingHotspots = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [Rank = Int64.Type, QuestionKey = text, QuestionText = text, SectionText = text, TypeText = text, LogicReferences = Int64.Type, RuleKinds = text, RuleSample = text],
+				        {
+				            {1, "q_sq6j", "Which pack size of _______ (SHOW BRAND NAME AND VARIANT CODED IN SQ6g A…", "Screener", "Open text", 9, "visibility", "selected(${sq3b}, '1') and (selected(${interviewer_instruction_show_screen}, '01') or selected(${interviewer_instruction_show_screen}, '02'…"},
+				            {2, "q_sq6i", "Since when have you been using _______ (SHOW BRAND NAME CODED IN SQ6g)…", "Screener", "Single choice", 8, "visibility", "selected(${sq3b}, '1') and (selected(${interviewer_instruction_show_screen}, '01') or selected(${interviewer_instruction_show_screen}, '02'…"},
+				            {3, "q_sq6d", "Which of these statements best describes your role in deciding which ag…", "Screener", "Open text", 7, "visibility", "selected(${sq3b}, '1') and (selected(${interviewer_instruction_show_screen}, '01') or selected(${interviewer_instruction_show_screen}, '02'…"},
+				            {4, "q_sq6e1_which_of_the_following_agarbatti_brands_are_you_aware_", "SQ6e1. Which of the following agarbatti brands are you aware of? MA", "Screener", "Open text", 7, "visibility", "selected(${sq3b}, '1') and (selected(${interviewer_instruction_show_screen}, '01') or selected(${interviewer_instruction_show_screen}, '02'…"},
+				            {5, "q_sq6e", "Which of the following agarbatti brands have you used in the last 6 mon…", "Screener", "Open text", 7, "visibility", "selected(${sq3b}, '1') and (selected(${interviewer_instruction_show_screen}, '01') or selected(${interviewer_instruction_show_screen}, '02'…"},
+				            {6, "q_sq6f", "Which brand of agarbatti are you using currently? SA", "Screener", "Open text", 7, "visibility", "selected(${sq3b}, '1') and (selected(${interviewer_instruction_show_screen}, '01') or selected(${interviewer_instruction_show_screen}, '02'…"},
+				            {7, "q_sq6f_2", "And which brand of agarbatti do you use most often? SA", "Screener", "Single choice", 7, "visibility", "selected(${sq3b}, '1') and (selected(${interviewer_instruction_show_screen}, '01') or selected(${interviewer_instruction_show_screen}, '02'…"},
+				            {8, "q_sq6c", "Which of the following items do you regularly use during your prayers a…", "Screener", "Multi-select", 6, "visibility", "selected(${sq3b}, '1') and (selected(${interviewer_instruction_show_screen}, '01') or selected(${interviewer_instruction_show_screen}, '02'…"},
+				            {9, "q_interviewer_instruction_show_screen_instruction", "INTERVIEWER INSTRUCTION: SHOW SCREEN | INSTRUCTION", "Screener", "Single choice", 5, "visibility", "selected(${sq3b}, '1') and (selected(${interviewer_instruction_show_screen}, '01') or selected(${interviewer_instruction_show_screen}, '02'…"},
+				            {10, "q_interviewer_instruction_show_screen_4", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "Screener", "Single choice", 4, "visibility", "selected(${sq3b}, '1') and (selected(${interviewer_instruction_show_screen}, '01') or selected(${interviewer_instruction_show_screen}, '02'…"}
+				        }
+				    )
+				in
+				    Source

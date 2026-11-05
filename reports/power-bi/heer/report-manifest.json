@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "code": "HEER",
+  "source": "HEER.docx",
+  "sourceTitle": "HEER",
+  "generatedAt": "2026-11-04T00:00:00.000Z",
+  "boundary": "Questionnaire intelligence only. Response tables are empty unless response rows were explicitly supplied; no synthetic respondents are created.",
+  "counts": {
+    "questions": 75,
+    "answerable": 50,
+    "sections": 6,
+    "required": 49,
+    "conditional": 0,
+    "requiredInAnyPath": 49,
+    "routed": 48,
+    "constraints": 3,
+    "choiceFilters": 4,
+    "choiceOptions": 298,
+    "logicReferences": 66,
+    "families": 7,
+    "types": 6,
+    "estimatedSeconds": 1222,
+    "estimatedMinutes": 20.366666666666667,
+    "responses": 0,
+    "answers": 0
+  },
+  "pages": [
+    {
+      "name": "00 Cover",
+      "id": "77aa62f25b65a7f60c87",
+      "visuals": 28
+    },
+    {
+      "name": "01 Executive read",
+      "id": "e4d936f00de49fb0526b",
+      "visuals": 21
+    },
+    {
+      "name": "02 Instrument architecture",
+      "id": "cf39cb19430a51fae21d",
+      "visuals": 21
+    },
+    {
+      "name": "03 Routing & quality",
+      "id": "01529a74bdc80b4713df",
+      "visuals": 21
+    },
+    {
+      "name": "04 Analysis blueprint",
+      "id": "1fd24dcd1665e8b266d9",
+      "visuals": 17
+    },
+    {
+      "name": "05 Question atlas",
+      "id": "e5c417623ecc60e64367",
+      "visuals": 15
+    },
+    {
+      "name": "06 Fieldwork readiness",
+      "id": "0fb4ab2e983565bfedda",
+      "visuals": 19
+    }
+  ],
+  "visualCount": 142,
+  "semanticModel": {
+    "compatibilityLevel": 1567,
+    "tables": [
+      {
+        "name": "Questions",
+        "columns": 30,
+        "rows": 75,
+        "measures": 0
+      },
+      {
+        "name": "Sections",
+        "columns": 13,
+        "rows": 6,
+        "measures": 2
+      },
+      {
+        "name": "QuestionTypes",
+        "columns": 10,
+        "rows": 6,
+        "measures": 1
+      },
+      {
+        "name": "AnalysisFamilies",
+        "columns": 8,
+        "rows": 7,
+        "measures": 1
+      },
+      {
+        "name": "RoutingAnchors",
+        "columns": 7,
+        "rows": 10,
+        "measures": 1
+      },
+      {
+        "name": "RoutingHotspots",
+        "columns": 8,
+        "rows": 10,
+        "measures": 0
+      },
+      {
+        "name": "DataContract",
+        "columns": 6,
+        "rows": 8,
+        "measures": 0
+      },
+      {
+        "name": "Responses",
+        "columns": 11,
+        "rows": 0,
+        "measures": 0
+      },
+      {
+        "name": "Answers",
+        "columns": 7,
+        "rows": 0,
+        "measures": 0
+      },
+      {
+        "name": "_Measures",
+        "columns": 1,
+        "rows": 0,
+        "measures": 20
+      }
+    ],
+    "relationships": 7
+  },
+  "paths": {
+    "project": "HEER.pbip",
+    "report": "HEER.Report",
+    "semanticModel": "HEER.SemanticModel"
+  },
+  "evidence": {
+    "respondentData": "none",
+    "responseRows": 0,
+    "answerRows": 0
+  }
+}

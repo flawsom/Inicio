@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "code": "PRISM",
+  "source": "PRISM.docx",
+  "sourceTitle": "PRISM",
+  "generatedAt": "2026-11-04T00:00:00.000Z",
+  "boundary": "Questionnaire intelligence only. Response tables are empty unless response rows were explicitly supplied; no synthetic respondents are created.",
+  "counts": {
+    "questions": 47,
+    "answerable": 26,
+    "sections": 5,
+    "required": 26,
+    "conditional": 0,
+    "requiredInAnyPath": 26,
+    "routed": 29,
+    "constraints": 4,
+    "choiceFilters": 1,
+    "choiceOptions": 91,
+    "logicReferences": 105,
+    "families": 6,
+    "types": 5,
+    "estimatedSeconds": 584,
+    "estimatedMinutes": 9.733333333333333,
+    "responses": 0,
+    "answers": 0
+  },
+  "pages": [
+    {
+      "name": "00 Cover",
+      "id": "15a78fbd6bb5c5a33382",
+      "visuals": 28
+    },
+    {
+      "name": "01 Executive read",
+      "id": "91ba866c93edd66da39c",
+      "visuals": 21
+    },
+    {
+      "name": "02 Instrument architecture",
+      "id": "b92761bc9188cc829203",
+      "visuals": 21
+    },
+    {
+      "name": "03 Routing & quality",
+      "id": "cbdf6a269520e87fc47c",
+      "visuals": 21
+    },
+    {
+      "name": "04 Analysis blueprint",
+      "id": "76e9d1678f5f16bde28e",
+      "visuals": 17
+    },
+    {
+      "name": "05 Question atlas",
+      "id": "57db201a7ba1f39801aa",
+      "visuals": 15
+    },
+    {
+      "name": "06 Fieldwork readiness",
+      "id": "98813625b6382c993c84",
+      "visuals": 19
+    }
+  ],
+  "visualCount": 142,
+  "semanticModel": {
+    "compatibilityLevel": 1567,
+    "tables": [
+      {
+        "name": "Questions",
+        "columns": 30,
+        "rows": 47,
+        "measures": 0
+      },
+      {
+        "name": "Sections",
+        "columns": 13,
+        "rows": 5,
+        "measures": 2
+      },
+      {
+        "name": "QuestionTypes",
+        "columns": 10,
+        "rows": 5,
+        "measures": 1
+      },
+      {
+        "name": "AnalysisFamilies",
+        "columns": 8,
+        "rows": 6,
+        "measures": 1
+      },
+      {
+        "name": "RoutingAnchors",
+        "columns": 7,
+        "rows": 10,
+        "measures": 1
+      },
+      {
+        "name": "RoutingHotspots",
+        "columns": 8,
+        "rows": 10,
+        "measures": 0
+      },
+      {
+        "name": "DataContract",
+        "columns": 6,
+        "rows": 8,
+        "measures": 0
+      },
+      {
+        "name": "Responses",
+        "columns": 11,
+        "rows": 0,
+        "measures": 0
+      },
+      {
+        "name": "Answers",
+        "columns": 7,
+        "rows": 0,
+        "measures": 0
+      },
+      {
+        "name": "_Measures",
+        "columns": 1,
+        "rows": 0,
+        "measures": 20
+      }
+    ],
+    "relationships": 7
+  },
+  "paths": {
+    "project": "PRISM.pbip",
+    "report": "PRISM.Report",
+    "semanticModel": "PRISM.SemanticModel"
+  },
+  "evidence": {
+    "respondentData": "none",
+    "responseRows": 0,
+    "answerRows": 0
+  }
+}

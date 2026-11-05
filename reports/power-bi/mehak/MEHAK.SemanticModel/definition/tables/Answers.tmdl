@@ -1,0 +1,43 @@
+table Answers
+	column ResponseId
+		dataType: string
+		summarizeBy: none
+		sourceColumn: ResponseId
+	column QuestionKey
+		dataType: string
+		summarizeBy: none
+		sourceColumn: QuestionKey
+	column AnswerText
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: AnswerText
+	column AnswerNumber
+		dataType: double
+		formatString: 0.0
+		summarizeBy: none
+		sourceColumn: AnswerNumber
+	column AnsweredAt
+		dataType: dateTime
+		summarizeBy: none
+		sourceColumn: AnsweredAt
+	column DurationSeconds
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: DurationSeconds
+	column IsFlagged
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: IsFlagged
+	partition Answers = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [ResponseId = text, QuestionKey = text, AnswerText = text, AnswerNumber = number, AnsweredAt = datetime, DurationSeconds = Int64.Type, IsFlagged = logical],
+				        {}
+				    )
+				in
+				    Source

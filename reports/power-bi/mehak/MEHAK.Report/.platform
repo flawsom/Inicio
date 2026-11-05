@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Report",
+    "displayName": "MEHAK"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "3c5daa33-699d-4106-82c1-2ba8df59c677"
+  }
+}

@@ -1,0 +1,231 @@
+table Questions
+	column QuestionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionKey
+	column '#'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: QuestionOrder
+	column SectionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: SectionKey
+	column Section
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SectionText
+	column SectionOrder
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: SectionOrder
+	column QuestionName
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionName
+	column Question
+		dataType: string
+		summarizeBy: none
+		sourceColumn: QuestionText
+	column QuestionFull
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionFull
+	column TypeKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: TypeKey
+	column Type
+		dataType: string
+		summarizeBy: none
+		sourceColumn: TypeText
+	column FamilyKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: FamilyKey
+	column Answerable
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: AnswerableText
+	column AnswerableFlag
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: AnswerableFlag
+	column Required
+		dataType: string
+		summarizeBy: none
+		sourceColumn: RequiredText
+	column RequiredFlag
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: RequiredFlag
+	column RequiredMode
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: RequiredMode
+	column Logic
+		dataType: string
+		summarizeBy: none
+		sourceColumn: LogicText
+	column LogicFlag
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: LogicFlag
+	column Constraint
+		dataType: string
+		summarizeBy: none
+		sourceColumn: ConstraintText
+	column ConstraintFlag
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: ConstraintFlag
+	column ChoiceFilterFlag
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: ChoiceFilterFlag
+	column Choices
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: ChoiceCount
+	column Analysis
+		dataType: string
+		summarizeBy: none
+		sourceColumn: AnalysisText
+	column Chart
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: ChartText
+	column Caution
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: CautionText
+	column 'Est. sec'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: EstimatedSeconds
+	column Burden
+		dataType: string
+		summarizeBy: none
+		sourceColumn: BurdenBand
+	column 'Logic refs'
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: DependencyCount
+	column 'Inbound refs'
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: InboundReferences
+	column 'Rule kinds'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: RuleKinds
+	partition Questions = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [QuestionKey = text, QuestionOrder = Int64.Type, SectionKey = text, SectionText = text, SectionOrder = Int64.Type, QuestionName = text, QuestionText = text, QuestionFull = text, TypeKey = text, TypeText = text, FamilyKey = text, AnswerableText = text, AnswerableFlag = logical, RequiredText = text, RequiredFlag = logical, RequiredMode = text, LogicText = text, LogicFlag = logical, ConstraintText = text, ConstraintFlag = logical, ChoiceFilterFlag = logical, ChoiceCount = Int64.Type, AnalysisText = text, ChartText = text, CautionText = text, EstimatedSeconds = Int64.Type, BurdenBand = text, DependencyCount = Int64.Type, InboundReferences = Int64.Type, RuleKinds = text],
+				        {
+				            {"q_starttime", 1, "unassigned", "Unassigned section", 9007199254740991, "starttime", "starttime", "starttime", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_endtime", 2, "unassigned", "Unassigned section", 9007199254740991, "endtime", "endtime", "endtime", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_deviceid", 3, "unassigned", "Unassigned section", 9007199254740991, "deviceid", "deviceid", "deviceid", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_devicephonenum", 4, "unassigned", "Unassigned section", 9007199254740991, "devicephonenum", "devicephonenum", "devicephonenum", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_username", 5, "unassigned", "Unassigned section", 9007199254740991, "username", "username", "username", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_device_info", 6, "unassigned", "Unassigned section", 9007199254740991, "device_info", "device_info", "device_info", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, "calculation"},
+				            {"q_duration", 7, "unassigned", "Unassigned section", 9007199254740991, "duration", "duration", "duration", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, "calculation"},
+				            {"q_caseid", 8, "unassigned", "Unassigned section", 9007199254740991, "caseid", "caseid", "caseid", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_resp_name", 9, "g_bg_101", "Interviewer & Respondent Info", 9, "resp_name", "Respondent Name", "Respondent Name", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "—", false, "Set", true, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 43, "Heavy", 0, 0, "constraint"},
+				            {"q_resp_no", 10, "g_bg_101", "Interviewer & Respondent Info", 9, "resp_no", "Respondent Phone no.", "Respondent Phone no.", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "—", false, "Set", true, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 43, "Heavy", 0, 0, "constraint"},
+				            {"q_resp_add", 11, "g_bg_101", "Interviewer & Respondent Info", 9, "resp_add", "Respondent Address", "Respondent Address", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "—", false, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 41, "Heavy", 0, 0, null},
+				            {"q_n_1", 12, "unassigned", "Unassigned section", 9007199254740991, "n_1", "GOOD…....................! I am from Coral Research Services, a market research agency. We regularly conduct market research st…", "GOOD…....................! I am from Coral Research Services, a market research agency. We regularly conduct market research studies on various products and services to get consumer feedback. Right now, we are conducting a study about Real jewellery. We would be thankful if you could answer a few questions.", "note", "Note", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_glob_term", 13, "unassigned", "Unassigned section", 9007199254740991, "glob_term", "Global Termination", "Global Termination", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 45, "calculation"},
+				            {"q_s0", 14, "g_main_q", "Main Questionnaire", 15, "s0", "Centres", "Centres", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 9, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 22, "Moderate", 1, 0, "visibility"},
+				            {"q_s1", 15, "g_main_q", "Main Questionnaire", 15, "s1", "Sampling GRID", "Sampling GRID", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 2, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 17, "Moderate", 1, 0, "visibility"},
+				            {"q_sq1a", 16, "g_main_q", "Main Questionnaire", 15, "sq1a", "Do you or any of your family members work in any of these types of companies? SA | INSTRUCTION", "Do you or any of your family members work in any of these types of companies? SA | INSTRUCTION", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 6, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 20, "Moderate", 1, 0, "visibility"},
+				            {"q_sq1b", 17, "g_main_q", "Main Questionnaire", 15, "sq1b", "Have you participated in any Market Research survey or Group discussion in the last three months? SA", "Have you participated in any Market Research survey or Group discussion in the last three months? SA", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 2, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 17, "Moderate", 1, 0, "visibility"},
+				            {"q_sq2a", 18, "g_main_q", "Main Questionnaire", 15, "sq2a", "What is your age? _________ years old. | Instruction", "What is your age? _________ years old. | Instruction", "integer", "Whole number", "Numeric distribution", "Yes", true, "Required", true, "required", "—", false, "Set", true, false, 0, "Numeric distribution", "Histogram · n / median / IQR", "Do not report a mean without a distribution check; segment by routing if bases differ.", 18, "Moderate", 0, 2, "constraint"},
+				            {"q_age_grp", 19, "g_main_q", "Main Questionnaire", 15, "age_grp", "Age Group", "Age Group", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 1, 1, "calculation"},
+				            {"q_age_term", 20, "g_main_q", "Main Questionnaire", 15, "age_term", "Age Termination", "Age Termination", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 1, 0, "calculation"},
+				            {"q_age_dis", 21, "g_main_q", "Main Questionnaire", 15, "age_dis", "Age Display", "Age Display", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 1, 0, "calculation"},
+				            {"q_sq2b", 22, "g_main_q", "Main Questionnaire", 15, "sq2b", "RECORD GENDER. SA.", "RECORD GENDER. SA.", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 2, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 17, "Moderate", 1, 0, "visibility"},
+				            {"q_sq3a_oe", 23, "g_bg_nccs", "Please look at the screen and tell me the highest level of education of the Chief Wage Earner in your household? By Chief Wage Earner, I mean the person who contributes maximum to the expenses of your household. SA | CODE", 25, "sq3a_oe", "CLARIFY AND WRITE VERBATIM FIRST", "CLARIFY AND WRITE VERBATIM FIRST", "text", "Open text", "Verbatim coding", "Yes", true, "Optional", false, "optional", "—", false, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 40, "Heavy", 0, 0, null},
+				            {"q_sq3a", 24, "g_bg_nccs", "Please look at the screen and tell me the highest level of education of the Chief Wage Earner in your household? By Chief Wage Earner, I mean the person who contributes maximum to the expenses of your household. SA | CODE", 25, "sq3a", "Please look at the screen and tell me the highest level of education of the Chief Wage Earner in your household? By Chief Wage…", "Please look at the screen and tell me the highest level of education of the Chief Wage Earner in your household? By Chief Wage Earner, I mean the person who contributes maximum to the expenses of your household. SA | CODE", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "—", false, "—", false, false, 7, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 18, "Moderate", 0, 1, null},
+				            {"q_sq3b", 25, "g_bg_nccs", "Please look at the screen and tell me the highest level of education of the Chief Wage Earner in your household? By Chief Wage Earner, I mean the person who contributes maximum to the expenses of your household. SA | CODE", 25, "sq3b", "From this list, which of the items do you have at your home for your or your family’s use, and is in a working condition? This…", "From this list, which of the items do you have at your home for your or your family’s use, and is in a working condition? This is a standard list of items. We need this for survey purpose only. MA | CODE", "select_multiple", "Multi-select", "Multi-response frequency", "Yes", true, "Required", true, "required", "—", false, "—", false, false, 10, "Multi-response frequency", "Horizontal bar · % of respondents", "Do not divide mentions by answers; the denominator is respondents.", 30, "Moderate", 0, 1, null},
+				            {"q_sq3b_total", 26, "g_bg_nccs", "Please look at the screen and tell me the highest level of education of the Chief Wage Earner in your household? By Chief Wage Earner, I mean the person who contributes maximum to the expenses of your household. SA | CODE", 25, "sq3b_total", "Total Durables", "Total Durables", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 1, 1, "calculation"},
+				            {"q_sech", 27, "g_bg_nccs", "Please look at the screen and tell me the highest level of education of the Chief Wage Earner in your household? By Chief Wage Earner, I mean the person who contributes maximum to the expenses of your household. SA | CODE", 25, "sech", "NCCS", "NCCS", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 2, 2, "calculation"},
+				            {"q_sech_qt", 28, "g_bg_nccs", "Please look at the screen and tell me the highest level of education of the Chief Wage Earner in your household? By Chief Wage Earner, I mean the person who contributes maximum to the expenses of your household. SA | CODE", 25, "sech_qt", "NCCS Group", "NCCS Group", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 1, 0, "calculation"},
+				            {"q_nccs_term", 29, "g_bg_nccs", "Please look at the screen and tell me the highest level of education of the Chief Wage Earner in your household? By Chief Wage Earner, I mean the person who contributes maximum to the expenses of your household. SA | CODE", 25, "nccs_term", "NCCS Termination", "NCCS Termination", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 1, 0, "calculation"},
+				            {"q_n_nccs", 30, "g_bg_nccs", "Please look at the screen and tell me the highest level of education of the Chief Wage Earner in your household? By Chief Wage Earner, I mean the person who contributes maximum to the expenses of your household. SA | CODE", 25, "n_nccs", "NCCS : ${sech}", "NCCS : ${sech}", "note", "Note", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_sq5", 31, "g_main_q", "Main Questionnaire", 15, "sq5", "Which of the following best describes your involvement in jewellery purchase decisions in your household? SA", "Which of the following best describes your involvement in jewellery purchase decisions in your household? SA", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 3, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 18, "Moderate", 1, 0, "visibility"},
+				            {"q_sq6", 32, "g_main_q", "Main Questionnaire", 15, "sq6", "What was the approximate value of your last jewellery purchase? SA SHOW OPTIONS", "What was the approximate value of your last jewellery purchase? SA SHOW OPTIONS", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 6, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 20, "Moderate", 1, 0, "visibility"},
+				            {"q_grid_z_programmer_instruction_not_to_be_asked_to_respondent", 33, "g_main_q", "Main Questionnaire", 15, "grid_z_programmer_instruction_not_to_be_asked_to_respondent", "Grid Z. PROGRAMMER INSTRUCTION: NOT TO BE ASKED TO RESPONDENT", "Grid Z. PROGRAMMER INSTRUCTION: NOT TO BE ASKED TO RESPONDENT", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 4, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_l2y", 34, "g_main_q", "Main Questionnaire", 15, "l2y", "L2Y", "L2Y", "select_multiple", "Multi-select", "Multi-response frequency", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 5, "Multi-response frequency", "Horizontal bar · % of respondents", "Do not divide mentions by answers; the denominator is respondents.", 29, "Moderate", 1, 2, "visibility"},
+				            {"q_last_2", 35, "g_main_q", "Main Questionnaire", 15, "last_2", "Last", "Last", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, true, 5, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 19, "Moderate", 2, 0, "visibility, choice filter"},
+				            {"q_mq12a_all", 36, "g_main_q", "Main Questionnaire", 15, "mq12a_all", "Total Awareness", "Total Awareness", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 2, 0, "calculation"},
+				            {"q_pq1", 37, "g_main_q", "Main Questionnaire", 15, "pq1", "When did you last purchased jewellery? SA SHOW OPTIONS", "When did you last purchased jewellery? SA SHOW OPTIONS", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 4, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_sq4", 38, "g_main_q", "Main Questionnaire", 15, "sq4", "for yourself or your family? SA. SHOW OPTIONS.", "for yourself or your family? SA. SHOW OPTIONS.", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 6, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 20, "Moderate", 1, 0, "visibility"},
+				            {"q_sq4_2", 39, "g_main_q", "Main Questionnaire", 15, "sq4_2", "purchase? SA SHOW OPTIONS SA. SHOW OPTIONS.", "purchase? SA SHOW OPTIONS SA. SHOW OPTIONS.", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 23, "Moderate", 1, 0, "visibility"},
+				            {"q_sq4_2_oth", 40, "g_main_q", "Main Questionnaire", 15, "sq4_2_oth", "sq4_2_oth", "sq4_2_oth", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility, calculation"},
+				            {"q_pq5a", 41, "g_main_q", "Main Questionnaire", 15, "pq5a", "Before making a jewellery purchase, which of the following do you typically do? MA ROTATE OPTIONS.", "Before making a jewellery purchase, which of the following do you typically do? MA ROTATE OPTIONS.", "select_multiple", "Multi-select", "Multi-response frequency", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Multi-response frequency", "Horizontal bar · % of respondents", "Do not divide mentions by answers; the denominator is respondents.", 33, "Heavy", 1, 0, "visibility"},
+				            {"q_pq5a_oth", 42, "g_main_q", "Main Questionnaire", 15, "pq5a_oth", "pq5a_oth", "pq5a_oth", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility, calculation"},
+				            {"q_pq5b", 43, "g_main_q", "Main Questionnaire", 15, "pq5b", "How long do you typically take from the time you decide to buy jewellery to actually purchasing? SA SHOW OPTIONS.", "How long do you typically take from the time you decide to buy jewellery to actually purchasing? SA SHOW OPTIONS.", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 5, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_pq5c", 44, "g_main_q", "Main Questionnaire", 15, "pq5c", "How many jewellery stores do you typically visit before making a purchase? SA SHOW OPTIONS.", "How many jewellery stores do you typically visit before making a purchase? SA SHOW OPTIONS.", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 4, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_pq7a", 45, "g_main_q", "Main Questionnaire", 15, "pq7a", "Which type of jewellery did you purchase most recently? SA SHOW OPTIONS", "Which type of jewellery did you purchase most recently? SA SHOW OPTIONS", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 11, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 23, "Moderate", 1, 0, "visibility"},
+				            {"q_pq8", 46, "g_main_q", "Main Questionnaire", 15, "pq8", "What type of jewellery designs appeal to you the most? SA SHOW OPTIONS", "What type of jewellery designs appeal to you the most? SA SHOW OPTIONS", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 8, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 21, "Moderate", 1, 0, "visibility"},
+				            {"q_pq9", 47, "g_main_q", "Main Questionnaire", 15, "pq9", "Looking ahead, which of the following jewellery categories would you be interested in purchasing more of in the future? SA SHOW…", "Looking ahead, which of the following jewellery categories would you be interested in purchasing more of in the future? SA SHOW OPTIONS", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 23, "Moderate", 1, 0, "visibility"},
+				            {"q_pq10_1", 48, "g_bg_pq10", "Rank on a scale of 1–10 how important the following factors are to you when purchasing silver jewellery. (1 = Not Important, 10 = Extremely Important) Rating 1–10", 51, "pq10_1", "Purity certificate (925 silver hallmark)", "Purity certificate (925 silver hallmark)", "select_one", "Single choice", "Scale / rating", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Scale / rating", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit.", 23, "Moderate", 1, 0, "visibility"},
+				            {"q_pq10_2", 49, "g_bg_pq10", "Rank on a scale of 1–10 how important the following factors are to you when purchasing silver jewellery. (1 = Not Important, 10 = Extremely Important) Rating 1–10", 51, "pq10_2", "Price", "Price", "select_one", "Single choice", "Scale / rating", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Scale / rating", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit.", 23, "Moderate", 1, 0, "visibility"},
+				            {"q_pq10_3", 50, "g_bg_pq10", "Rank on a scale of 1–10 how important the following factors are to you when purchasing silver jewellery. (1 = Not Important, 10 = Extremely Important) Rating 1–10", 51, "pq10_3", "Brand reputation", "Brand reputation", "select_one", "Single choice", "Scale / rating", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Scale / rating", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit.", 23, "Moderate", 1, 0, "visibility"},
+				            {"q_pq10_4", 51, "g_bg_pq10", "Rank on a scale of 1–10 how important the following factors are to you when purchasing silver jewellery. (1 = Not Important, 10 = Extremely Important) Rating 1–10", 51, "pq10_4", "Design / setting", "Design / setting", "select_one", "Single choice", "Scale / rating", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Scale / rating", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit.", 23, "Moderate", 1, 0, "visibility"},
+				            {"q_pq10_5", 52, "g_bg_pq10", "Rank on a scale of 1–10 how important the following factors are to you when purchasing silver jewellery. (1 = Not Important, 10 = Extremely Important) Rating 1–10", 51, "pq10_5", "Resale value", "Resale value", "select_one", "Single choice", "Scale / rating", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Scale / rating", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit.", 23, "Moderate", 1, 0, "visibility"},
+				            {"q_pq10_6", 53, "g_bg_pq10", "Rank on a scale of 1–10 how important the following factors are to you when purchasing silver jewellery. (1 = Not Important, 10 = Extremely Important) Rating 1–10", 51, "pq10_6", "Ethical sourcing", "Ethical sourcing", "select_one", "Single choice", "Scale / rating", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Scale / rating", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit.", 23, "Moderate", 1, 0, "visibility"},
+				            {"q_pq10_7", 54, "g_bg_pq10", "Rank on a scale of 1–10 how important the following factors are to you when purchasing silver jewellery. (1 = Not Important, 10 = Extremely Important) Rating 1–10", 51, "pq10_7", "Warranty / after-sales service", "Warranty / after-sales service", "select_one", "Single choice", "Scale / rating", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Scale / rating", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit.", 23, "Moderate", 1, 0, "visibility"},
+				            {"q_pq10_8", 55, "g_bg_pq10", "Rank on a scale of 1–10 how important the following factors are to you when purchasing silver jewellery. (1 = Not Important, 10 = Extremely Important) Rating 1–10", 51, "pq10_8", "Packaging & aesthetics", "Packaging & aesthetics", "select_one", "Single choice", "Scale / rating", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Scale / rating", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit.", 23, "Moderate", 1, 0, "visibility"},
+				            {"q_pq10_9", 56, "g_bg_pq10", "Rank on a scale of 1–10 how important the following factors are to you when purchasing silver jewellery. (1 = Not Important, 10 = Extremely Important) Rating 1–10", 51, "pq10_9", "Availability of customisations", "Availability of customisations", "select_one", "Single choice", "Scale / rating", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Scale / rating", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit.", 23, "Moderate", 1, 0, "visibility"},
+				            {"q_pq10_10", 57, "g_bg_pq10", "Rank on a scale of 1–10 how important the following factors are to you when purchasing silver jewellery. (1 = Not Important, 10 = Extremely Important) Rating 1–10", 51, "pq10_10", "Durability of plating", "Durability of plating", "select_one", "Single choice", "Scale / rating", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Scale / rating", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit.", 23, "Moderate", 1, 0, "visibility"},
+				            {"q_dq1a", 58, "g_main_q", "Main Questionnaire", 15, "dq1a", "When choosing a jewellery store for shopping, which of the following factors are important to you? MA. SHOW ALL MOTIVATORS. ROT…", "When choosing a jewellery store for shopping, which of the following factors are important to you? MA. SHOW ALL MOTIVATORS. ROTATE MOTIVATORS DQ1b. And which of these factors are most important when choosing a jewellery store for shopping? And next? And next? TOP 3 RANKS. SHOW ONLY MOTIVATORS CODED IN DQ1a", "select_multiple", "Multi-select", "Multi-response frequency", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 11, "Multi-response frequency", "Horizontal bar · % of respondents", "Do not divide mentions by answers; the denominator is respondents.", 33, "Heavy", 1, 0, "visibility"},
+				            {"q_dq1a_oth", 59, "g_main_q", "Main Questionnaire", 15, "dq1a_oth", "dq1a_oth", "dq1a_oth", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility, calculation"},
+				            {"q_lq1", 60, "g_main_q", "Main Questionnaire", 15, "lq1", "How would you describe (INSERT BRAND NAME)’s pricing compared to other jewellery brand that you most often purchase from? Pleas…", "How would you describe (INSERT BRAND NAME)’s pricing compared to other jewellery brand that you most often purchase from? Please answer with the help of this scale. SA SHOW OPTIONS", "select_one", "Single choice", "Scale / rating", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 5, "Scale / rating", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_exposure_1_exposure_2_exposure_3_exposure_4_code", 61, "g_main_q", "Main Questionnaire", 15, "exposure_1_exposure_2_exposure_3_exposure_4_code", "Exposure 1 | Exposure 2 | Exposure 3 | Exposure 4 | CODE", "Exposure 1 | Exposure 2 | Exposure 3 | Exposure 4 | CODE", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 8, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 21, "Moderate", 1, 0, "visibility"},
+				            {"q_n_2", 62, "g_main_q", "Main Questionnaire", 15, "n_2", "READ: Please look at the concept carefully and answer a few questions.", "READ: Please look at the concept carefully and answer a few questions.", "note", "Note", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility"},
+				            {"q_q56a", 63, "g_main_q", "Main Questionnaire", 15, "q56a", "What specifically did you like about this concept that made you choose this over other samples? PROBE – What else?", "What specifically did you like about this concept that made you choose this over other samples? PROBE – What else?", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 44, "Heavy", 1, 0, "visibility"},
+				            {"q_q56b", 64, "g_main_q", "Main Questionnaire", 15, "q56b", "What specifically did you not like in ____ (CONCEPT RANK 3) that you ranked it last? PROBE – What else?", "What specifically did you not like in ____ (CONCEPT RANK 3) that you ranked it last? PROBE – What else?", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 44, "Heavy", 1, 0, "visibility"},
+				            {"q_zq1", 65, "g_main_q", "Main Questionnaire", 15, "zq1", "Could you please indicate your marital status? SA SHOW OPTIONS (EXCEPT DON’T WANT TO ANSWER)", "Could you please indicate your marital status? SA SHOW OPTIONS (EXCEPT DON’T WANT TO ANSWER)", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 4, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_zq2a", 66, "g_main_q", "Main Questionnaire", 15, "zq2a", "Please indicate your education level.SA SHOW OPTIONS", "Please indicate your education level.SA SHOW OPTIONS", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 4, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_programmer_to_rotate_options", 67, "g_main_q", "Main Questionnaire", 15, "programmer_to_rotate_options", "PROGRAMMER TO ROTATE OPTIONS", "PROGRAMMER TO ROTATE OPTIONS", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 8, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 21, "Moderate", 1, 0, "visibility"},
+				            {"q_zq3", 68, "g_main_q", "Main Questionnaire", 15, "zq3", "What is the approximate annual household income of your household? Please include the income of all earning members of your hou…", "What is the approximate annual household income of your household? Please include the income of all earning members of your household. SA SHOW OPTIONS", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 5, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_zq4", 69, "g_main_q", "Main Questionnaire", 15, "zq4", "Which all of these did you watch, read, or listen yesterday? MA SHOW OPTIONS", "Which all of these did you watch, read, or listen yesterday? MA SHOW OPTIONS", "select_multiple", "Multi-select", "Multi-response frequency", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 8, "Multi-response frequency", "Horizontal bar · % of respondents", "Do not divide mentions by answers; the denominator is respondents.", 31, "Heavy", 1, 0, "visibility"},
+				            {"q_q56_1", 70, "g_bg_q56", "Now that you have seen all three concepts, please rank them in order of your overall preference. Assign a rank of 1 to the concept you like the most, 2 to your next preferred concept, and 3 to the concept you like the least 3? SINGLE RANK FOR EACH CONCEPT", 74, "q56_1", "RANK 1", "RANK 1", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 4, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 1, 3, "visibility"},
+				            {"q_q56_2", 71, "g_bg_q56", "Now that you have seen all three concepts, please rank them in order of your overall preference. Assign a rank of 1 to the concept you like the most, 2 to your next preferred concept, and 3 to the concept you like the least 3? SINGLE RANK FOR EACH CONCEPT", 74, "q56_2", "RANK 2", "RANK 2", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, true, 4, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 2, 2, "visibility, choice filter"},
+				            {"q_q56_3", 72, "g_bg_q56", "Now that you have seen all three concepts, please rank them in order of your overall preference. Assign a rank of 1 to the concept you like the most, 2 to your next preferred concept, and 3 to the concept you like the least 3? SINGLE RANK FOR EACH CONCEPT", 74, "q56_3", "RANK 3", "RANK 3", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, true, 4, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 3, 0, "visibility, choice filter"},
+				            {"q_q56_4", 73, "g_bg_q56", "Now that you have seen all three concepts, please rank them in order of your overall preference. Assign a rank of 1 to the concept you like the most, 2 to your next preferred concept, and 3 to the concept you like the least 3? SINGLE RANK FOR EACH CONCEPT", 74, "q56_4", "RANK 4", "RANK 4", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, true, 4, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 4, 0, "visibility, choice filter"},
+				            {"q_completed", 74, "unassigned", "Unassigned section", 9007199254740991, "completed", "Completed", "Completed", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 1, 0, "calculation"},
+				            {"q_note_term", 75, "unassigned", "Unassigned section", 9007199254740991, "note_term", "Thanks for your time. Please close the survey.", "Thanks for your time. Please close the survey.", "note", "Note", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility"}
+				        }
+				    )
+				in
+				    Source

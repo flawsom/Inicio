@@ -1,0 +1,203 @@
+table Questions
+	column QuestionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionKey
+	column '#'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: QuestionOrder
+	column SectionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: SectionKey
+	column Section
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SectionText
+	column SectionOrder
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: SectionOrder
+	column QuestionName
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionName
+	column Question
+		dataType: string
+		summarizeBy: none
+		sourceColumn: QuestionText
+	column QuestionFull
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionFull
+	column TypeKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: TypeKey
+	column Type
+		dataType: string
+		summarizeBy: none
+		sourceColumn: TypeText
+	column FamilyKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: FamilyKey
+	column Answerable
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: AnswerableText
+	column AnswerableFlag
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: AnswerableFlag
+	column Required
+		dataType: string
+		summarizeBy: none
+		sourceColumn: RequiredText
+	column RequiredFlag
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: RequiredFlag
+	column RequiredMode
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: RequiredMode
+	column Logic
+		dataType: string
+		summarizeBy: none
+		sourceColumn: LogicText
+	column LogicFlag
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: LogicFlag
+	column Constraint
+		dataType: string
+		summarizeBy: none
+		sourceColumn: ConstraintText
+	column ConstraintFlag
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: ConstraintFlag
+	column ChoiceFilterFlag
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: ChoiceFilterFlag
+	column Choices
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: ChoiceCount
+	column Analysis
+		dataType: string
+		summarizeBy: none
+		sourceColumn: AnalysisText
+	column Chart
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: ChartText
+	column Caution
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: CautionText
+	column 'Est. sec'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: EstimatedSeconds
+	column Burden
+		dataType: string
+		summarizeBy: none
+		sourceColumn: BurdenBand
+	column 'Logic refs'
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: DependencyCount
+	column 'Inbound refs'
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: InboundReferences
+	column 'Rule kinds'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: RuleKinds
+	partition Questions = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [QuestionKey = text, QuestionOrder = Int64.Type, SectionKey = text, SectionText = text, SectionOrder = Int64.Type, QuestionName = text, QuestionText = text, QuestionFull = text, TypeKey = text, TypeText = text, FamilyKey = text, AnswerableText = text, AnswerableFlag = logical, RequiredText = text, RequiredFlag = logical, RequiredMode = text, LogicText = text, LogicFlag = logical, ConstraintText = text, ConstraintFlag = logical, ChoiceFilterFlag = logical, ChoiceCount = Int64.Type, AnalysisText = text, ChartText = text, CautionText = text, EstimatedSeconds = Int64.Type, BurdenBand = text, DependencyCount = Int64.Type, InboundReferences = Int64.Type, RuleKinds = text],
+				        {
+				            {"q_starttime", 1, "unassigned", "Unassigned section", 9007199254740991, "starttime", "starttime", "starttime", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_endtime", 2, "unassigned", "Unassigned section", 9007199254740991, "endtime", "endtime", "endtime", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_deviceid", 3, "unassigned", "Unassigned section", 9007199254740991, "deviceid", "deviceid", "deviceid", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_devicephonenum", 4, "unassigned", "Unassigned section", 9007199254740991, "devicephonenum", "devicephonenum", "devicephonenum", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_username", 5, "unassigned", "Unassigned section", 9007199254740991, "username", "username", "username", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_device_info", 6, "unassigned", "Unassigned section", 9007199254740991, "device_info", "device_info", "device_info", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, "calculation"},
+				            {"q_duration", 7, "unassigned", "Unassigned section", 9007199254740991, "duration", "duration", "duration", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, "calculation"},
+				            {"q_caseid", 8, "unassigned", "Unassigned section", 9007199254740991, "caseid", "caseid", "caseid", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_int_name", 9, "g_bg_101", "Interviewer & Respondent Info", 9, "int_name", "Interviewer Name", "Interviewer Name", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "—", false, "Set", true, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 43, "Heavy", 0, 0, "constraint"},
+				            {"q_st_point", 10, "g_bg_101", "Interviewer & Respondent Info", 9, "st_point", "Starting Point", "Starting Point", "integer", "Whole number", "Numeric distribution", "Yes", true, "Required", true, "required", "—", false, "Set", true, false, 0, "Numeric distribution", "Histogram · n / median / IQR", "Do not report a mean without a distribution check; segment by routing if bases differ.", 18, "Moderate", 0, 0, "constraint"},
+				            {"q_n_1", 11, "unassigned", "Unassigned section", 9007199254740991, "n_1", "GOOD…....................! I am from InfoLeap, a market research agency. We regularly conduct market research studies on variou…", "GOOD…....................! I am from InfoLeap, a market research agency. We regularly conduct market research studies on various products to collect consumer feedback, which is used to make better products.", "note", "Note", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 0, 0, null},
+				            {"q_interviewer_instruction_show_screen", 12, "g_screener", "Screener", 13, "interviewer_instruction_show_screen", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "—", false, "—", false, false, 6, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 17, "Moderate", 0, 16, null},
+				            {"q_interviewer_instruction_show_screen_oth", 13, "g_screener", "Screener", 13, "interviewer_instruction_show_screen_oth", "interviewer_instruction_show_screen_oth", "interviewer_instruction_show_screen_oth", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility, calculation"},
+				            {"q_interviewer_instruction_show_screen_2", 14, "g_screener", "Screener", 13, "interviewer_instruction_show_screen_2", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 3, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 18, "Moderate", 1, 15, "visibility"},
+				            {"q_interviewer_instruction_show_screen_2_oth", 15, "g_screener", "Screener", 13, "interviewer_instruction_show_screen_2_oth", "interviewer_instruction_show_screen_2_oth", "interviewer_instruction_show_screen_2_oth", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility, calculation"},
+				            {"q_sq7a", 16, "g_screener", "Screener", 13, "sq7a", "How often do you purchase powdered salt for your household? SA", "How often do you purchase powdered salt for your household? SA", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 6, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 20, "Moderate", 2, 14, "visibility"},
+				            {"q_sq7b", 17, "g_screener", "Screener", 13, "sq7b", "How often do you use powdered salt for preparing any dish in your household? SA", "How often do you use powdered salt for preparing any dish in your household? SA", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 3, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 18, "Moderate", 3, 13, "visibility"},
+				            {"q_sq7b_oth", 18, "g_screener", "Screener", 13, "sq7b_oth", "sq7b_oth", "sq7b_oth", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility, calculation"},
+				            {"q_sq8c", 19, "g_screener", "Screener", 13, "sq8c", "How often do you purchase crystal salt for your household? SA", "How often do you purchase crystal salt for your household? SA", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 6, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 20, "Moderate", 4, 12, "visibility"},
+				            {"q_sq8d", 20, "g_screener", "Screener", 13, "sq8d", "How often do you use crystal salt for preparing any dish in your household? SA", "How often do you use crystal salt for preparing any dish in your household? SA", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 44, "Heavy", 5, 0, "visibility"},
+				            {"q_vizag_hubli_kolkata_bhubaneshwar", 21, "g_screener", "Screener", 13, "vizag_hubli_kolkata_bhubaneshwar", "Vizag | Hubli | Kolkata | Bhubaneshwar", "Vizag | Hubli | Kolkata | Bhubaneshwar", "text", "Open text", "Verbatim coding", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 0, "Verbatim coding", "Code frame · themes + exemplars", "Verbatim counts describe coded mentions, not prevalence in the population.", 44, "Heavy", 5, 0, "visibility"},
+				            {"q_n_2", 22, "g_screener", "Screener", 13, "n_2", "MESSAGE TO DISPLAY: I WILL NOW SHOW YOU 6 DIFFERENT PROMOTIONAL OPTIONS FOR THE 1KG SALT PACK, ONE BY ONE. PLEASE LOOK AT EACH…", "MESSAGE TO DISPLAY: I WILL NOW SHOW YOU 6 DIFFERENT PROMOTIONAL OPTIONS FOR THE 1KG SALT PACK, ONE BY ONE. PLEASE LOOK AT EACH PROMOTIONAL OPTION CAREFULLY BEFORE WE PROCEED FURTHER.", "note", "Note", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 5, 0, "visibility"},
+				            {"q_n_3", 23, "g_screener", "Screener", 13, "n_3", "MESSAGE TO DISPLAY: I WILL NOW SHOW YOU 8 DIFFERENT PROMOTIONAL OPTIONS FOR THE 1KG SALT PACK, ONE BY ONE. PLEASE LOOK AT EACH…", "MESSAGE TO DISPLAY: I WILL NOW SHOW YOU 8 DIFFERENT PROMOTIONAL OPTIONS FOR THE 1KG SALT PACK, ONE BY ONE. PLEASE LOOK AT EACH PROMOTIONAL OPTION CAREFULLY BEFORE WE PROCEED FURTHER.", "note", "Note", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 5, 0, "visibility"},
+				            {"q_rotation_grid_for_centre_vizag_kolkata_bhubaneshwar_code", 24, "g_screener", "Screener", 13, "rotation_grid_for_centre_vizag_kolkata_bhubaneshwar_code", "ROTATION GRID- FOR CENTRE (VIZAG/KOLKATA/ BHUBANESHWAR) | Code", "ROTATION GRID- FOR CENTRE (VIZAG/KOLKATA/ BHUBANESHWAR) | Code", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 6, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 20, "Moderate", 5, 6, "visibility"},
+				            {"q_rotation_grid_for_centre_hubli_code", 25, "g_screener", "Screener", 13, "rotation_grid_for_centre_hubli_code", "ROTATION GRID- FOR CENTRE (HUBLI) | Code", "ROTATION GRID- FOR CENTRE (HUBLI) | Code", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 8, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 21, "Moderate", 6, 5, "visibility"},
+				            {"q_cq1", 26, "g_screener", "Screener", 13, "cq1", "How much do you like or dislike this promo? SA", "How much do you like or dislike this promo? SA", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 1, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 17, "Moderate", 7, 4, "visibility"},
+				            {"q_cq2", 27, "g_screener", "Screener", 13, "cq2", "How unique do you find this promo? SA", "How unique do you find this promo? SA", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 1, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 17, "Moderate", 8, 3, "visibility"},
+				            {"q_n_4", 28, "g_screener", "Screener", 13, "n_4", "MESSAGE TO DISPLAY: I WILL NOW SHOW YOU MULTIPLE SCREENS, EACH DISPLAYING PROMOTIONAL OPTIONS FOR THE 1KG SALT PACK. ON EACH SC…", "MESSAGE TO DISPLAY: I WILL NOW SHOW YOU MULTIPLE SCREENS, EACH DISPLAYING PROMOTIONAL OPTIONS FOR THE 1KG SALT PACK. ON EACH SCREEN, PLEASE SELECT THE PROMO YOU ARE MOST LIKELY TO BUY AND THE PROMO YOU ARE LEAST LIKELY TO BUY.", "note", "Note", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 9, 0, "visibility"},
+				            {"q_dq2", 29, "g_screener", "Screener", 13, "dq2", "Thanks for participating in the study; your feedback is valuable to us. Our client, ITC, may want to contact you to discuss a f…", "Thanks for participating in the study; your feedback is valuable to us. Our client, ITC, may want to contact you to discuss a few food products or personal care products and your habits regarding them or for some marketing activity. In that case, can we share your contact details (name, telephone number, and address) with them?", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 2, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 17, "Moderate", 9, 0, "visibility"},
+				            {"q_dq3", 30, "g_screener", "Screener", 13, "dq3", "For the validity of this response, we request that you please give a missed call at 6361127230. The mobile number should be the…", "For the validity of this response, we request that you please give a missed call at 6361127230. The mobile number should be the same as the one which you have filled in at the starting.SA", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 2, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 17, "Moderate", 10, 0, "visibility"},
+				            {"q_glob_term", 31, "g_screener", "Screener", 13, "glob_term", "Global Termination", "Global Termination", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 2, 11, "calculation"},
+				            {"q_sq1", 32, "g_bg_term", "Main Questionnaire", 34, "sq1", "Centre", "Centre", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 4, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_interviewer_instruction_show_screen_3", 33, "g_bg_term", "Main Questionnaire", 34, "interviewer_instruction_show_screen_3", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 6, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 20, "Moderate", 1, 0, "visibility"},
+				            {"q_sq2", 34, "g_bg_term", "Main Questionnaire", 34, "sq2", "Have you participated in any Market Research survey or Group Discussion in the last three months? SA | INSTRUCTION", "Have you participated in any Market Research survey or Group Discussion in the last three months? SA | INSTRUCTION", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 2, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 17, "Moderate", 1, 0, "visibility"},
+				            {"q_sq3a", 35, "g_bg_term", "Main Questionnaire", 34, "sq3a", "Please tell me your age. _________ years old. POST CODE IN RELEVANT AGE BREAK BELOW | INSTRUCTION", "Please tell me your age. _________ years old. POST CODE IN RELEVANT AGE BREAK BELOW | INSTRUCTION", "integer", "Whole number", "Numeric distribution", "Yes", true, "Required", true, "required", "—", false, "Set", true, false, 0, "Numeric distribution", "Histogram · n / median / IQR", "Do not report a mean without a distribution check; segment by routing if bases differ.", 18, "Moderate", 0, 0, "constraint"},
+				            {"q_age_grp", 36, "g_bg_term", "Main Questionnaire", 34, "age_grp", "Age Group", "Age Group", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 1, 0, "calculation"},
+				            {"q_age_term", 37, "g_bg_term", "Main Questionnaire", 34, "age_term", "Age Termination", "Age Termination", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 1, 0, "calculation"},
+				            {"q_age_dis", 38, "g_bg_term", "Main Questionnaire", 34, "age_dis", "Age Display", "Age Display", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 1, 0, "calculation"},
+				            {"q_sq3b", 39, "g_bg_term", "Main Questionnaire", 34, "sq3b", "Which of these best describes your marital status? SA | INSTRUCTION", "Which of these best describes your marital status? SA | INSTRUCTION", "select_one", "Single choice", "Frequency distribution", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 2, "Frequency distribution", "Horizontal bar · respondent %", "Denominator is the eligible base after routing, not the total sample.", 17, "Moderate", 1, 0, "visibility"},
+				            {"q_interviewer_instruction_show_screen_4", 40, "g_bg_term", "Main Questionnaire", 34, "interviewer_instruction_show_screen_4", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 7, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 21, "Moderate", 1, 0, "visibility"},
+				            {"q_interviewer_instruction_show_screen_5", 41, "g_bg_term", "Main Questionnaire", 34, "interviewer_instruction_show_screen_5", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 10, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 23, "Moderate", 1, 0, "visibility"},
+				            {"q_interviewer_instruction_show_screen_6", 42, "g_bg_term", "Main Questionnaire", 34, "interviewer_instruction_show_screen_6", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 3, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 18, "Moderate", 1, 0, "visibility"},
+				            {"q_interviewer_instruction_show_screen_7", 43, "g_bg_term", "Main Questionnaire", 34, "interviewer_instruction_show_screen_7", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "INTERVIEWER INSTRUCTION: SHOW SCREEN", "select_one", "Single choice", "Ordered categorical", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 5, "Ordered categorical", "Ordered bar · distribution + median", "Do not assume equal intervals between labels without a documented scale.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_dq1_most", 44, "g_bg_dq1", "Please select the salt promo that you are most likely to buy and the promo that you are least likely to buy. MAXDIFF OPTIONS TO BE SHOWN HERE", 47, "dq1_most", "Most Likely to buy", "Most Likely to buy", "select_one", "Single choice", "Scale / rating", "Yes", true, "Required", true, "required", "Conditional", true, "—", false, false, 4, "Scale / rating", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit.", 19, "Moderate", 1, 0, "visibility"},
+				            {"q_dq1_least", 45, "g_bg_dq1", "Please select the salt promo that you are most likely to buy and the promo that you are least likely to buy. MAXDIFF OPTIONS TO BE SHOWN HERE", 47, "dq1_least", "Least Likely to buy", "Least Likely to buy", "select_one", "Single choice", "Scale / rating", "Yes", true, "Required", true, "required", "Conditional", true, "Set", true, true, 4, "Scale / rating", "Diverging bar · distribution + mean", "A mean is only meaningful when the scale direction and anchors are explicit.", 21, "Moderate", 2, 0, "visibility, choice filter, constraint"},
+				            {"q_completed", 46, "unassigned", "Unassigned section", 9007199254740991, "completed", "Completed", "Completed", "calculate", "Calculated / audit", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "—", false, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 0, "No respondent time", 1, 0, "calculation"},
+				            {"q_note_term", 47, "unassigned", "Unassigned section", 9007199254740991, "note_term", "Thanks for your time. Please close the survey.", "Thanks for your time. Please close the survey.", "note", "Note", "Metadata / QA", "No", false, "Not asked", false, "not-asked", "Conditional", true, "—", false, false, 0, "Metadata / QA", "No chart · design metadata", "Never include administrative fields in a respondent base.", 3, "Light", 1, 0, "visibility"}
+				        }
+				    )
+				in
+				    Source

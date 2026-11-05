@@ -1,0 +1,55 @@
+table RoutingAnchors
+	measure 'Plotted inbound references' = SUM('RoutingAnchors'[Inbound refs])
+		formatString: #,##0
+	column Rank
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: Rank
+	column QuestionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionKey
+	column Question
+		dataType: string
+		summarizeBy: none
+		sourceColumn: QuestionText
+	column Section
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SectionText
+	column Type
+		dataType: string
+		summarizeBy: none
+		sourceColumn: TypeText
+	column 'Inbound refs'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: InboundReferences
+	column 'Rule kinds'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: RuleKinds
+	partition RoutingAnchors = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [Rank = Int64.Type, QuestionKey = text, QuestionText = text, SectionText = text, TypeText = text, InboundReferences = Int64.Type, RuleKinds = text],
+				        {
+				            {1, "q_glob_term", "Global Termination", "Unassigned section", "Calculated / audit", 45, "calculation"},
+				            {2, "q_q56_1", "RANK 1", "Now that you have seen all three conc…", "Single choice", 3, "visibility"},
+				            {3, "q_sq2a", "What is your age? _________ years old. | Instruction", "Main Questionnaire", "Whole number", 2, "constraint"},
+				            {4, "q_sech", "NCCS", "Please look at the screen and tell me…", "Calculated / audit", 2, "calculation"},
+				            {5, "q_l2y", "L2Y", "Main Questionnaire", "Multi-select", 2, "visibility"},
+				            {6, "q_q56_2", "RANK 2", "Now that you have seen all three conc…", "Single choice", 2, "visibility, choice filter"},
+				            {7, "q_age_grp", "Age Group", "Main Questionnaire", "Calculated / audit", 1, "calculation"},
+				            {8, "q_sq3a", "Please look at the screen and tell me the highest level o…", "Please look at the screen and tell me…", "Single choice", 1, "referenced"},
+				            {9, "q_sq3b", "From this list, which of the items do you have at your ho…", "Please look at the screen and tell me…", "Multi-select", 1, "referenced"},
+				            {10, "q_sq3b_total", "Total Durables", "Please look at the screen and tell me…", "Calculated / audit", 1, "calculation"}
+				        }
+				    )
+				in
+				    Source

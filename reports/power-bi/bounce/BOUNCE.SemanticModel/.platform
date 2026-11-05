@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "SemanticModel",
+    "displayName": "BOUNCE"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "d27725d6-cafe-4c04-8af0-b44ba34ebcb4"
+  }
+}

@@ -1,0 +1,90 @@
+table Sections
+	measure 'Plotted section questions' = SUM('Sections'[Questions])
+		formatString: #,##0
+	measure 'Plotted section minutes' = SUM('Sections'[Est. minutes])
+		formatString: 0.0
+	column SectionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: SectionKey
+	column Section
+		dataType: string
+		summarizeBy: none
+		sortByColumn: SectionOrder
+		sourceColumn: SectionText
+	column SectionOrder
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: SectionOrder
+	column Questions
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: QuestionCount
+	column Answerable
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: AnswerableCount
+	column Required
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: RequiredCount
+	column Conditional
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: ConditionalCount
+	column Routed
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: RoutedCount
+	column Constraints
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: ConstraintCount
+	column Choices
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: ChoiceCount
+	column 'Est. minutes'
+		dataType: double
+		formatString: 0.0
+		summarizeBy: none
+		sourceColumn: EstimatedMinutes
+	column '% burden'
+		dataType: double
+		formatString: 0.0%
+		summarizeBy: none
+		sourceColumn: BurdenShare
+	column SectionFull
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: SectionFull
+	partition Sections = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [SectionKey = text, SectionText = text, SectionOrder = Int64.Type, QuestionCount = Int64.Type, AnswerableCount = Int64.Type, RequiredCount = Int64.Type, ConditionalCount = Int64.Type, RoutedCount = Int64.Type, ConstraintCount = Int64.Type, ChoiceCount = Int64.Type, EstimatedMinutes = number, BurdenShare = number, SectionFull = text],
+				        {
+				            {"g_bg_101", "Interviewer & Respondent Info", 1, 4, 4, 4, 0, 0, 3, 0, 2.8333333333333335, 0.0832517140058766, "Interviewer & Respondent Info"},
+				            {"g_screener", "Screener", 2, 8, 3, 3, 0, 4, 0, 13, 1, 0.029382957884427033, "Screener"},
+				            {"g_bg_term", "Main Questionnaire", 3, 83, 63, 63, 0, 79, 15, 204, 26.65, 0.7830558276199804, "Main Questionnaire"},
+				            {"g_bg_b2", "What deposit did you pay to start? INR: ________", 4, 2, 2, 0, 0, 0, 2, 1, 0.7, 0.02056807051909892, "What deposit did you pay to start? INR: ________"},
+				            {"g_bg_b6", "Before you used Bounce, what did you earn in a…", 5, 2, 2, 0, 0, 0, 2, 1, 0.7, 0.02056807051909892, "Before you used Bounce, what did you earn in a typical week after paying for your vehicle or fuel? INR/week: ________"},
+				            {"g_bg_b8", "In the last month, did you pay any extra charge…", 6, 2, 2, 0, 0, 0, 2, 1, 0.7, 0.02056807051909892, "In the last month, did you pay any extra charges fines, damage, late fees, penalties? Approx INR: ______"},
+				            {"g_bg_c2", "On a working day, how many hours and km do you…", 7, 2, 2, 2, 0, 2, 2, 0, 0.7, 0.02056807051909892, "On a working day, how many hours and km do you usually ride? Hours: ______, Km: _____"},
+				            {"g_bg_x6", "At your busiest, how many days a week did you r…", 8, 2, 2, 2, 0, 2, 2, 0, 0.7, 0.02056807051909892, "At your busiest, how many days a week did you ride, and what did you earn per day? Days: ____ INR/day: ______"},
+				            {"unassigned", "Unassigned section", 9, 11, 0, 0, 0, 1, 0, 0, 0.05, 0.0014691478942213518, "Unassigned section"}
+				        }
+				    )
+				in
+				    Source

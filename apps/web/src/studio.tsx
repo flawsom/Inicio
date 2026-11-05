@@ -3,7 +3,9 @@ import {
   validateForm,
   xlsFormSheets,
   type AdapterNote,
+  type Choice,
   type FormDefinition,
+  type Group,
   type OutSheet,
   type Question,
   type QuestionRules,
@@ -158,25 +160,34 @@ function SheetTable({ sheet }: { sheet: OutSheet }): JSX.Element {
 /**
  * The types the builder offers, in the order a form is usually written.
  *
- * Not every type is here on purpose: a `rank`, a `geoshape` or an `appearance` is a
- * thing an author reaches for in the JSON, and offering a control for it would
- * suggest a guidance this list cannot give. Everything absent is still editable in
- * the JSON, which remains the source of truth.
+ * The list now covers every editable canonical type. Audit fields are not here: they
+ * are a `calculate` carrying an `audit` descriptor, and that descriptor is a
+ * workbook-level concern the JSON keeps. The builder never invents an audit field,
+ * but it carries one untouched when a question is edited around it.
  */
 export const BUILDER_TYPES: readonly QuestionType[] = [
   'text',
   'textarea',
   'integer',
   'decimal',
+  'percentage',
+  'currency',
   'date',
+  'datetime',
+  'time',
   'yesno',
   'select_one',
   'select_multiple',
+  'rank',
+  'enumerator',
   'geopoint',
+  'geotrace',
+  'geoshape',
   'image',
   'audio',
   'video',
   'file',
+  'barcode',
   'note',
   'calculate',
 ];
@@ -260,6 +271,8 @@ export function reorderQuestion(form: FormDefinition, fromId: string, toId: stri
 /** One question's logic, as the engine's own fields name it. */
 export interface QuestionLogicPatch {
   visibleIf?: string | null;
+  enableIf?: string | null;
+  calculate?: string | null;
   choiceFilter?: string | null;
   constraint?: string | null;
   constraintMessage?: string | null;
@@ -273,9 +286,17 @@ export interface QuestionLogicPatch {
  * whatever it had, so typing in one input cannot clear another; and a field cleared
  * to an empty string becomes `null` and then disappears, so "no rule" is stored as
  * no rule rather than as an expression that evaluates to nothing.
+ *
+ * `enableIf` and `calculate` moved into this patch when the builder exposed them.
+ * They are still carried for a caller that does not mention them, because a control
+ * appearing on screen must not quietly erase a rule it has not been asked about.
  */
-export function setQuestionLogic(form: FormDefinition, questionId: string, patch: QuestionLogicPatch): FormDefinition {
-  const language = form.defaultLanguage;
+export function setQuestionLogic(
+  form: FormDefinition,
+  questionId: string,
+  patch: QuestionLogicPatch,
+  language = form.defaultLanguage,
+): FormDefinition {
   return {
     ...form,
     questions: form.questions.map((question) => {
@@ -283,13 +304,14 @@ export function setQuestionLogic(form: FormDefinition, questionId: string, patch
 
       const existing = question.rules ?? {};
       const visibleIf = patch.visibleIf === undefined ? blank(existing.visibleIf) : blank(patch.visibleIf);
+      const enableIf = patch.enableIf === undefined ? blank(existing.enableIf) : blank(patch.enableIf);
+      const calculate = patch.calculate === undefined ? blank(existing.calculate) : blank(patch.calculate);
       const choiceFilter = patch.choiceFilter === undefined ? blank(existing.choiceFilter) : blank(patch.choiceFilter);
       const rules: QuestionRules = {};
       if (visibleIf) rules.visibleIf = visibleIf;
+      if (enableIf) rules.enableIf = enableIf;
+      if (calculate) rules.calculate = calculate;
       if (choiceFilter) rules.choiceFilter = choiceFilter;
-      // Fields this editor does not offer are carried, not dropped.
-      if (existing.enableIf) rules.enableIf = existing.enableIf;
-      if (existing.calculate) rules.calculate = existing.calculate;
 
       const constraint = patch.constraint === undefined ? blank(question.validation?.constraint) : blank(patch.constraint);
       const message = { ...(question.validation?.message ?? {}) };
@@ -314,6 +336,269 @@ function canFilterChoices(type: QuestionType): boolean {
   return type === 'select_one' || type === 'select_multiple' || type === 'rank';
 }
 
+function hasChoices(type: QuestionType): boolean {
+  return canFilterChoices(type);
+}
+
+function isInput(type: QuestionType): boolean {
+  return type !== 'note' && type !== 'calculate';
+}
+
+/** One localized string written without dropping the other languages. */
+function withLocalized(existing: Record<string, string> | undefined, language: string, value: string): Record<string, string> {
+  const next = { ...(existing ?? {}) };
+  if (value.trim() === '') delete next[language];
+  else next[language] = value;
+  return next;
+}
+
+function withoutEmptyLocalized(existing: Record<string, string> | undefined): Record<string, string> | undefined {
+  if (!existing || Object.keys(existing).length === 0) return undefined;
+  return existing;
+}
+
+/** What a field should show while editing a translation: blank, not another language's text. */
+export function editingText(existing: Record<string, string> | undefined, language: string): string {
+  return existing?.[language] ?? '';
+}
+
+/** A placeholder that names the text already written, without pretending it is this language. */
+export function translationPlaceholder(existing: Record<string, string> | undefined, language: string): string {
+  if (!existing) return '';
+  const other = Object.entries(existing).find(([key, value]) => key !== language && value.trim() !== '');
+  return other ? `${other[0]}: ${other[1]}` : '';
+}
+
+/**
+ * The authoring fields on a question, separate from its logic.
+ *
+ * The builder writes only what it was asked to write. A patch that names `label`
+ * leaves the hint alone; changing a language does not copy the default text into it;
+ * and `required` is a boolean here because a conditional requirement is an expression
+ * and belongs in the JSON until the builder can edit it without replacing it.
+ */
+export interface QuestionContentPatch {
+  name?: string;
+  type?: QuestionType;
+  label?: string;
+  hint?: string | null;
+  required?: boolean;
+  groupId?: string | null;
+  requiredMessage?: string | null;
+}
+
+export function setQuestionContent(
+  form: FormDefinition,
+  questionId: string,
+  patch: QuestionContentPatch,
+  language = form.defaultLanguage,
+): FormDefinition {
+  return {
+    ...form,
+    questions: form.questions.map((question) => {
+      if (question.id !== questionId) return question;
+      const next: Question = { ...question };
+
+      if (patch.name !== undefined) next.name = patch.name;
+      if (patch.groupId !== undefined) next.groupId = patch.groupId;
+      if (patch.required !== undefined) next.required = patch.required;
+      if (patch.type !== undefined && patch.type !== question.type) {
+        next.type = patch.type;
+        // Switching to a choice type gives the options editor a list to edit. It is
+        // empty, not pre-filled with invented answers: the analyser reports that the
+        // choices are missing, and the author decides what belongs there.
+        if (hasChoices(patch.type) && !next.choices) next.choices = { inline: [] };
+      }
+      if (patch.label !== undefined) next.label = withLocalized(question.label, language, patch.label);
+      if (patch.hint !== undefined) {
+        const hint = withoutEmptyLocalized(withLocalized(question.hint, language, patch.hint ?? ''));
+        if (hint) next.hint = hint;
+        else delete next.hint;
+      }
+      if (patch.requiredMessage !== undefined) {
+        const message = withoutEmptyLocalized(
+          withLocalized(question.requiredMessage, language, patch.requiredMessage ?? ''),
+        );
+        if (message) next.requiredMessage = message;
+        else delete next.requiredMessage;
+      }
+      return next;
+    }),
+  };
+}
+
+/** Duplicate a question beside itself, with an id and export column that cannot collide. */
+export function duplicateQuestion(form: FormDefinition, questionId: string): FormDefinition {
+  const at = form.questions.findIndex((question) => question.id === questionId);
+  if (at === -1) return form;
+  const original = form.questions[at];
+  if (!original) return form;
+
+  const copy = JSON.parse(JSON.stringify(original)) as Question;
+  copy.id = uniqueId(form);
+  copy.name = uniqueName(form, original.name ? `${original.name}_copy` : 'question');
+  const questions = [...form.questions];
+  questions.splice(at + 1, 0, copy);
+  return { ...form, questions };
+}
+
+/** The options a choice question actually renders, whether they are inline or shared. */
+export function choicesOf(form: FormDefinition, question: Question): Choice[] {
+  const listName = question.choices?.listName;
+  if (listName) return form.choiceLists?.[listName] ?? [];
+  return question.choices?.inline ?? [];
+}
+
+/** The shared-list name, when editing one choice edits more than this question. */
+export function choiceListName(question: Question): string | null {
+  return question.choices?.listName ?? null;
+}
+
+function withChoices(
+  form: FormDefinition,
+  questionId: string,
+  change: (choices: Choice[]) => Choice[],
+): FormDefinition {
+  const question = form.questions.find((entry) => entry.id === questionId);
+  if (!question) return form;
+  const listName = question.choices?.listName;
+  if (listName) {
+    const current = form.choiceLists?.[listName] ?? [];
+    return {
+      ...form,
+      choiceLists: { ...(form.choiceLists ?? {}), [listName]: change([...current]) },
+    };
+  }
+  return {
+    ...form,
+    questions: form.questions.map((entry) => {
+      if (entry.id !== questionId) return entry;
+      return {
+        ...entry,
+        choices: { ...(entry.choices ?? {}), inline: change([...(entry.choices?.inline ?? [])]) },
+      };
+    }),
+  };
+}
+
+function uniqueChoiceValue(choices: Choice[]): string {
+  const taken = new Set(choices.map((choice) => choice.value));
+  let index = choices.length + 1;
+  while (taken.has(String(index))) index += 1;
+  return String(index);
+}
+
+/** Add an option with a usable value and a label the author can replace. */
+export function addChoice(form: FormDefinition, questionId: string, language = form.defaultLanguage): FormDefinition {
+  return withChoices(form, questionId, (choices) => {
+    const number = choices.length + 1;
+    const label = `Option ${number}`;
+    return [
+      ...choices,
+      {
+        value: uniqueChoiceValue(choices),
+        label: { [form.defaultLanguage]: label, ...(language !== form.defaultLanguage ? { [language]: label } : {}) },
+      },
+    ];
+  });
+}
+
+export function setChoiceValue(form: FormDefinition, questionId: string, index: number, value: string): FormDefinition {
+  return withChoices(form, questionId, (choices) =>
+    choices.map((choice, choiceIndex) => (choiceIndex === index ? { ...choice, value } : choice)),
+  );
+}
+
+export function setChoiceLabel(
+  form: FormDefinition,
+  questionId: string,
+  index: number,
+  value: string,
+  language = form.defaultLanguage,
+): FormDefinition {
+  return withChoices(form, questionId, (choices) =>
+    choices.map((choice, choiceIndex) =>
+      choiceIndex === index ? { ...choice, label: withLocalized(choice.label, language, value) } : choice,
+    ),
+  );
+}
+
+export function removeChoice(form: FormDefinition, questionId: string, index: number): FormDefinition {
+  return withChoices(form, questionId, (choices) => choices.filter((_, choiceIndex) => choiceIndex !== index));
+}
+
+export function moveChoice(form: FormDefinition, questionId: string, index: number, delta: number): FormDefinition {
+  return withChoices(form, questionId, (choices) => {
+    const to = index + delta;
+    if (index < 0 || index >= choices.length || to < 0 || to >= choices.length) return choices;
+    const next = [...choices];
+    const [moved] = next.splice(index, 1);
+    if (!moved) return choices;
+    next.splice(to, 0, moved);
+    return next;
+  });
+}
+
+function uniqueGroupId(form: FormDefinition): string {
+  const taken = new Set(form.groups.map((group) => group.id));
+  let index = form.groups.length + 1;
+  while (taken.has(`g_${index}`)) index += 1;
+  return `g_${index}`;
+}
+
+function uniqueGroupName(form: FormDefinition, base: string): string {
+  const taken = new Set(form.groups.map((group) => group.name));
+  if (!taken.has(base)) return base;
+  let index = 2;
+  while (taken.has(`${base}_${index}`)) index += 1;
+  return `${base}_${index}`;
+}
+
+/** Add a section. The questions stay independent until one is assigned to it. */
+export function addGroup(form: FormDefinition, label: string, language = form.defaultLanguage): FormDefinition {
+  const text = label.trim() === '' ? 'New section' : label;
+  const group: Group = {
+    id: uniqueGroupId(form),
+    name: uniqueGroupName(form, 'section'),
+    label: { [form.defaultLanguage]: text, ...(language !== form.defaultLanguage ? { [language]: text } : {}) },
+  };
+  return { ...form, groups: [...form.groups, group] };
+}
+
+export function setGroupLabel(
+  form: FormDefinition,
+  groupId: string,
+  value: string,
+  language = form.defaultLanguage,
+): FormDefinition {
+  return {
+    ...form,
+    groups: form.groups.map((group) =>
+      group.id === groupId ? { ...group, label: withLocalized(group.label, language, value) } : group,
+    ),
+  };
+}
+
+/**
+ * Remove a section, not its questions: they become ungrouped so no answer loses its
+ * field. The confirmation lives in the control, because the JSON still knows how to
+ * put the section back and the analyser does not need to be taught about this one.
+ */
+export function removeGroup(form: FormDefinition, groupId: string): FormDefinition {
+  if (!form.groups.some((group) => group.id === groupId)) return form;
+  return {
+    ...form,
+    groups: form.groups.filter((group) => group.id !== groupId),
+    questions: form.questions.map((question) =>
+      question.groupId === groupId ? { ...question, groupId: null } : question,
+    ),
+  };
+}
+
+export function groupLabel(group: Group, language: string): string {
+  return group.label?.[language] ?? Object.values(group.label ?? {})[0] ?? group.name;
+}
+
 /**
  * The builder surface: the questions as an ordered list, and one question's logic.
  *
@@ -333,8 +618,14 @@ function BuilderPanel({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [adding, setAdding] = useState<QuestionType>('text');
-  const language = form.defaultLanguage;
+  const [editingLanguage, setEditingLanguage] = useState<string | null>(null);
+  const availableLanguages = form.languages.length > 0 ? form.languages : [form.defaultLanguage];
+  const language =
+    editingLanguage && availableLanguages.includes(editingLanguage) ? editingLanguage : form.defaultLanguage;
   const selected = form.questions.find((question) => question.id === selectedId) ?? null;
+  const selectedIndex = selected ? form.questions.findIndex((question) => question.id === selected.id) : -1;
+  const selectedChoices = selected ? choicesOf(form, selected) : [];
+  const sharedList = selected ? choiceListName(selected) : null;
 
   const add = (): void => {
     const next = addQuestion(form, adding, selectedId);
@@ -345,8 +636,31 @@ function BuilderPanel({
 
   return (
     <div className="studio-builder">
+      <div className="studio-builder-toolbar">
+        <div>
+          <span className="eyebrow">Builder</span>
+          <p className="small muted">
+            Edit the question, its choices and its rules here. Every change is written straight into the JSON
+            above, so the workbook and preview move with it.
+          </p>
+        </div>
+        <label className="small muted">
+          Editing language{' '}
+          <select
+            value={language}
+            aria-label="Builder language"
+            onChange={(event) => setEditingLanguage(event.target.value)}
+          >
+            {availableLanguages.map((code) => (
+              <option key={code} value={code}>
+                {code}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       <div className="row wrap">
-        <span className="eyebrow">Builder</span>
         <label className="small muted">
           New question of type{' '}
           <select
@@ -366,6 +680,48 @@ function BuilderPanel({
         </button>
       </div>
 
+      <details className="studio-builder-sections">
+        <summary>
+          Sections <span className="muted small">{form.groups.length}</span>
+        </summary>
+        <p className="small muted">
+          A section is a group of questions, often shown on one screen. Removing one never removes its
+          questions; they become ungrouped.
+        </p>
+        {form.groups.length > 0 && (
+          <div className="studio-builder-section-list">
+            {form.groups.map((group) => (
+              <div className="studio-builder-section" key={group.id}>
+                <label className="small">
+                  Section label
+                  <input
+                    aria-label={`Section ${group.name} label`}
+                    value={editingText(group.label, language)}
+                    placeholder={translationPlaceholder(group.label, language) || group.name}
+                    onChange={(event) => onEdit(setGroupLabel(form, group.id, event.target.value, language))}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="ghost small"
+                  aria-label={`Remove section ${group.name}`}
+                  onClick={() => onEdit(removeGroup(form, group.id))}
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <button
+          type="button"
+          className="ghost small"
+          onClick={() => onEdit(addGroup(form, 'New section', language))}
+        >
+          Add section
+        </button>
+      </details>
+
       {form.questions.length === 0 ? (
         <p className="muted small">
           No questions yet. Adding one puts it in the JSON, the workbook and the preview at the same moment,
@@ -376,10 +732,20 @@ function BuilderPanel({
           {form.questions.map((question, index) => (
             <li
               key={question.id}
-              className={question.id === selectedId ? 'studio-builder-row selected' : 'studio-builder-row'}
-              aria-current={question.id === selectedId}
+              className={[
+                'studio-builder-row',
+                question.id === selectedId ? 'selected' : '',
+                question.id === draggingId ? 'dragging' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              aria-current={question.id === selectedId ? 'true' : undefined}
               draggable
-              onDragStart={() => setDraggingId(question.id)}
+              onDragStart={(event) => {
+                event.dataTransfer?.setData('text/plain', question.id);
+                setDraggingId(question.id);
+              }}
+              onDragEnd={() => setDraggingId(null)}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => {
                 event.preventDefault();
@@ -387,6 +753,9 @@ function BuilderPanel({
                 setDraggingId(null);
               }}
             >
+              <span className="studio-builder-index muted small" aria-hidden="true">
+                {index + 1}
+              </span>
               <span className="studio-builder-grip muted small" aria-hidden="true">
                 ⠿
               </span>
@@ -434,53 +803,298 @@ function BuilderPanel({
       )}
 
       {selected && (
-        <div className="studio-builder-logic">
-          <p className="small">
-            <strong>{questionLabel(selected, language)}</strong> <span className="muted">· {selected.name}</span>
-          </p>
-          <label className="small">
-            Show this question when <code>visibleIf</code>
-            <input
-              value={selected.rules?.visibleIf ?? ''}
-              spellCheck={false}
-              placeholder="${consent} = 'yes'"
-              onChange={(event) => onEdit(setQuestionLogic(form, selected.id, { visibleIf: event.target.value }))}
-            />
-          </label>
-          {canFilterChoices(selected.type) && (
-            <label className="small">
-              Filter its choices <code>choiceFilter</code>
+        <div className="studio-builder-editor">
+          <div className="studio-builder-editor-head">
+            <div>
+              <span className="eyebrow">
+                Question {selectedIndex + 1} of {form.questions.length}
+              </span>
+              <h3>{questionLabel(selected, language)}</h3>
+            </div>
+            <button
+              type="button"
+              className="ghost small"
+              onClick={() => {
+                const next = duplicateQuestion(form, selected.id);
+                const copy = next.questions[selectedIndex + 1];
+                onEdit(next);
+                if (copy) setSelectedId(copy.id);
+              }}
+            >
+              Duplicate
+            </button>
+          </div>
+
+          <div className="studio-builder-fields">
+            <label className="studio-builder-field wide">
+              Question label · {language}
               <input
-                value={selected.rules?.choiceFilter ?? ''}
+                aria-label="Question label"
+                value={editingText(selected.label, language)}
+                placeholder={translationPlaceholder(selected.label, language) || selected.name}
+                onChange={(event) => onEdit(setQuestionContent(form, selected.id, { label: event.target.value }, language))}
+              />
+            </label>
+            <label className="studio-builder-field">
+              Export name
+              <input
+                aria-label="Question name"
+                value={selected.name}
                 spellCheck={false}
-                placeholder="district = ${district}"
-                onChange={(event) => onEdit(setQuestionLogic(form, selected.id, { choiceFilter: event.target.value }))}
+                onChange={(event) => onEdit(setQuestionContent(form, selected.id, { name: event.target.value }, language))}
+              />
+            </label>
+            <label className="studio-builder-field">
+              Type
+              <select
+                aria-label="Question type"
+                value={selected.type}
+                onChange={(event) =>
+                  onEdit(setQuestionContent(form, selected.id, { type: event.target.value as QuestionType }, language))
+                }
+              >
+                {BUILDER_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="studio-builder-field">
+              Section
+              <select
+                aria-label="Question section"
+                value={selected.groupId ?? ''}
+                onChange={(event) =>
+                  onEdit(
+                    setQuestionContent(
+                      form,
+                      selected.id,
+                      { groupId: event.target.value === '' ? null : event.target.value },
+                      language,
+                    ),
+                  )
+                }
+              >
+                <option value="">No section</option>
+                {form.groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {groupLabel(group, language)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="studio-builder-field wide">
+              Hint · {language}
+              <input
+                aria-label="Question hint"
+                value={editingText(selected.hint, language)}
+                placeholder={translationPlaceholder(selected.hint, language) || 'Optional help under the question'}
+                onChange={(event) => onEdit(setQuestionContent(form, selected.id, { hint: event.target.value }, language))}
+              />
+            </label>
+          </div>
+
+          {isInput(selected.type) && (
+            <div className="studio-builder-requirement">
+              <label className="small">
+                <input
+                  type="checkbox"
+                  checked={Boolean(selected.required)}
+                  disabled={typeof selected.required === 'string'}
+                  onChange={(event) =>
+                    onEdit(setQuestionContent(form, selected.id, { required: event.target.checked }, language))
+                  }
+                />{' '}
+                Required
+              </label>
+              {typeof selected.required === 'string' && (
+                <span className="muted small">
+                  A conditional requirement is preserved: <code>{selected.required}</code>
+                </span>
+              )}
+            </div>
+          )}
+
+          {Boolean(selected.required) && isInput(selected.type) && (
+            <label className="small">
+              Message if missing · {language}
+              <input
+                aria-label="Required message"
+                value={editingText(selected.requiredMessage, language)}
+                placeholder={translationPlaceholder(selected.requiredMessage, language) || 'Please answer this question'}
+                onChange={(event) =>
+                  onEdit(setQuestionContent(form, selected.id, { requiredMessage: event.target.value }, language))
+                }
               />
             </label>
           )}
-          <label className="small">
-            Only accept a value when <code>constraint</code>
-            <input
-              value={selected.validation?.constraint ?? ''}
-              spellCheck={false}
-              placeholder=". >= 0 and . <= 10"
-              onChange={(event) => onEdit(setQuestionLogic(form, selected.id, { constraint: event.target.value }))}
-            />
-          </label>
-          <label className="small">
-            Message when it fails
-            <input
-              value={selected.validation?.message?.[language] ?? ''}
-              spellCheck={false}
-              placeholder="Between 0 and 10"
-              onChange={(event) => onEdit(setQuestionLogic(form, selected.id, { constraintMessage: event.target.value }))}
-            />
-          </label>
-          <p className="muted small">
-            These are the strings the expression engine evaluates, and nothing here is checked by a second
-            parser. The analyser above reports what is wrong with them, and the preview shows what they do,
-            including an edit that named a question you have since removed.
-          </p>
+
+          {hasChoices(selected.type) && (
+            <fieldset className="studio-builder-choices">
+              <legend>
+                Choices <span className="muted small">{selectedChoices.length}</span>
+              </legend>
+              {sharedList ? (
+                <p className="small muted">
+                  These options are the shared list <code>{sharedList}</code>. Editing one changes every question
+                  that uses it.
+                </p>
+              ) : (
+                <p className="small muted">The options a respondent chooses from, in render order.</p>
+              )}
+              {selectedChoices.length === 0 ? (
+                <p className="small error">This question has no choices yet. Add one below.</p>
+              ) : (
+                <ol className="studio-builder-option-list">
+                  {selectedChoices.map((choice, index) => (
+                    <li className="studio-builder-option" key={`${choice.value}-${index}`}>
+                      <span className="studio-builder-option-index muted small" aria-hidden="true">
+                        {index + 1}
+                      </span>
+                      <input
+                        aria-label={`Option ${index + 1} value`}
+                        value={choice.value}
+                        spellCheck={false}
+                        placeholder="value"
+                        onChange={(event) => onEdit(setChoiceValue(form, selected.id, index, event.target.value))}
+                      />
+                      <input
+                        aria-label={`Option ${index + 1} label`}
+                        value={editingText(choice.label, language)}
+                        placeholder={translationPlaceholder(choice.label, language) || 'Label'}
+                        onChange={(event) =>
+                          onEdit(setChoiceLabel(form, selected.id, index, event.target.value, language))
+                        }
+                      />
+                      <div className="row">
+                        <button
+                          type="button"
+                          className="ghost small"
+                          aria-label={`Move option ${index + 1} up`}
+                          disabled={index === 0}
+                          onClick={() => onEdit(moveChoice(form, selected.id, index, -1))}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost small"
+                          aria-label={`Move option ${index + 1} down`}
+                          disabled={index === selectedChoices.length - 1}
+                          onClick={() => onEdit(moveChoice(form, selected.id, index, 1))}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost small"
+                          aria-label={`Remove option ${index + 1}`}
+                          onClick={() => onEdit(removeChoice(form, selected.id, index))}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              <button
+                type="button"
+                className="ghost small"
+                onClick={() => onEdit(addChoice(form, selected.id, language))}
+              >
+                Add option
+              </button>
+            </fieldset>
+          )}
+
+          <details className="studio-builder-logic" open>
+            <summary>Logic & validation</summary>
+            <div className="studio-builder-logic-grid">
+              <label className="small">
+                Show this question when <code>visibleIf</code>
+                <input
+                  aria-label="Show this question when"
+                  value={selected.rules?.visibleIf ?? ''}
+                  spellCheck={false}
+                  placeholder="${consent} = 'yes'"
+                  onChange={(event) =>
+                    onEdit(setQuestionLogic(form, selected.id, { visibleIf: event.target.value }, language))
+                  }
+                />
+              </label>
+              <label className="small">
+                Make it read-only when <code>enableIf</code>
+                <input
+                  aria-label="Make it read-only when"
+                  value={selected.rules?.enableIf ?? ''}
+                  spellCheck={false}
+                  placeholder="${locked} = 'yes'"
+                  onChange={(event) =>
+                    onEdit(setQuestionLogic(form, selected.id, { enableIf: event.target.value }, language))
+                  }
+                />
+              </label>
+              {selected.type === 'calculate' && (
+                <label className="small">
+                  Calculate its value with <code>calculate</code>
+                  <input
+                    aria-label="Calculate its value with"
+                    value={selected.rules?.calculate ?? ''}
+                    spellCheck={false}
+                    placeholder="${q1} + ${q2}"
+                    onChange={(event) =>
+                      onEdit(setQuestionLogic(form, selected.id, { calculate: event.target.value }, language))
+                    }
+                  />
+                </label>
+              )}
+              {canFilterChoices(selected.type) && (
+                <label className="small">
+                  Filter its choices <code>choiceFilter</code>
+                  <input
+                    aria-label="Filter its choices"
+                    value={selected.rules?.choiceFilter ?? ''}
+                    spellCheck={false}
+                    placeholder="district = ${district}"
+                    onChange={(event) =>
+                      onEdit(setQuestionLogic(form, selected.id, { choiceFilter: event.target.value }, language))
+                    }
+                  />
+                </label>
+              )}
+              <label className="small">
+                Only accept a value when <code>constraint</code>
+                <input
+                  aria-label="Only accept a value when"
+                  value={selected.validation?.constraint ?? ''}
+                  spellCheck={false}
+                  placeholder=". >= 0 and . <= 10"
+                  onChange={(event) =>
+                    onEdit(setQuestionLogic(form, selected.id, { constraint: event.target.value }, language))
+                  }
+                />
+              </label>
+              <label className="small">
+                Message when it fails · {language}
+                <input
+                  aria-label="Message when it fails"
+                  value={editingText(selected.validation?.message, language)}
+                  spellCheck={false}
+                  placeholder={translationPlaceholder(selected.validation?.message, language) || 'Between 0 and 10'}
+                  onChange={(event) =>
+                    onEdit(setQuestionLogic(form, selected.id, { constraintMessage: event.target.value }, language))
+                  }
+                />
+              </label>
+            </div>
+            <p className="muted small">
+              These are the strings the expression engine evaluates, and nothing here is checked by a second
+              parser. The analyser above reports what is wrong with them, and the preview shows what they do,
+              including an edit that named a question you have since removed.
+            </p>
+          </details>
         </div>
       )}
     </div>

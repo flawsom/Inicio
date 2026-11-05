@@ -1,0 +1,60 @@
+table Responses
+	column ResponseId
+		dataType: string
+		summarizeBy: none
+		sourceColumn: ResponseId
+	column Status
+		dataType: string
+		summarizeBy: none
+		sourceColumn: Status
+	column StartedAt
+		dataType: dateTime
+		summarizeBy: none
+		sourceColumn: StartedAt
+	column SubmittedAt
+		dataType: dateTime
+		summarizeBy: none
+		sourceColumn: SubmittedAt
+	column DurationMinutes
+		dataType: double
+		formatString: 0.0
+		summarizeBy: none
+		sourceColumn: DurationMinutes
+	column DeviceId
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: DeviceId
+	column Interviewer
+		dataType: string
+		summarizeBy: none
+		sourceColumn: Interviewer
+	column SectionReached
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SectionReached
+	column CompletionPct
+		dataType: double
+		formatString: 0.0%
+		summarizeBy: none
+		sourceColumn: CompletionPct
+	column ConflictCount
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: ConflictCount
+	column FlagCount
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: FlagCount
+	partition Responses = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [ResponseId = text, Status = text, StartedAt = datetime, SubmittedAt = datetime, DurationMinutes = number, DeviceId = text, Interviewer = text, SectionReached = text, CompletionPct = number, ConflictCount = Int64.Type, FlagCount = Int64.Type],
+				        {}
+				    )
+				in
+				    Source

@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "code": "NAND",
+  "source": "NAND.docx",
+  "sourceTitle": "NAND",
+  "generatedAt": "2026-11-04T00:00:00.000Z",
+  "boundary": "Questionnaire intelligence only. Response tables are empty unless response rows were explicitly supplied; no synthetic respondents are created.",
+  "counts": {
+    "questions": 242,
+    "answerable": 198,
+    "sections": 3,
+    "required": 198,
+    "conditional": 0,
+    "requiredInAnyPath": 198,
+    "routed": 226,
+    "constraints": 1,
+    "choiceFilters": 0,
+    "choiceOptions": 663,
+    "logicReferences": 12577,
+    "families": 8,
+    "types": 7,
+    "estimatedSeconds": 5272,
+    "estimatedMinutes": 87.86666666666666,
+    "responses": 0,
+    "answers": 0
+  },
+  "pages": [
+    {
+      "name": "00 Cover",
+      "id": "b8bd657fdc0d9b29e7e3",
+      "visuals": 28
+    },
+    {
+      "name": "01 Executive read",
+      "id": "e709fa402988f5d42698",
+      "visuals": 21
+    },
+    {
+      "name": "02 Instrument architecture",
+      "id": "a0894bc9c0ea6b5a591d",
+      "visuals": 21
+    },
+    {
+      "name": "03 Routing & quality",
+      "id": "a9b9d33bb4be9035fe5a",
+      "visuals": 21
+    },
+    {
+      "name": "04 Analysis blueprint",
+      "id": "c74194f90ae8c9eba112",
+      "visuals": 17
+    },
+    {
+      "name": "05 Question atlas",
+      "id": "b22d7da7e13cc5905b2b",
+      "visuals": 15
+    },
+    {
+      "name": "06 Fieldwork readiness",
+      "id": "b23760fdc71b635f08c4",
+      "visuals": 19
+    }
+  ],
+  "visualCount": 142,
+  "semanticModel": {
+    "compatibilityLevel": 1567,
+    "tables": [
+      {
+        "name": "Questions",
+        "columns": 30,
+        "rows": 242,
+        "measures": 0
+      },
+      {
+        "name": "Sections",
+        "columns": 13,
+        "rows": 3,
+        "measures": 2
+      },
+      {
+        "name": "QuestionTypes",
+        "columns": 10,
+        "rows": 7,
+        "measures": 1
+      },
+      {
+        "name": "AnalysisFamilies",
+        "columns": 8,
+        "rows": 8,
+        "measures": 1
+      },
+      {
+        "name": "RoutingAnchors",
+        "columns": 7,
+        "rows": 10,
+        "measures": 1
+      },
+      {
+        "name": "RoutingHotspots",
+        "columns": 8,
+        "rows": 10,
+        "measures": 0
+      },
+      {
+        "name": "DataContract",
+        "columns": 6,
+        "rows": 8,
+        "measures": 0
+      },
+      {
+        "name": "Responses",
+        "columns": 11,
+        "rows": 0,
+        "measures": 0
+      },
+      {
+        "name": "Answers",
+        "columns": 7,
+        "rows": 0,
+        "measures": 0
+      },
+      {
+        "name": "_Measures",
+        "columns": 1,
+        "rows": 0,
+        "measures": 20
+      }
+    ],
+    "relationships": 7
+  },
+  "paths": {
+    "project": "NAND.pbip",
+    "report": "NAND.Report",
+    "semanticModel": "NAND.SemanticModel"
+  },
+  "evidence": {
+    "respondentData": "none",
+    "responseRows": 0,
+    "answerRows": 0
+  }
+}

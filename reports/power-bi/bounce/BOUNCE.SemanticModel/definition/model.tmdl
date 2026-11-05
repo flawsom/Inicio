@@ -1,0 +1,14 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	sourceQueryCulture: en-US
+	ref table Questions
+	ref table Sections
+	ref table QuestionTypes
+	ref table AnalysisFamilies
+	ref table RoutingAnchors
+	ref table RoutingHotspots
+	ref table DataContract
+	ref table Responses
+	ref table Answers
+	ref table _Measures

@@ -95,6 +95,79 @@ The tenant, capacity, workspace and artifact requirements are in
 either produce a stale snapshot or a file Power BI cannot open. The monitor and the
 plan are the honest first delivery.
 
+## The questionnaire-to-PBIP generator
+
+The repository also ships a reusable generator, `scripts/build-powerbi-report.mjs`
+(`pnpm powerbi:report`), so the five examples in `reports/power-bi` are not a fixed
+catalogue. It accepts any questionnaire and writes a complete Power BI Project:
+
+```bash
+pnpm powerbi:report -- --docx ./questionnaire.docx --code ACME --project-number 1612
+pnpm powerbi:report -- --definition ./form.json --code ACME
+pnpm powerbi:report -- --all ./questionnaires --out ./reports/power-bi
+pnpm powerbi:report -- --manifest ./studies.json
+```
+
+A `.docx` goes through the same DOCX compiler described in the root README and becomes the
+canonical `FormDefinition`; a JSON input is used directly. `analyzeDefinition()` then derives
+everything the report states from that definition: section volume, answerable and required
+counts, routing anchors, validation constraints, choice load, a planning-burden heuristic,
+question types and an analysis family for every question. There is no branch keyed on a
+study name and no per-questionnaire page code. The same seven-page composition is rebuilt
+for every input.
+
+### What the project contains
+
+- **`.pbip`** — the project shortcut that Power BI Desktop opens.
+- **`.Report`** — PBIR report definition: seven pages, 142 visuals, page and visual schemas,
+  the base Fluent2 theme, and the `Inicio Research Intelligence` custom theme.
+- **`.SemanticModel`** — TMDL model with ten tables, seven relationships and twenty DAX
+  measures. Questionnaire rows are embedded with Power Query `#table`; the model opens
+  without a gateway, a file path parameter or a refresh credential.
+- **`report-manifest.json`** — machine-readable counts, page ids, model summary and the
+  evidence boundary.
+- **`README.md`** — the study-specific opening instructions and the empty-response warning.
+
+The pages are: `00 Cover`, `01 Executive read`, `02 Instrument architecture`,
+`03 Routing & quality`, `04 Analysis blueprint`, `05 Question atlas` and
+`06 Fieldwork readiness`. The visual grammar is deliberately editorial rather than the
+Power BI default: warm paper, a dark cover, Georgia display type and a burnt-sienna, teal,
+ocher and plum palette. The page canvas is fixed at 1280 × 720, so the report itself never
+scrolls sideways; a long table may scroll inside its own visual.
+
+### The response boundary
+
+`Responses` and `Answers` always carry their schema. They carry **zero rows** unless real
+CSV files are passed with `--responses` and `--answers`. The cover, the readiness page and
+the manifest all state that no respondent data is present. This is what keeps a design
+dossier from being mistaken for a fieldwork finding:
+
+```bash
+pnpm powerbi:report -- \
+  --docx ./questionnaire.docx --code ACME \
+  --responses ./responses.csv --answers ./answers.csv
+```
+
+The expected columns match the model: `ResponseId`, `Status`, `StartedAt`, `SubmittedAt`,
+`DurationMinutes`, `DeviceId`, `Interviewer`, `SectionReached`, `CompletionPct`,
+`ConflictCount`, `FlagCount`; and `ResponseId`, `QuestionKey`, `AnswerText`, `AnswerNumber`,
+`AnsweredAt`, `DurationSeconds`, `IsFlagged`. The rows are normalised, not invented.
+
+### Reproducibility and checks
+
+The generator is deterministic: page ids and visual ids are hashes of the study code, page
+name and visual label; `--generated-at` pins the timestamp. `pnpm powerbi:test` runs five
+Node tests over a synthetic definition: questionnaire-derived counts, CSV quoting, indented
+TMDL with a valid star schema, unique in-bounds pages with resolvable fields, and a writer
+that leaves the response layer empty by default. The five generated examples additionally
+pass the Microsoft PBIR validator (0 errors, 0 warnings) and all 65 TMDL files parse with
+no unknown nodes.
+
+That is structural and schema validation, not a visual render. Power BI Desktop is not
+installed in this workspace, so the projects have not been opened and screenshotted here;
+the `.pbip` is the artifact Desktop opens. The generator also does not write a `.pbix`,
+for the reason documented above.
+
 ## Open-source and agent skills reviewed
 
 The request asked for the strongest Power BI and Fabric skills on GitHub. The useful
@@ -118,8 +191,8 @@ ones fall into three groups, and none of them changes the PBIX boundary:
   It is a young, self-verified project, not a foundation for a release path.
 
 The shipped code does not install an unreviewed agent plugin into the server. The
-standards above are encoded in the monitor and the report plan, where they can be
-tested.
+standards above are encoded in the monitor, the report plan and the questionnaire
+generator, where they can be tested.
 
 ## Using the plan in Power BI Desktop
 

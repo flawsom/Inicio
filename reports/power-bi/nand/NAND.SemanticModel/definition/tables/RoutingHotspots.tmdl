@@ -1,0 +1,58 @@
+table RoutingHotspots
+	column Rank
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: Rank
+	column QuestionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionKey
+	column Question
+		dataType: string
+		summarizeBy: none
+		sourceColumn: QuestionText
+	column Section
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SectionText
+	column Type
+		dataType: string
+		summarizeBy: none
+		sourceColumn: TypeText
+	column 'Logic refs'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: LogicReferences
+	column 'Rule kinds'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: RuleKinds
+	column 'Rule sample'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: RuleSample
+	partition RoutingHotspots = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [Rank = Int64.Type, QuestionKey = text, QuestionText = text, SectionText = text, TypeText = text, LogicReferences = Int64.Type, RuleKinds = text, RuleSample = text],
+				        {
+				            {1, "q_k3_2", "What is ONE thing that the system (government, NGOs, private sector) ge…", "Screener", "Open text", 138, "visibility", "(selected(${s0}, '1') or selected(${s0}, '2') or selected(${s0}, '3') or selected(${s0}, '4') or selected(${s0}, '5')) and (selected(${a1_3…"},
+				            {2, "q_k4", "What is ONE thing the system gets RIGHT - a support or program that act…", "Screener", "Open text", 138, "visibility", "(selected(${s0}, '1') or selected(${s0}, '2') or selected(${s0}, '3') or selected(${s0}, '4') or selected(${s0}, '5')) and (selected(${a1_3…"},
+				            {3, "q_k2", "Target annual income in 3 years with full support?", "Screener", "Whole number", 137, "visibility", "(selected(${s0}, '1') or selected(${s0}, '2') or selected(${s0}, '3') or selected(${s0}, '4') or selected(${s0}, '5')) and (selected(${a1_3…"},
+				            {4, "q_k3", "Is staying in your current district part of your plans?", "Screener", "Single choice", 137, "visibility", "(selected(${s0}, '1') or selected(${s0}, '2') or selected(${s0}, '3') or selected(${s0}, '4') or selected(${s0}, '5')) and (selected(${a1_3…"},
+				            {5, "q_k1", "In 5 years, what do you envision yourself doing?", "Screener", "Single choice", 136, "visibility", "(selected(${s0}, '1') or selected(${s0}, '2') or selected(${s0}, '3') or selected(${s0}, '4') or selected(${s0}, '5')) and (selected(${a1_3…"},
+				            {6, "q_m5", "How would you rate your farmer’s communication and interaction skills?", "Screener", "Single choice", 135, "visibility", "(selected(${s0}, '1') or selected(${s0}, '2') or selected(${s0}, '3') or selected(${s0}, '4') or selected(${s0}, '5')) and (selected(${a1_3…"},
+				            {7, "q_m4", "How would you rate your communication skills with farmers?", "Screener", "Single choice", 134, "visibility", "(selected(${s0}, '1') or selected(${s0}, '2') or selected(${s0}, '3') or selected(${s0}, '4') or selected(${s0}, '5')) and (selected(${a1_3…"},
+				            {8, "q_m3", "What is your primary mode of communication with farmers?", "Screener", "Single choice", 133, "visibility", "(selected(${s0}, '1') or selected(${s0}, '2') or selected(${s0}, '3') or selected(${s0}, '4') or selected(${s0}, '5')) and (selected(${a1_3…"},
+				            {9, "q_ask_m2_those_who_coded_1_in_m1m2_do_you_regularly_interact_w", "ASK M2 THOSE WHO CODED 1 IN M1M2 . Do you regularly interact with the f…", "Screener", "Single choice", 132, "visibility", "(selected(${s0}, '1') or selected(${s0}, '2') or selected(${s0}, '3') or selected(${s0}, '4') or selected(${s0}, '5')) and (selected(${a1_3…"},
+				            {10, "q_m1", "Please tell me if you have an existing farmer network?", "Screener", "Single choice", 131, "visibility", "(selected(${s0}, '1') or selected(${s0}, '2') or selected(${s0}, '3') or selected(${s0}, '4') or selected(${s0}, '5')) and (selected(${a1_3…"}
+				        }
+				    )
+				in
+				    Source

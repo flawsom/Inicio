@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "SemanticModel",
+    "displayName": "MEHAK"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "3adaece5-f43a-4fd5-8e04-c5bb700e895b"
+  }
+}

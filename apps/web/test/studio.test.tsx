@@ -151,6 +151,26 @@ function previewField(labelText: string): HTMLElement | null {
   return (fields.find((el) => el.querySelector('label')?.textContent?.includes(labelText)) as HTMLElement) ?? null;
 }
 
+function builderRow(labelText: string): HTMLElement {
+  const found = [...panel('Definition').querySelectorAll('.studio-builder-row')].find((el) =>
+    el.textContent?.includes(labelText),
+  );
+  if (!found) throw new Error(`no builder row containing "${labelText}"`);
+  return found as HTMLElement;
+}
+
+function builderEditor(): HTMLElement {
+  const found = panel('Definition').querySelector('.studio-builder-editor');
+  if (!found) throw new Error('no builder editor');
+  return found as HTMLElement;
+}
+
+function builderInput(label: string): HTMLInputElement {
+  const found = builderEditor().querySelector(`input[aria-label="${label}"]`);
+  if (!found) throw new Error(`no builder input "${label}"`);
+  return found as HTMLInputElement;
+}
+
 async function next(scope: HTMLElement = panel('Preview')): Promise<void> {
   await click(buttonIn(scope, 'Next'));
 }
@@ -417,6 +437,54 @@ describe('the definition studio', () => {
     // Erasing the text clears the metadata instead of leaving a stale prefix.
     await edit(input, '');
     expect(onMetadata).toHaveBeenLastCalledWith('sq3', '');
+  });
+
+  it('edits a question and its options in the visual builder, with no request', async () => {
+    await mount();
+    const before = calls.length;
+
+    await click(builderRow('Consent given?').querySelector('button.studio-builder-label') as HTMLElement);
+    await edit(builderInput('Question label'), 'Consent asked?');
+
+    // The edit is in the JSON source and the row beside it, not in a builder-only copy.
+    expect(textarea().value).toContain('Consent asked?');
+    expect(panel('Definition').textContent).toContain('Consent asked?');
+    expect(calls.slice(before).every((call) => call.method === 'GET')).toBe(true);
+
+    // Adding an option writes the option list the preview renders.
+    await click(buttonIn(builderEditor(), 'Add option'));
+    await edit(builderInput('Option 3 label'), 'Maybe');
+    expect(textarea().value).toContain('Maybe');
+    const consent = panel('Preview').querySelector('select') as HTMLSelectElement;
+    expect([...consent.options].map((option) => option.textContent)).toContain('Maybe');
+  });
+
+  it('adds a typed question into a section, with choices the analyser can see', async () => {
+    await mount();
+
+    const sections = panel('Definition').querySelector('details.studio-builder-sections') as HTMLDetailsElement;
+    await click(sections.querySelector('summary') as HTMLElement);
+    await click(buttonIn(sections, 'Add section'));
+    expect(textarea().value).toContain('"New section"');
+
+    await choose(panel('Definition').querySelector('select[aria-label="New question type"]') as HTMLSelectElement, 'select_one');
+    await click(buttonIn(panel('Definition'), 'Add question'));
+    await edit(builderInput('Question label'), 'Which district?');
+
+    const sectionSelect = builderEditor().querySelector('select[aria-label="Question section"]') as HTMLSelectElement;
+    expect([...sectionSelect.options].map((option) => option.textContent)).toContain('New section');
+    await choose(sectionSelect, [...sectionSelect.options].find((option) => option.textContent === 'New section')?.value ?? '');
+    expect(textarea().value).toContain('"groupId": "g_2"');
+
+    await click(buttonIn(builderEditor(), 'Add option'));
+    await click(buttonIn(builderEditor(), 'Add option'));
+    await edit(builderInput('Option 1 label'), 'North');
+    await edit(builderInput('Option 2 label'), 'South');
+    expect(textarea().value).toContain('North');
+    expect(textarea().value).toContain('South');
+
+    const report = panel('Definition').querySelector('.card');
+    expect(report?.textContent ?? '').toContain('No publish-blocking problems');
   });
 
   it('renders the preview with the respondent’s own field markup, not a lookalike', async () => {

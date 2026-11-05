@@ -1,0 +1,58 @@
+table RoutingHotspots
+	column Rank
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: Rank
+	column QuestionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionKey
+	column Question
+		dataType: string
+		summarizeBy: none
+		sourceColumn: QuestionText
+	column Section
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SectionText
+	column Type
+		dataType: string
+		summarizeBy: none
+		sourceColumn: TypeText
+	column 'Logic refs'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: LogicReferences
+	column 'Rule kinds'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: RuleKinds
+	column 'Rule sample'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: RuleSample
+	partition RoutingHotspots = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [Rank = Int64.Type, QuestionKey = text, QuestionText = text, SectionText = text, TypeText = text, LogicReferences = Int64.Type, RuleKinds = text, RuleSample = text],
+				        {
+				            {1, "q_dq3", "For the validity of this response, we request that you please give a mi…", "Screener", "Single choice", 10, "visibility", "(selected(${interviewer_instruction_show_screen}, '1') or selected(${interviewer_instruction_show_screen}, '2') or selected(${interviewer_i…"},
+				            {2, "q_n_4", "MESSAGE TO DISPLAY: I WILL NOW SHOW YOU MULTIPLE SCREENS, EACH DISPLAYI…", "Screener", "Note", 9, "visibility", "(selected(${interviewer_instruction_show_screen}, '1') or selected(${interviewer_instruction_show_screen}, '2') or selected(${interviewer_i…"},
+				            {3, "q_dq2", "Thanks for participating in the study; your feedback is valuable to us.…", "Screener", "Single choice", 9, "visibility", "(selected(${interviewer_instruction_show_screen}, '1') or selected(${interviewer_instruction_show_screen}, '2') or selected(${interviewer_i…"},
+				            {4, "q_cq2", "How unique do you find this promo? SA", "Screener", "Single choice", 8, "visibility", "(selected(${interviewer_instruction_show_screen}, '1') or selected(${interviewer_instruction_show_screen}, '2') or selected(${interviewer_i…"},
+				            {5, "q_cq1", "How much do you like or dislike this promo? SA", "Screener", "Single choice", 7, "visibility", "(selected(${interviewer_instruction_show_screen}, '1') or selected(${interviewer_instruction_show_screen}, '2') or selected(${interviewer_i…"},
+				            {6, "q_rotation_grid_for_centre_hubli_code", "ROTATION GRID- FOR CENTRE (HUBLI) | Code", "Screener", "Single choice", 6, "visibility", "(selected(${interviewer_instruction_show_screen}, '1') or selected(${interviewer_instruction_show_screen}, '2') or selected(${interviewer_i…"},
+				            {7, "q_sq8d", "How often do you use crystal salt for preparing any dish in your househ…", "Screener", "Open text", 5, "visibility", "(selected(${interviewer_instruction_show_screen}, '1') or selected(${interviewer_instruction_show_screen}, '2') or selected(${interviewer_i…"},
+				            {8, "q_vizag_hubli_kolkata_bhubaneshwar", "Vizag | Hubli | Kolkata | Bhubaneshwar", "Screener", "Open text", 5, "visibility", "(selected(${interviewer_instruction_show_screen}, '1') or selected(${interviewer_instruction_show_screen}, '2') or selected(${interviewer_i…"},
+				            {9, "q_n_2", "MESSAGE TO DISPLAY: I WILL NOW SHOW YOU 6 DIFFERENT PROMOTIONAL OPTIONS…", "Screener", "Note", 5, "visibility", "(selected(${interviewer_instruction_show_screen}, '1') or selected(${interviewer_instruction_show_screen}, '2') or selected(${interviewer_i…"},
+				            {10, "q_n_3", "MESSAGE TO DISPLAY: I WILL NOW SHOW YOU 8 DIFFERENT PROMOTIONAL OPTIONS…", "Screener", "Note", 5, "visibility", "(selected(${interviewer_instruction_show_screen}, '1') or selected(${interviewer_instruction_show_screen}, '2') or selected(${interviewer_i…"}
+				        }
+				    )
+				in
+				    Source

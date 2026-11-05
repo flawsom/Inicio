@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "SemanticModel",
+    "displayName": "HEER"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "96a9f1ad-6777-44d8-8816-1f487e75b8f3"
+  }
+}

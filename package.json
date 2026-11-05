@@ -23,6 +23,8 @@
     "budgets": "node scripts/check-budgets.mjs",
     "fabric:deploy": "node scripts/fabric-deploy.mjs",
     "fabric:test": "node --test scripts/fabric-deploy.test.mjs",
+    "powerbi:report": "node scripts/build-powerbi-report.mjs",
+    "powerbi:test": "node --test scripts/build-powerbi-report.test.mjs",
     "superset:provision": "node scripts/superset-provision.mjs",
     "superset:test": "node --test scripts/superset-provision.test.mjs",
     "icons": "node scripts/make-icons.mjs",

@@ -1,0 +1,85 @@
+{
+  "name": "Inicio Research Intelligence.json",
+  "dataColors": [
+    "#B4431D",
+    "#0E6B63",
+    "#B27A1E",
+    "#395B70",
+    "#70465F",
+    "#66704A",
+    "#8C5A3C",
+    "#4F5D66"
+  ],
+  "background": "#F6F0E6",
+  "foreground": "#1C1917",
+  "tableAccent": "#B4431D",
+  "good": "#2F6B4F",
+  "neutral": "#B27A1E",
+  "bad": "#A33A2B",
+  "textClasses": {
+    "title": {
+      "fontFace": "Georgia",
+      "fontSize": 26,
+      "color": "#1C1917"
+    },
+    "header": {
+      "fontFace": "Segoe UI Semibold",
+      "fontSize": 13,
+      "color": "#1C1917"
+    },
+    "label": {
+      "fontFace": "Segoe UI",
+      "fontSize": 10,
+      "color": "#756A5E"
+    },
+    "callout": {
+      "fontFace": "Georgia",
+      "fontSize": 26,
+      "color": "#1C1917"
+    }
+  },
+  "visualStyles": {
+    "*": {
+      "*": {
+        "background": [
+          {
+            "show": false
+          }
+        ],
+        "border": [
+          {
+            "show": false
+          }
+        ],
+        "dropShadow": [
+          {
+            "show": false
+          }
+        ],
+        "visualHeader": [
+          {
+            "show": false
+          }
+        ]
+      }
+    },
+    "cardVisual": {
+      "*": {
+        "value": [
+          {
+            "fontFamily": "Georgia",
+            "fontSize": 24,
+            "fontColor": "#1C1917"
+          }
+        ],
+        "label": [
+          {
+            "fontFamily": "Segoe UI",
+            "fontSize": 9,
+            "fontColor": "#756A5E"
+          }
+        ]
+      }
+    }
+  }
+}

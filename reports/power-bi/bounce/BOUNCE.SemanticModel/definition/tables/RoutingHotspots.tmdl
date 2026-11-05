@@ -1,0 +1,58 @@
+table RoutingHotspots
+	column Rank
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: Rank
+	column QuestionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionKey
+	column Question
+		dataType: string
+		summarizeBy: none
+		sourceColumn: QuestionText
+	column Section
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SectionText
+	column Type
+		dataType: string
+		summarizeBy: none
+		sourceColumn: TypeText
+	column 'Logic refs'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: LogicReferences
+	column 'Rule kinds'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: RuleKinds
+	column 'Rule sample'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: RuleSample
+	partition RoutingHotspots = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [Rank = Int64.Type, QuestionKey = text, QuestionText = text, SectionText = text, TypeText = text, LogicReferences = Int64.Type, RuleKinds = text, RuleSample = text],
+				        {
+				            {1, "q_a1", "Which platforms do you deliver for? mark all that apply. ROTATE OPTIONS", "Main Questionnaire", "Multi-select", 2, "visibility, constraint", "selected(${glob_term}, '1')"},
+				            {2, "q_b1_po", "Post-code", "Main Questionnaire", "Calculated / audit", 2, "visibility, calculation", "selected(${glob_term}, '1')"},
+				            {3, "q_b1_po_dis", "Post-code display", "Main Questionnaire", "Calculated / audit", 2, "visibility, calculation", "selected(${glob_term}, '1')"},
+				            {4, "q_b7b1", "How much more do you save? ________", "Main Questionnaire", "Whole number", 2, "visibility, constraint", "(selected(${glob_term}, '1')) and (selected(${b7a}, '1') or selected(${b7a}, '2') or selected(${b7a}, '3'))"},
+				            {5, "q_b7b2", "How much less do you save? _______", "Main Questionnaire", "Whole number", 2, "visibility, constraint", "(selected(${glob_term}, '1')) and (selected(${b7a}, '4') or selected(${b7a}, '5'))"},
+				            {6, "q_e2b", "What are the other reasons in choosing Bounce?", "Main Questionnaire", "Multi-select", 2, "visibility, choice filter", "selected(${glob_term}, '1')"},
+				            {7, "q_x2", "In total, how long did you use it? Months: ______", "Main Questionnaire", "Whole number", 2, "visibility, constraint", "(selected(${glob_term}, '1')) and (selected(${z0}, '2'))"},
+				            {8, "q_x6a", "Days a week", "At your busiest, how many days a…", "Whole number", 2, "visibility, constraint", "(selected(${glob_term}, '1')) and (selected(${z0}, '2'))"},
+				            {9, "q_x6b", "INR/day", "At your busiest, how many days a…", "Whole number", 2, "visibility, constraint", "(selected(${glob_term}, '1')) and (selected(${z0}, '2'))"},
+				            {10, "q_s3", "How long have you used or did you use a Bounce scooter? SA", "Screener", "Single choice", 2, "visibility", "(selected(${s1}, '1') or selected(${s1}, '2') or selected(${s1}, '3')) and (selected(${s2}, '1') or selected(${s2}, '2') or selected(${s2},…"}
+				        }
+				    )
+				in
+				    Source

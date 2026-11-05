@@ -1,0 +1,55 @@
+table RoutingAnchors
+	measure 'Plotted inbound references' = SUM('RoutingAnchors'[Inbound refs])
+		formatString: #,##0
+	column Rank
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: Rank
+	column QuestionKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: QuestionKey
+	column Question
+		dataType: string
+		summarizeBy: none
+		sourceColumn: QuestionText
+	column Section
+		dataType: string
+		summarizeBy: none
+		sourceColumn: SectionText
+	column Type
+		dataType: string
+		summarizeBy: none
+		sourceColumn: TypeText
+	column 'Inbound refs'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: InboundReferences
+	column 'Rule kinds'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: RuleKinds
+	partition RoutingAnchors = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [Rank = Int64.Type, QuestionKey = text, QuestionText = text, SectionText = text, TypeText = text, InboundReferences = Int64.Type, RuleKinds = text],
+				        {
+				            {1, "q_s0", "Please select the District. SA", "Screener", "Single choice", 196, "referenced"},
+				            {2, "q_a1_3", "Which occupations do family members engage in?", "Screener", "Single choice", 192, "visibility"},
+				            {3, "q_a1_4", "What are your household’s main sources of income?", "Screener", "Single choice", 191, "visibility"},
+				            {4, "q_a1_8", "Please rank the purposes you selected above in order of i…", "Screener", "Ranking", 187, "visibility"},
+				            {5, "q_a1_12", "From which institution/agency do you usually purchase?", "Screener", "Single choice", 183, "visibility"},
+				            {6, "q_a1_14", "What is the breeding method used for the herd?", "Screener", "Single choice", 181, "visibility"},
+				            {7, "q_now_let_s_talk_about_these_insert_the_breed_coded_in_q1b_1_i", "Now let’s talk about these <INSERT THE BREED CODED IN Q1b…", "Screener", "Single choice", 178, "visibility"},
+				            {8, "q_and_how_many_months_pregnant_is_this_insert_one_by_one_from_", "And how many months pregnant is this <INSERT ONE BY ONE F…", "Screener", "Multi-select", 176, "visibility"},
+				            {9, "q_how_much_total_milk_you_yield_per_day_from_insert_one_by_one", "How much total milk you yield per day from <INSERT ONE BY…", "Screener", "Single choice", 174, "visibility"},
+				            {10, "q_q1db", "What is the average lactation length of your cattle?", "Screener", "Single choice", 172, "visibility"}
+				        }
+				    )
+				in
+				    Source

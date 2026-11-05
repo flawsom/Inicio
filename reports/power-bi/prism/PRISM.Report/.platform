@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Report",
+    "displayName": "PRISM"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "67faacc0-fbd9-4fd7-80d7-a1d9e6c7b2e1"
+  }
+}

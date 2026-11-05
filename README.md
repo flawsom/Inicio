@@ -370,6 +370,7 @@ standing, rather than showing the definition they used to have.
 | 🧾 **Consent with evidence** | `terms_acceptance` stores policy version, text hash, timestamp, IP and user agent, append-only and tenant-scoped. |
 | 🕵️ **Audit trail** | Material writes (membership, role, invitation, publish, import, export) are recorded as org-scoped audit rows. |
 | 🖥️ **Live analyser** | The studio validates the definition on every keystroke — not on save — and reports errors and warnings with the question name in them, in the panel you are typing into. |
+| 🧭 **A Power BI dossier for any questionnaire** | `pnpm powerbi:report` compiles a Word questionnaire or a canonical definition into a seven-page Power BI Project with an embedded TMDL model: cover, executive read, instrument architecture, routing and quality, analysis blueprint, question atlas and fieldwork readiness. The pages are derived from the questionnaire's own sections, types, routing, constraints and choice load — there is no branch keyed on a study name. Five example projects are in [`reports/power-bi`](./reports/power-bi), each with 142 visuals and an editorial theme. Response tables stay empty unless real CSVs are supplied, so a design dossier is never mistaken for fieldwork evidence. It is a PBIP, not a `.pbix`, because Microsoft does not write a model-bearing PBIX outside Desktop; the five outputs pass the Microsoft PBIR validator with 0 errors and 0 warnings. See [`docs/POWER-BI.md`](./docs/POWER-BI.md). |
 | 📊 **A live monitor for every form** | Each published form has a **Live monitor** tab that charts every answerable field, not a hand-picked few: bars for single and multi select, a histogram with mean, median, minimum and maximum for numbers, a daily line for dates, coordinates for geo fields, and presence counts for files. The screen reads the live analytics aggregate, so a submission lands on the next push; a timer runs only while the stream is down. Every chart has a data table, a base size and an explicit empty state, and every table exports as CSV, one question at a time or as one tidy file. The same model emits a deterministic Power BI report plan with DAX measures, a 1280×720 layout on an 8 px grid and the honest limitation that Microsoft does not write a model-bearing `.pbix` outside Desktop. `pnpm fabric:deploy` then publishes a Desktop-made PBIX or a PBIR report folder through the supported Microsoft APIs when a service principal is configured. For a licence-free path, `pnpm superset:provision` uploads the same tidy CSV to the self-hosted Apache Superset stack in [`docker/superset`](./docker/superset); Superset is Apache-2.0 with no seat or report cap, and the resulting dashboard is an explicit snapshot rather than the live monitor. See [`docs/POWER-BI.md`](./docs/POWER-BI.md) and [`docs/FREE-BI.md`](./docs/FREE-BI.md). |
 | 📡 **An honest live indicator** | The console header says whether the push channel is connected, and the screens fall back to a timer only when it is not. "Live" is a claim about the connection, not a style. |
 | 🔌 **An integration surface, not a token** | An API key is a restricted session for its creator: same tenant boundary, narrower reach, dead the moment they leave the team. Revocation is not a second mechanism that can drift. |
@@ -918,6 +919,7 @@ pnpm coverage     # v8 coverage, per package
 pnpm build       # engine -> api -> web
 pnpm budgets     # the built bundle, gzipped, against its ceilings
 pnpm fabric:test # the Fabric deploy command's artifact and secret boundaries
+pnpm powerbi:test # questionnaire -> PBIP analysis, report and model invariants
 pnpm superset:test # the free BI provisioning client, against a mock Superset
 pnpm drift       # is production running the migrations this checkout has?
 ```
@@ -1035,16 +1037,19 @@ Inicio
 │   └── superset/                    pinned Apache Superset 6.1.0 stack for the free BI path
 ├── docs/
 │   ├── ROADMAP.md                   verified status, what is missing, free-tier ceilings
-│   ├── POWER-BI.md                  live monitor, report plan and the PBIX/Fabric boundary
+│   ├── POWER-BI.md                  live monitor, questionnaire-to-PBIP generator and the PBIX/Fabric boundary
 │   ├── FREE-BI.md                   free-forever BI research, Superset stack and provisioning
 │   ├── MARKET-RESEARCH.md           why the product is shaped this way
 │   └── assets/*.svg                 the illustrations in this README
+├── reports/power-bi                 five generated PBIP examples, and the generic reporting pipeline's index
 ├── specs/
 │   ├── PLATFORM.md                  canonical design (supersedes the school framing)
 │   ├── openapi.yaml                 the API contract
 │   ├── expression-grammar.md        the grammar the engine implements
 │   └── questionnaire.json           the 2026 school ranking survey, as template #1
 ├── scripts
+│   ├── build-powerbi-report.mjs     any questionnaire -> seven-page PBIP/PBIR + TMDL
+│   ├── powerbi/                     study analysis, model and report composition
 │   ├── sandbox-setup.sh             rootless local stack (pnpm + embedded PostgreSQL 16)
 │   ├── e2e-consumer.mjs             the whole consumer journey over HTTP, against a real database
 │   ├── e2e-offline.mjs              the offline sync contract, conflicts included
@@ -2110,6 +2115,7 @@ ceilings underneath — lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). This is t
 - [x] **Multi-tenant schema, `FORCE` row-level security and an audit trail**
 - [x] **Invitation-only identity** — one-time codes, sessions, roles (owner / admin / member / viewer)
 - [x] **Authoring** — schema or JSON, with a live analyser that blocks a bad publish
+- [x] **A visual builder and logic editor** — question labels and hints in any language, export names, types, sections, required flags, inline or shared choices, duplicate, reorder, delete, and the engine's visibility, read-only, calculate, choice-filter and validation expressions; every control writes through the JSON panel, and the analyser reports a broken edit instead of silently repairing it
 - [x] **A real expression engine** — relevance, constraints, calculations, choice filters
 - [x] **XLSForm import and export**, with a round-trip fixpoint and a report of what could not be carried
 - [x] **Word questionnaire intake**: `.docx` uploads compile through a 12-rule extractor into the canonical model, with statement grids, `field-list` groups, SurveyCTO metadata and a report of what needs review
@@ -2121,6 +2127,7 @@ ceilings underneath — lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). This is t
 - [x] **An installable PWA** that caches the shell and never the data
 - [x] **Exports that carry meaning** — CSV bundle (data + codebook + labels + missing codes), XLSX, JSON, and SPSS `.sav` / Stata `.dta` from the pyreadstat worker, whose binary output is read back by its own round-trip script — which found and fixed two defects the first time it ran — with `&codebook=1` shipping the codebook beside the data file
 - [x] **Live analytics** recomputed per request, plus per-response conflict counts
+- [x] **A Power BI dossier for any questionnaire** — `pnpm powerbi:report` turns a Word file or canonical definition into a seven-page PBIP with an embedded TMDL model, a questionnaire-derived analysis plan and an empty-by-default response layer; five PBIR/TMDL examples are in `reports/power-bi`
 - [x] **Pushed, not polled**: one server-sent event stream per form, coalesced per aggregate, with an honest connection indicator and a timer that only starts when the stream is gone
 - [x] **An immersive public surface**: a WebGL landing page whose every figure is read live from the API, and which is complete and readable without the scene
 - [x] **Quality flags and a flag queue** — speeding, straight-lining, duplicates, and findings raised by hand, each with its evidence and its recorded decision
@@ -2137,7 +2144,6 @@ ceilings underneath — lives in [`docs/ROADMAP.md`](docs/ROADMAP.md). This is t
 
 - [ ] **Backups and one rehearsed restore** — currently *not done*, and the single most important gap: nothing dumps the database, and no restore has ever been rehearsed
 - [ ] **A WCAG 2.2 AA audit and a Lighthouse budget** — everything a rule engine can decide is already enforced on every push (the colour measurements, the `axe-core` audit, the byte ceilings); what is still missing is a person with a screen reader, a keyboard-only pass over every signed-in screen, and a Lighthouse run against the deployment with the sign-in flow scripted — which is why [Lighthouse](#lighthouse) is empty rather than filled with a number nobody can reproduce
-- [ ] **A visual builder and logic editor** — the JSON editor is complete; the drag-and-drop surface is being written now, so treat it as in progress rather than as something you can use yet
 
 ### 🧭 Longer horizon
 

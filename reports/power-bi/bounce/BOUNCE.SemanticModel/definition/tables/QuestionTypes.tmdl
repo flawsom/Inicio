@@ -1,0 +1,70 @@
+table QuestionTypes
+	measure 'Plotted type questions' = SUM('QuestionTypes'[Questions])
+		formatString: #,##0
+	column TypeKey
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: TypeKey
+	column Type
+		dataType: string
+		summarizeBy: none
+		sortByColumn: TypeOrder
+		sourceColumn: TypeText
+	column TypeOrder
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: TypeOrder
+	column Questions
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: QuestionCount
+	column Answerable
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: AnswerableCount
+	column Required
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: RequiredCount
+	column Routed
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: RoutedCount
+	column Constraints
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: ConstraintCount
+	column Choices
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: ChoiceCount
+	column 'Est. minutes'
+		dataType: double
+		formatString: 0.0
+		summarizeBy: none
+		sourceColumn: EstimatedMinutes
+	partition QuestionTypes = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [TypeKey = text, TypeText = text, TypeOrder = Int64.Type, QuestionCount = Int64.Type, AnswerableCount = Int64.Type, RequiredCount = Int64.Type, RoutedCount = Int64.Type, ConstraintCount = Int64.Type, ChoiceCount = Int64.Type, EstimatedMinutes = number],
+				        {
+				            {"select_one", "Single choice", 0, 38, 38, 38, 37, 0, 175, 12.033333333333333},
+				            {"select_multiple", "Multi-select", 1, 9, 9, 6, 6, 8, 45, 4.5},
+				            {"text", "Open text", 3, 14, 14, 14, 10, 3, 0, 10.166666666666666},
+				            {"integer", "Whole number", 5, 19, 19, 16, 15, 17, 0, 6.333333333333333},
+				            {"note", "Note", 22, 4, 0, 0, 3, 0, 0, 0.15},
+				            {"calculate", "Calculated / audit", 23, 32, 0, 0, 17, 0, 0, 0.85}
+				        }
+				    )
+				in
+				    Source

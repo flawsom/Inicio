@@ -1,0 +1,45 @@
+table _Measures
+	measure 'Question count' = COUNTROWS('Questions')
+		formatString: #,##0
+	measure 'Answerable questions' = CALCULATE(COUNTROWS('Questions'), 'Questions'[AnswerableFlag] = TRUE())
+		formatString: #,##0
+	measure 'Required questions' = CALCULATE(COUNTROWS('Questions'), 'Questions'[RequiredFlag] = TRUE())
+		formatString: #,##0
+	measure 'Conditionally required' = CALCULATE(COUNTROWS('Questions'), 'Questions'[RequiredMode] = "conditional")
+		formatString: #,##0
+	measure 'Routing rules' = CALCULATE(COUNTROWS('Questions'), 'Questions'[LogicFlag] = TRUE())
+		formatString: #,##0
+	measure Constraints = CALCULATE(COUNTROWS('Questions'), 'Questions'[ConstraintFlag] = TRUE())
+		formatString: #,##0
+	measure 'Choice filters' = CALCULATE(COUNTROWS('Questions'), 'Questions'[ChoiceFilterFlag] = TRUE())
+		formatString: #,##0
+	measure 'Choice options' = SUM('Questions'[Choices])
+		formatString: #,##0
+	measure 'Section count' = DISTINCTCOUNT('Questions'[SectionKey])
+		formatString: #,##0
+	measure 'Estimated minutes' = DIVIDE(SUM('Questions'[Est. sec]), 60)
+		formatString: 0.0
+	measure 'Analysis families' = DISTINCTCOUNT('Questions'[Analysis])
+		formatString: #,##0
+	measure 'Logic references' = SUM('Questions'[Logic refs])
+		formatString: #,##0
+	measure 'Open text questions' = CALCULATE(COUNTROWS('Questions'), 'Questions'[Analysis] = "Verbatim coding")
+		formatString: #,##0
+	measure 'Numeric questions' = CALCULATE(COUNTROWS('Questions'), 'Questions'[Analysis] = "Numeric distribution")
+		formatString: #,##0
+	measure 'Median choices' = MEDIAN('Questions'[Choices])
+		formatString: 0
+	measure 'Fieldwork status' = IF(COUNTROWS('Responses') = 0, "Awaiting data", "Loaded")
+	measure 'Responses loaded' = IF(COUNTROWS('Responses') = 0, "0", FORMAT(COUNTROWS('Responses'), "#,##0"))
+	measure Completion = IF(COUNTROWS('Responses') = 0, "—", FORMAT(DIVIDE(CALCULATE(COUNTROWS('Responses'), 'Responses'[Status] = "Submitted"), COUNTROWS('Responses')), "0.0%"))
+	measure 'Quality flags' = IF(COUNTROWS('Responses') = 0, "—", FORMAT(SUM('Responses'[FlagCount]), "#,##0"))
+	measure 'Answer rows' = COUNTROWS('Answers')
+		formatString: #,##0
+	column Dummy
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: [Dummy]
+	partition _Measures = calculated
+		mode: import
+		source = ROW("Dummy", BLANK())

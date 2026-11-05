@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "code": "MEHAK",
+  "source": "MEHAK.docx",
+  "sourceTitle": "MEHAK",
+  "generatedAt": "2026-11-04T00:00:00.000Z",
+  "boundary": "Questionnaire intelligence only. Response tables are empty unless response rows were explicitly supplied; no synthetic respondents are created.",
+  "counts": {
+    "questions": 60,
+    "answerable": 42,
+    "sections": 5,
+    "required": 42,
+    "conditional": 0,
+    "requiredInAnyPath": 42,
+    "routed": 43,
+    "constraints": 4,
+    "choiceFilters": 2,
+    "choiceOptions": 178,
+    "logicReferences": 110,
+    "families": 7,
+    "types": 6,
+    "estimatedSeconds": 1176,
+    "estimatedMinutes": 19.6,
+    "responses": 0,
+    "answers": 0
+  },
+  "pages": [
+    {
+      "name": "00 Cover",
+      "id": "0f3d122116e8be564e0b",
+      "visuals": 28
+    },
+    {
+      "name": "01 Executive read",
+      "id": "7623ed5e8054c2f087d8",
+      "visuals": 21
+    },
+    {
+      "name": "02 Instrument architecture",
+      "id": "7278e42f8caec7fe3be9",
+      "visuals": 21
+    },
+    {
+      "name": "03 Routing & quality",
+      "id": "04cd07801081e774f1ed",
+      "visuals": 21
+    },
+    {
+      "name": "04 Analysis blueprint",
+      "id": "292a53b80214f9ef712b",
+      "visuals": 17
+    },
+    {
+      "name": "05 Question atlas",
+      "id": "893d02a95d315299c795",
+      "visuals": 15
+    },
+    {
+      "name": "06 Fieldwork readiness",
+      "id": "f802f9480c76d0990731",
+      "visuals": 19
+    }
+  ],
+  "visualCount": 142,
+  "semanticModel": {
+    "compatibilityLevel": 1567,
+    "tables": [
+      {
+        "name": "Questions",
+        "columns": 30,
+        "rows": 60,
+        "measures": 0
+      },
+      {
+        "name": "Sections",
+        "columns": 13,
+        "rows": 5,
+        "measures": 2
+      },
+      {
+        "name": "QuestionTypes",
+        "columns": 10,
+        "rows": 6,
+        "measures": 1
+      },
+      {
+        "name": "AnalysisFamilies",
+        "columns": 8,
+        "rows": 7,
+        "measures": 1
+      },
+      {
+        "name": "RoutingAnchors",
+        "columns": 7,
+        "rows": 10,
+        "measures": 1
+      },
+      {
+        "name": "RoutingHotspots",
+        "columns": 8,
+        "rows": 10,
+        "measures": 0
+      },
+      {
+        "name": "DataContract",
+        "columns": 6,
+        "rows": 8,
+        "measures": 0
+      },
+      {
+        "name": "Responses",
+        "columns": 11,
+        "rows": 0,
+        "measures": 0
+      },
+      {
+        "name": "Answers",
+        "columns": 7,
+        "rows": 0,
+        "measures": 0
+      },
+      {
+        "name": "_Measures",
+        "columns": 1,
+        "rows": 0,
+        "measures": 20
+      }
+    ],
+    "relationships": 7
+  },
+  "paths": {
+    "project": "MEHAK.pbip",
+    "report": "MEHAK.Report",
+    "semanticModel": "MEHAK.SemanticModel"
+  },
+  "evidence": {
+    "respondentData": "none",
+    "responseRows": 0,
+    "answerRows": 0
+  }
+}

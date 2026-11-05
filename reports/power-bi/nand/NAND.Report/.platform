@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Report",
+    "displayName": "NAND"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "ce4f3fdf-1a41-490f-85cf-1a8d442b36c8"
+  }
+}
