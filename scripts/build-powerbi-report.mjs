@@ -147,7 +147,7 @@ export function writeStudyProject(study, options = {}) {
 }
 
 function projectReadme(study, manifest) {
-  return `# ${study.code} — Power BI design dossier
+  return `# ${study.code} - Power BI design dossier
 
 Generated from **${study.sourceLabel}** on ${study.generatedAt.slice(0, 10)}.
 
@@ -155,7 +155,7 @@ This folder is a **Power BI Project (PBIP)**. Open \`${study.code}.pbip\` in Pow
 
 ## What is in the report
 
-${manifest.pages.map((page, index) => `${index + 1}. **${page.name}** — ${page.visuals} visual${page.visuals === 1 ? '' : 's'}`).join('\n')}
+${manifest.pages.map((page, index) => `${index + 1}. **${page.name}** - ${page.visuals} visual${page.visuals === 1 ? '' : 's'}`).join('\n')}
 
 ## What the model contains
 

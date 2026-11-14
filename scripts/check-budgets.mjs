@@ -50,7 +50,7 @@ const budgets = {
   // a third of the single-chunk ceiling.
   studioJs: 40 * 1024,
   // The pointer trail. Twenty springs of fifty beads and the curve through them, on
-  // every route but only after a pointer has moved — it is the smallest lazy chunk in
+  // every route but only after a pointer has moved - it is the smallest lazy chunk in
   // the build, and it is the one that must never be *imported* statically, because it
   // is decoration and nobody should wait for it before the first paint.
   cursorJs: 4 * 1024,
@@ -164,17 +164,17 @@ if (!instrument) {
      * And the trail, on the same argument: a decoration on every route is exactly the thing
      * somebody is tempted to import statically because "it is only a canvas".
      *
-     * The markers are the curve call and the ribbon's own colour string — `hsla(`, written
+     * The markers are the curve call and the ribbon's own colour string - `hsla(`, written
      * once, with a hue that walks a slow sine. Both exist nowhere else in the app and both
      * survive minification, because a canvas method is a property name and an `hsla()`
-     * string is a string. `mountCursorTrail` deliberately is *not* a marker: the call site —
-     * `module.mountCursorTrail(canvas)` — is in the entry chunk by definition, because the
+     * string is a string. `mountCursorTrail` deliberately is *not* a marker: the call site -
+     * `module.mountCursorTrail(canvas)` - is in the entry chunk by definition, because the
      * property being called on a dynamically imported module cannot be renamed. That is the
      * call, not the code.
      *
      * `any-pointer: fine` was the second marker and is not one any more, for the reason this
      * build made it wrong: the shell now asks that question itself, ahead of the fetch
-     * (`wantsCursorTrail`), so the query string is *supposed* to be in the entry chunk — it is
+     * (`wantsCursorTrail`), so the query string is *supposed* to be in the entry chunk - it is
      * what stops a phone downloading the chunk at all.
      */
     for (const marker of ['quadraticCurveTo', 'hsla(']) {

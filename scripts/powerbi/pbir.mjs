@@ -10,7 +10,7 @@
  */
 import { createHash } from 'node:crypto';
 
-const VISUAL_SCHEMA = 'https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.9.0/schema.json';
+const VISUAL_SCHEMA = 'https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.12.0/schema.json';
 const PAGE_SCHEMA = 'https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/2.1.0/schema.json';
 const PAGES_SCHEMA = 'https://developer.microsoft.com/json-schemas/fabric/item/report/definition/pagesMetadata/1.1.0/schema.json';
 const REPORT_SCHEMA = 'https://developer.microsoft.com/json-schemas/fabric/item/report/definition/report/3.3.0/schema.json';
@@ -294,7 +294,7 @@ class PageBuilder {
           value: [{
             properties: {
               fontSize: numberLiteral(valueSize),
-              fontFamily: literal(FONT.display),
+              fontFamily: textLiteral(FONT.display),
               fontColor: colorValue(C.ink),
             },
             selector: { id: 'default' },
@@ -302,7 +302,7 @@ class PageBuilder {
           label: [{
             properties: {
               fontSize: numberLiteral(labelSize),
-              fontFamily: literal(FONT.body),
+              fontFamily: textLiteral(FONT.body),
               fontColor: colorValue(C.muted),
               show: bool(true),
             },
@@ -387,7 +387,7 @@ class PageBuilder {
             properties: {
               show: bool(true),
               fontSize: numberLiteral(9),
-              fontFamily: literal(FONT.body),
+              fontFamily: textLiteral(FONT.body),
               color: colorValue(C.ink),
               labelOverflow: bool(false),
             },
@@ -397,7 +397,7 @@ class PageBuilder {
             properties: {
               show: bool(true),
               showAxisTitle: bool(false),
-              fontFamily: literal(FONT.body),
+              fontFamily: textLiteral(FONT.body),
               fontSize: numberLiteral(9),
               labelColor: colorValue(C.ink),
               maxMarginFactor: numberLiteral(35),
@@ -447,7 +447,7 @@ class PageBuilder {
           }],
           columnHeaders: [{
             properties: {
-              fontFamily: literal(FONT.semibold),
+              fontFamily: textLiteral(FONT.semibold),
               fontSize: numberLiteral(8.5),
               fontColor: colorValue(C.muted),
               backColor: colorValue('#F1E7DA'),
@@ -456,7 +456,7 @@ class PageBuilder {
           }],
           values: [{
             properties: {
-              fontFamily: literal(FONT.body),
+              fontFamily: textLiteral(FONT.body),
               fontSize: numberLiteral(8.5),
               fontColor: colorValue(C.ink),
               backColor: colorValue(C.card),
@@ -724,7 +724,7 @@ function executivePage(study) {
 function architecturePage(study) {
   const page = new PageBuilder(study, '02 Instrument architecture');
   page.panel('page-bg', 0, 0, 1280, 720, { fill: C.paper, border: null, radius: 0, z: 0 });
-  addHeader(page, 2, 'INSTRUMENT ARCHITECTURE', 'Sections, burden and control density', 'Where the questionnaire spends respondent attention — and which sections carry the most routing and validation.');
+  addHeader(page, 2, 'INSTRUMENT ARCHITECTURE', 'Sections, burden and control density', 'Where the questionnaire spends respondent attention - and which sections carry the most routing and validation.');
 
   addChartHeading(page, 48, 140, 'Section architecture', 'Volume, required state and planning burden');
   page.table('section-table', 48, 176, 742, 352, [
@@ -765,7 +765,7 @@ function architecturePage(study) {
   });
 
   addNarrative(page, 48, 540, 742, 116, 'Reading the architecture', study.narrative.architecture.join('\n'), { fill: '#EFE4D5' });
-  page.text('burden-note', 820, 634, 412, 36, 'Burden is a planning heuristic derived from question type, choice load and routing — not a measured interview length.', {
+  page.text('burden-note', 820, 634, 412, 36, 'Burden is a planning heuristic derived from question type, choice load and routing - not a measured interview length.', {
     size: 7.5,
     color: C.muted,
     z: 200,
@@ -1067,9 +1067,11 @@ export function buildTheme() {
     background: C.paper,
     foreground: C.ink,
     tableAccent: C.accent,
-    good: '#2F6B4F',
-    neutral: C.ochre,
-    bad: '#A33A2B',
+    // Theme JSON accepts only: name, dataColors, background, foreground, tableAccent,
+    // maximum, minimum, null, textClasses, visualStyles. Any other root key fails import.
+    maximum: '#2F6B4F',
+    minimum: '#A33A2B',
+    null: '#A79B8D',
     textClasses: {
       title: { fontFace: FONT.display, fontSize: 26, color: C.ink },
       header: { fontFace: FONT.semibold, fontSize: 13, color: C.ink },

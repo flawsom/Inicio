@@ -4,7 +4,7 @@
  *
  * Nothing is stubbed: a real organisation, form, published version and link are
  * created, and the respondent flow is driven exactly as the offline queue in the
- * browser drives it — a stable device UUID, a `base` describing the last server
+ * browser drives it - a stable device UUID, a `base` describing the last server
  * state, retries, and a submission that happens twice.
  *
  * The temporary organisation is deleted at the end, so the live database is left
@@ -76,7 +76,7 @@ async function main() {
   await db.connect();
 
   // A throwaway account of the harness's own. It accepts its own terms, creates
-  // its own organisation, and is removed at the end — so the real owner's
+  // its own organisation, and is removed at the end - so the real owner's
   // account, organisation and (legal) terms state are never touched.
   const email = `offline-e2e-${randomUUID()}@example.invalid`;
   const user = (

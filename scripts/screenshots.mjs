@@ -2,7 +2,7 @@
  * The screenshots in the README, taken rather than drawn.
  *
  * `docs/assets/screenshots/*.jpg` are captures of the running product, and this is
- * the thing that made them — so nobody has to take a picture on trust. It drives a
+ * the thing that made them - so nobody has to take a picture on trust. It drives a
  * real browser against a real deployment, asserts the four behaviours a screenshot
  * cannot show you (the page read its figures from the API in that request, the
  * WebGL scene drew a frame, the call to action reaches the sign-in route, and
@@ -53,7 +53,7 @@ const errors = [];
 
 // The GL flags are the ones this chromium actually accepts. It allows one implementation,
 // `egl-angle`, and refuses both `--use-gl=swiftshader`, which it maps to `gl=none`, and
-// `--use-angle=swiftshader` without `--disable-gpu-sandbox` — in each case the context
+// `--use-angle=swiftshader` without `--disable-gpu-sandbox` - in each case the context
 // creation fails and the page draws its no-WebGL fallback, so the shots would be of the
 // fallback while the check below passed. Verified by creating a context before the run:
 // `--use-gl=angle --use-angle=swiftshader --disable-gpu-sandbox` is the combination that
@@ -88,7 +88,7 @@ page.on('console', (m) => {
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message.slice(0, 200)}`));
 // Through the protocol, not the page: a browser asks for `/favicon.ico` on its own
 // when the document declares no icon, and that request never surfaces as a page
-// response — which is exactly how a 404 sat in the console of every visit without
+// response - which is exactly how a 404 sat in the console of every visit without
 // any check noticing.
 const cdp = await desktop.newCDPSession(page);
 cdp.on('Network.responseReceived', (e) => {
@@ -198,7 +198,7 @@ await browser.close();
 /* --------------------------------------------------------------- report */
 const unexpected = bad.filter((entry) => !entry.includes('401'));
 check('nothing 4xx\'d except the signed-out 401', unexpected.length === 0, unexpected.join(' '));
-for (const entry of checks) console.log(`${entry.ok ? 'PASS' : 'FAIL'}  ${entry.name}${entry.detail ? ` — ${entry.detail}` : ''}`);
+for (const entry of checks) console.log(`${entry.ok ? 'PASS' : 'FAIL'}  ${entry.name}${entry.detail ? ` - ${entry.detail}` : ''}`);
 console.log('console errors:', errors.length ? errors : 'none');
 for (const [file, size] of Object.entries(sizes)) console.log(`  ${file}  ${size}`);
 writeFileSync(join(OUT, 'capture-report.json'), `${JSON.stringify({ base: BASE, at: new Date().toISOString(), checks, consoleErrors: errors, bad, sizes }, null, 2)}\n`);

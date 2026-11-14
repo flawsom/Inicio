@@ -135,9 +135,12 @@ node scripts/build-oracura-powerbi.mjs
 PYTHONPATH=/tmp/xlsxlibs python3 scripts/build-oracura-excel.py  # Excel companion, needs openpyxl
 ```
 
-The delivered zip is built by deleting it first (`zip -qr` updates an archive in place, and
-page ids are random per build, so a re-zip without the delete keeps an earlier build's
-pages). It is then validated from the inside with the same command as the folder; see
+The delivered zip is produced by `scripts/package-oracura.mjs`, which deletes the target
+first (`zip` updates an archive in place, and page ids are random per build, so a re-zip
+without the delete keeps an earlier build's pages), then normalises every mtime, writes
+with `TZ=UTC` and uses `zip -X`. The build itself is deterministic because `GENERATED_AT`
+is a constant, so rebuilding and repackaging yields the same zip byte for byte. The zip is
+then validated from the inside with the same command as the folder; see
 [Verification](#verification) for the count check that makes a stale zip fail.
 
 Source data lives in `oracura-data/evaluations.csv` (kept outside the generated
@@ -164,13 +167,11 @@ node scripts/validate-pbip.mjs reports/power-bi/oracura \
   --data reports/power-bi/oracura/data/evaluations.csv \
   --dimensions City,Age,Gender,Family \
   --manifest reports/power-bi/oracura/report-manifest.json --strict-relationship
-# 3. Package the deliverable zip - delete first, always. `zip -qr` on an
-# existing zip UPDATES it in place, so pages from a previous build (random
-# page GUIDs every build) survive as stale duplicates inside the zip and the
-# validator counts more visuals than the build produced. Run from inside the
-# oracura/ folder so the zip top level is the project contents:
-rm -f reports/power-bi/ORACURA_Module1_PBIP.zip
-(cd reports/power-bi/oracura && zip -qr ../ORACURA_Module1_PBIP.zip ORACURA.pbip ORACURA.Report ORACURA.SemanticModel data report-manifest.json README.md)
+# 3. Package the deliverable zip reproducibly. The script deletes the target first
+# (zip updates in place, so stale pages from an earlier build would survive), gives
+# every entry one fixed mtime, writes with TZ=UTC and zips with -X. Two runs over
+# the same build therefore produce the same sha256:
+node scripts/package-oracura.mjs
 # 4. Validate the zip itself - page/visual counts must match the directory build:
 node scripts/validate-pbip.mjs reports/power-bi/ORACURA_Module1_PBIP.zip \
   --data reports/power-bi/oracura/data/evaluations.csv \

@@ -63,16 +63,11 @@ jobs:
       - name: Drillthrough bindings
         run: node scripts/verify-drillthrough.mjs
 
-      # Delete first, always. The `rm` is the fix for the stale-page failure above,
-      # not hygiene: without it this step would pass on a dirty workspace and the next
-      # reader would find pages nobody built.
-      - name: Package the deliverable, deleting first
-        run: |
-          set -e
-          rm -f reports/power-bi/ORACURA_Module1_PBIP.zip
-          cd reports/power-bi/oracura
-          zip -qr ../ORACURA_Module1_PBIP.zip \
-            ORACURA.pbip ORACURA.Report ORACURA.SemanticModel data report-manifest.json README.md
+      # Deleting first is the fix for the stale-page failure above, not hygiene. The
+      # script also normalises mtimes and writes with TZ=UTC and zip -X, so the archive
+      # is a function of the build rather than of the machine that packaged it.
+      - name: Package the deliverable reproducibly
+        run: node scripts/package-oracura.mjs
 
       # The count check lives in the validator: with --manifest it compares page ids,
       # page count and visual count against the build that produced them, so a zip that
@@ -83,3 +78,18 @@ jobs:
             --data reports/power-bi/oracura/data/evaluations.csv \
             --dimensions City,Age,Gender,Family \
             --manifest reports/power-bi/oracura/report-manifest.json --strict-relationship
+
+      # A reproducible build is a claim, so it is tested rather than asserted. Rebuild
+      # and repackage from the same commit and require the same sha256 and an unchanged
+      # report tree. This is the step that would have caught the committed theme file
+      # that no longer matched its generator.
+      - name: Rebuild and repackage, require identical bytes
+        run: |
+          set -e
+          before=$(sha256sum reports/power-bi/ORACURA_Module1_PBIP.zip | cut -d' ' -f1)
+          node scripts/build-oracura-powerbi.mjs
+          node scripts/package-oracura.mjs
+          after=$(sha256sum reports/power-bi/ORACURA_Module1_PBIP.zip | cut -d' ' -f1)
+          test "$before" = "$after" || { echo "zip changed between identical builds: $before != $after"; exit 1; }
+          git diff --quiet -- reports/power-bi/oracura || { echo "build output is not reproducible:"; git diff --stat -- reports/power-bi/oracura; exit 1; }
+          echo "identical archive: $before"

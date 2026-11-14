@@ -3,7 +3,7 @@
  * report.
  *
  * The important boundary: nothing here invents a respondent. The study model
- * describes the instrument that was submitted — its sections, questions, routing,
+ * describes the instrument that was submitted - its sections, questions, routing,
  * constraints, choice load and the analysis each question will require. Response
  * tables are carried separately and may be empty. The report is therefore useful
  * before fieldwork and remains honest after it.
@@ -553,7 +553,7 @@ export function analyzeDefinition(definition, options = {}) {
     ],
     analysis: [
       `${counts.families} analysis families are represented. ${categorical} questions call for a categorical distribution, ${openText} for verbatim coding and ${numeric} for a numeric distribution; these are different analytical contracts and should not be collapsed into one “percentage” column.`,
-      `No inferential test is pre-committed here. Significance, subgroup comparisons and driver analysis depend on the sampling design, achieved base and the response data — none of which are fabricated in this build.`,
+      `No inferential test is pre-committed here. Significance, subgroup comparisons and driver analysis depend on the sampling design, achieved base and the response data - none of which are fabricated in this build.`,
       `Conditional questions must be analysed on their eligible base. A percentage with the total sample as its denominator is a design error, not a finding.`,
     ],
     readiness: [

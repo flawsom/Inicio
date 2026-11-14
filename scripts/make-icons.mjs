@@ -3,8 +3,8 @@
  *
  * These are the least-read asset in the repository: generated once, committed, and
  * then seen in every browser tab and on every home screen for months. They were also
- * the last thing still wearing the *previous* brand — a navy ground with a light blue
- * mark, measured at 92 % blue-dominant pixels — because changing a stylesheet does
+ * the last thing still wearing the *previous* brand - a navy ground with a light blue
+ * mark, measured at 92 % blue-dominant pixels - because changing a stylesheet does
  * not change a PNG. So they are not edited by hand any more: they are generated, from
  * the same values the stylesheets and the manifest use, by a script anyone can re-run.
  *
@@ -91,7 +91,7 @@ function draw(size) {
         }
       }
       const total = SAMPLES * SAMPLES;
-      // Bars are drawn last, so where a bar meets the tile the bar wins — as it does
+      // Bars are drawn last, so where a bar meets the tile the bar wins - as it does
       // in the drawn mark, where the bars sit on top of the tile.
       let r = 0;
       let g = 0;
@@ -180,5 +180,5 @@ for (const [file, size] of [
 ]) {
   const png = encode(size);
   writeFileSync(join(OUT, file), png);
-  console.log(`${file} — ${size}x${size}, ${png.length} bytes`);
+  console.log(`${file} - ${size}x${size}, ${png.length} bytes`);
 }

@@ -1218,9 +1218,7 @@ node scripts/check-syntax.mjs                                    # syntax gate (
 node scripts/build-oracura-powerbi.mjs                             # PBIP
 # package + model + data + slicers, one command:
 node scripts/validate-pbip.mjs reports/power-bi/oracura --data reports/power-bi/oracura/data/evaluations.csv --dimensions City,Age,Gender,Family --manifest reports/power-bi/oracura/report-manifest.json --strict-relationship
-rm -f reports/power-bi/ORACURA_Module1_PBIP.zip       # ALWAYS delete first: zip -qr updates in place,
-# and stale pages from the previous build (random GUIDs) would survive inside the zip
-(cd reports/power-bi/oracura && zip -qr ../ORACURA_Module1_PBIP.zip ORACURA.pbip ORACURA.Report ORACURA.SemanticModel data report-manifest.json README.md)
+node scripts/package-oracura.mjs                                   # reproducible zip: fixed mtimes, -X, delete-first
 node scripts/validate-pbip.mjs reports/power-bi/ORACURA_Module1_PBIP.zip --data reports/power-bi/oracura/data/evaluations.csv --dimensions City,Age,Gender,Family --manifest reports/power-bi/oracura/report-manifest.json --strict-relationship
 PYTHONPATH=/tmp/xlsxlibs python3 scripts/build-oracura-excel.py   # Excel companion
 \`\`\`

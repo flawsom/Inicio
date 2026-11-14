@@ -3,25 +3,25 @@
  * Has the deployed database fallen behind this checkout's migrations?
  *
  * The failure this exists for is quiet by nature. A migration merged to `main` either
- * runs against production or it does not — and if it does not, the application is
+ * runs against production or it does not - and if it does not, the application is
  * deployed and *reachable* while the tables its newest screens read do not exist there.
  * Nothing 500s: the new route answers `500` only when somebody opens the new screen, and
  * the health check, the landing page and every older surface keep answering `200`. That
  * is exactly how the deployment spent a day nine migrations deep while the repository
  * believed it was migrated.
  *
- * So this reads the one number the running service publishes about its own schema —
+ * So this reads the one number the running service publishes about its own schema -
  * `GET /api/v1/public/summary` reports the `schema_migrations` ledger it just read, on
- * the connection it actually uses — and compares it with the migration files in this
+ * the connection it actually uses - and compares it with the migration files in this
  * checkout. No credentials, no database driver, nothing to install: the endpoint is
  * public by design and reports no tenant data.
  *
  * Exit codes, because a caller has to tell the two failures apart:
- *   0  in step — the deployment has applied exactly the migrations this checkout has;
- *   1  drift — it has applied fewer (or, just as importantly, more: a database ahead of
+ *   0  in step - the deployment has applied exactly the migrations this checkout has;
+ *   1  drift - it has applied fewer (or, just as importantly, more: a database ahead of
  *      `main` means a branch's migration was applied by hand or main is behind the
  *      deployment it is supposed to describe);
- *   2  unreadable — the summary could not be read at all, which is an outage or a bad
+ *   2  unreadable - the summary could not be read at all, which is an outage or a bad
  *      `DRIFT_URL`, not drift. Reporting that as drift would train everyone to ignore it.
  *
  * `DRIFT_URL` overrides the origin, so the same check runs against a preview deployment.
@@ -64,7 +64,7 @@ try {
   deployed = await deployedLedger();
 } catch (error) {
   console.error(`✗ unreadable: ${error.message}`);
-  console.error(`  Cannot tell whether the schema is in step — check the deployment, not its migrations.`);
+  console.error(`  Cannot tell whether the schema is in step - check the deployment, not its migrations.`);
   process.exit(2);
 }
 
@@ -96,7 +96,7 @@ if (deployed.migrationsApplied < expected.count) {
   console.error(`  the deployment it describes. Either way the two no longer agree.`);
 } else {
   // Same count, different latest: a migration was renamed, reordered or replaced, which
-  // is a defect in its own right — the ledger is append-only and names are its history.
+  // is a defect in its own right - the ledger is append-only and names are its history.
   console.error(`✗ drift: both have ${expected.count} migrations but not the same latest one`);
   console.error(`    there ${deployed.latestMigration}, here ${expected.latest}`);
   console.error(`  Migrations are append-only and never renamed; the two names disagreeing means one side changed one.`);
