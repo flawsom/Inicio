@@ -157,7 +157,7 @@ test('report package has unique pages, in-bounds visuals and resolvable fields',
   assert.equal(new Set(pkg.pages.map((page) => page.id)).size, 7);
   assert.ok(pkg.pages.some((page) => page.displayName.includes('Question atlas')));
   assert.ok(pkg.pages.some((page) => page.displayName.includes('Fieldwork readiness')));
-  assert.equal(pkg.themeJson.name, 'Inicio Research Intelligence.json');
+  assert.equal(pkg.themeJson.name, 'InicioResearchIntelligence.json');
   assert.equal(pkg.themeJson.visualStyles.cardVisual['*'].value[0].fontColor !== undefined, true);
   assert.equal(pkg.pages[0].json.visuals, undefined);
   const chart = pkg.pages
@@ -179,7 +179,7 @@ test('writer produces a complete PBIP with an empty response layer', () => {
     assert.ok(existsSync(join(result.projectDir, 'PULSE-01.pbip')));
     assert.ok(existsSync(join(result.projectDir, 'PULSE-01.Report', 'definition.pbir')));
     assert.ok(existsSync(join(result.projectDir, 'PULSE-01.SemanticModel', 'definition', 'model.tmdl')));
-    assert.ok(existsSync(join(result.projectDir, 'PULSE-01.Report', 'StaticResources', 'RegisteredResources', 'Inicio Research Intelligence.json')));
+    assert.ok(existsSync(join(result.projectDir, 'PULSE-01.Report', 'StaticResources', 'RegisteredResources', 'InicioResearchIntelligence.json')));
     const manifest = JSON.parse(readFileSync(join(result.projectDir, 'report-manifest.json'), 'utf8'));
     assert.equal(manifest.code, 'PULSE-01');
     assert.equal(manifest.evidence.respondentData, 'none');

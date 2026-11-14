@@ -20,7 +20,9 @@ const PLATFORM_SCHEMA = 'https://developer.microsoft.com/json-schemas/fabric/git
 const PBISM_SCHEMA = 'https://developer.microsoft.com/json-schemas/fabric/item/semanticModel/definitionProperties/1.0.0/schema.json';
 
 export const REPORT_DEFINITION_VERSION = '2.0.0';
-export const THEME_NAME = 'Inicio Research Intelligence';
+// Part names are URIs: a space here made Desktop reject the whole package on publish
+// ("Part URI is not valid per rules defined in the Open Packaging Conventions").
+export const THEME_NAME = 'InicioResearchIntelligence';
 export const BASE_THEME_NAME = 'Fluent2-CY26SU10';
 
 const C = {

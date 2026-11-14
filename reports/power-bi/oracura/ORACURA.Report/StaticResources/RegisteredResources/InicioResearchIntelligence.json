@@ -1,5 +1,5 @@
 {
-  "name": "Inicio Research Intelligence.json",
+  "name": "InicioResearchIntelligence.json",
   "dataColors": [
     "#B4431D",
     "#0E6B63",
@@ -13,9 +13,9 @@
   "background": "#F6F0E6",
   "foreground": "#1C1917",
   "tableAccent": "#B4431D",
-  "good": "#2F6B4F",
-  "neutral": "#B27A1E",
-  "bad": "#A33A2B",
+  "maximum": "#2F6B4F",
+  "minimum": "#A33A2B",
+  "null": "#A79B8D",
   "textClasses": {
     "title": {
       "fontFace": "Georgia",

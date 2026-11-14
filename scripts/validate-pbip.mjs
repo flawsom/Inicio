@@ -82,6 +82,19 @@ const walk = (dir, out = []) => {
 const files = walk(root);
 const rel = (p) => p.slice(root.length + 1);
 
+// ---------- 0. OPC part names ----------
+// A package is an Open Packaging Conventions zip, so every part name is a URI path.
+// Desktop refuses to publish, and names the offending pack URI, when a segment holds a
+// raw space or other character outside the pchar set. The custom theme was registered
+// as "Inicio Research Intelligence.json" and broke publish with exactly that error.
+// Percent-encoding is not an option here: PBIR resolves these names literally.
+const opcIllegal = /[^A-Za-z0-9._~!$&'()*+,;=:@/-]/;
+for (const file of files) {
+  const name = rel(file);
+  const bad = name.split('/').filter((seg) => opcIllegal.test(seg));
+  ok(bad.length === 0, `part name is a valid OPC URI: ${name}${bad.length ? ` (illegal: ${bad.join(', ')})` : ''}`);
+}
+
 // ---------- 1. package ----------
 const pbip = files.find((f) => f.endsWith('.pbip'));
 if (!pbip) {

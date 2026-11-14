@@ -11,7 +11,7 @@
       "type": "SharedResources"
     },
     "customTheme": {
-      "name": "Inicio Research Intelligence.json",
+      "name": "InicioResearchIntelligence.json",
       "reportVersionAtImport": {
         "visual": "2.9.0",
         "report": "3.3.0",
@@ -37,8 +37,8 @@
       "type": "RegisteredResources",
       "items": [
         {
-          "name": "Inicio Research Intelligence.json",
-          "path": "Inicio Research Intelligence.json",
+          "name": "InicioResearchIntelligence.json",
+          "path": "InicioResearchIntelligence.json",
           "type": "CustomTheme"
         }
       ]
