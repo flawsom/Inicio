@@ -21,3 +21,9 @@ coverage/
 # same directory, so running it leaves a __pycache__ beside the service's source.
 __pycache__/
 *.pyc
+
+# Handoff bundles and generated reports kept outside the repository. The push bundle is
+# a transfer artifact, not source: committing it would double the repository size and go
+# stale the moment the branch moves.
+artifacts/
+*.bundle

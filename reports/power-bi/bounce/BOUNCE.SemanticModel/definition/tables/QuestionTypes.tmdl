@@ -1,4 +1,5 @@
 table QuestionTypes
+	/// Questions per type; the plotted value for the type chart.
 	measure 'Plotted type questions' = SUM('QuestionTypes'[Questions])
 		formatString: #,##0
 	column TypeKey

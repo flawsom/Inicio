@@ -1,4 +1,5 @@
 table AnalysisFamilies
+	/// Questions per analysis family; the plotted value for the family chart.
 	measure 'Plotted family questions' = SUM('AnalysisFamilies'[Questions])
 		formatString: #,##0
 	column FamilyKey

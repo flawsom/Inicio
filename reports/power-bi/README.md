@@ -108,6 +108,19 @@ build's random page ids survive beside the new ones (a 477-visual build once val
 sequence, including packaging and validating the zip, on every push and pull request that
 touches `scripts/` or `reports/power-bi/`.
 
+The five questionnaire dossiers are packaged the same deterministic way, so a folder and
+its archive can be compared by hash rather than by 175 files:
+
+```bash
+node scripts/package-dossiers.mjs
+```
+
+That writes `BOUNCE_PBIP.zip`, `HEER_PBIP.zip`, `MEHAK_PBIP.zip`, `NAND_PBIP.zip` and
+`PRISM_PBIP.zip` beside their folders. Their sources are Word questionnaires that are not
+in this repository, so the script packages what is committed rather than rebuilding it.
+`SOURCE_DATE_EPOCH` (whole seconds) overrides the packaged date for every archive; an
+invalid value fails instead of silently producing a 1970 build.
+
 ## Limits
 
 - No `.pbix` is written. Microsoft does not support creating a model-bearing PBIX outside

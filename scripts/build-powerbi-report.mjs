@@ -237,7 +237,12 @@ function csvRows(path) {
 }
 
 function buildOne(entry, shared = {}) {
-  const generatedAt = shared.generatedAt ?? new Date().toISOString();
+  // A dossier's footer and manifest carry its build date, so the date has to be an input
+  // to be reproducible. --generated-at wins; SOURCE_DATE_EPOCH (seconds) is the
+  // reproducible-builds convention; the clock is the fallback for an interactive build.
+  const epoch = process.env.SOURCE_DATE_EPOCH;
+  const generatedAt = shared.generatedAt
+    ?? (epoch && /^\d+$/.test(epoch) ? new Date(Number(epoch) * 1000).toISOString() : new Date().toISOString());
   const code = studyCodeFrom(entry.code || entry.name || (entry.docx ? basename(entry.docx, extname(entry.docx)) : entry.definition ? basename(entry.definition, extname(entry.definition)) : 'INSTRUMENT'));
   const sourcePath = entry.docx ?? entry.definition;
   const sourceLabel = sourcePath ? basename(sourcePath) : code;

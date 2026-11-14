@@ -1,38 +1,58 @@
 table _Measures
+	/// Rows in Questions - every question in the instrument.
 	measure 'Question count' = COUNTROWS('Questions')
 		formatString: #,##0
+	/// Questions a respondent can actually answer, per AnswerableFlag.
 	measure 'Answerable questions' = CALCULATE(COUNTROWS('Questions'), 'Questions'[AnswerableFlag] = TRUE())
 		formatString: #,##0
+	/// Questions marked required, including those required only on some paths.
 	measure 'Required questions' = CALCULATE(COUNTROWS('Questions'), 'Questions'[RequiredFlag] = TRUE())
 		formatString: #,##0
+	/// Questions required only when an earlier answer routes to them.
 	measure 'Conditionally required' = CALCULATE(COUNTROWS('Questions'), 'Questions'[RequiredMode] = "conditional")
 		formatString: #,##0
+	/// Questions carrying at least one logic rule that routes respondents.
 	measure 'Routing rules' = CALCULATE(COUNTROWS('Questions'), 'Questions'[LogicFlag] = TRUE())
 		formatString: #,##0
+	/// Questions with a validation constraint on the answer.
 	measure Constraints = CALCULATE(COUNTROWS('Questions'), 'Questions'[ConstraintFlag] = TRUE())
 		formatString: #,##0
+	/// Questions whose option list is narrowed by an earlier answer.
 	measure 'Choice filters' = CALCULATE(COUNTROWS('Questions'), 'Questions'[ChoiceFilterFlag] = TRUE())
 		formatString: #,##0
+	/// Total answer options across all choice questions.
 	measure 'Choice options' = SUM('Questions'[Choices])
 		formatString: #,##0
+	/// Distinct sections the instrument is divided into.
 	measure 'Section count' = DISTINCTCOUNT('Questions'[SectionKey])
 		formatString: #,##0
+	/// Sum of the per-question time estimates, in minutes.
 	measure 'Estimated minutes' = DIVIDE(SUM('Questions'[Est. sec]), 60)
 		formatString: 0.0
+	/// Distinct analysis families the questions are grouped into.
 	measure 'Analysis families' = DISTINCTCOUNT('Questions'[Analysis])
 		formatString: #,##0
+	/// Sum of routing references across questions - how interconnected the logic is.
 	measure 'Logic references' = SUM('Questions'[Logic refs])
 		formatString: #,##0
+	/// Questions analysed as verbatim coding (free text).
 	measure 'Open text questions' = CALCULATE(COUNTROWS('Questions'), 'Questions'[Analysis] = "Verbatim coding")
 		formatString: #,##0
+	/// Questions analysed as a numeric distribution (scales, counts).
 	measure 'Numeric questions' = CALCULATE(COUNTROWS('Questions'), 'Questions'[Analysis] = "Numeric distribution")
 		formatString: #,##0
+	/// Median option count per choice question - typical list length.
 	measure 'Median choices' = MEDIAN('Questions'[Choices])
 		formatString: 0
+	/// Readiness label: Awaiting data until responses are loaded.
 	measure 'Fieldwork status' = IF(COUNTROWS('Responses') = 0, "Awaiting data", "Loaded")
+	/// Rows in Responses, or 0 when none were supplied.
 	measure 'Responses loaded' = IF(COUNTROWS('Responses') = 0, "0", FORMAT(COUNTROWS('Responses'), "#,##0"))
+	/// Share of loaded responses submitted rather than left as drafts.
 	measure Completion = IF(COUNTROWS('Responses') = 0, "—", FORMAT(DIVIDE(CALCULATE(COUNTROWS('Responses'), 'Responses'[Status] = "Submitted"), COUNTROWS('Responses')), "0.0%"))
+	/// Sum of per-response quality flags raised during cleaning.
 	measure 'Quality flags' = IF(COUNTROWS('Responses') = 0, "—", FORMAT(SUM('Responses'[FlagCount]), "#,##0"))
+	/// Rows in Answers - one per question answered per response.
 	measure 'Answer rows' = COUNTROWS('Answers')
 		formatString: #,##0
 	column Dummy

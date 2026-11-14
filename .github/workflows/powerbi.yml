@@ -79,17 +79,30 @@ jobs:
             --dimensions City,Age,Gender,Family \
             --manifest reports/power-bi/oracura/report-manifest.json --strict-relationship
 
-      # A reproducible build is a claim, so it is tested rather than asserted. Rebuild
-      # and repackage from the same commit and require the same sha256 and an unchanged
-      # report tree. This is the step that would have caught the committed theme file
-      # that no longer matched its generator.
-      - name: Rebuild and repackage, require identical bytes
+      # A reproducible build is a claim, so it is tested rather than asserted: rebuild
+      # and repackage from the commit, then require the result to be byte-identical to the
+      # artifacts that are actually committed. Comparing two fresh runs would not catch a
+      # stale committed zip or a generator change that only lives in the commit's parent.
+      # This is the step that would have caught the theme file that no longer matched its
+      # generator, and the committed dossier folders doing the same.
+      - name: Rebuild and repackage, require byte-identical committed artifacts
         run: |
-          set -e
-          before=$(sha256sum reports/power-bi/ORACURA_Module1_PBIP.zip | cut -d' ' -f1)
+          set -euo pipefail
+          committed=$(sha256sum reports/power-bi/ORACURA_Module1_PBIP.zip | cut -d' ' -f1)
           node scripts/build-oracura-powerbi.mjs
           node scripts/package-oracura.mjs
-          after=$(sha256sum reports/power-bi/ORACURA_Module1_PBIP.zip | cut -d' ' -f1)
-          test "$before" = "$after" || { echo "zip changed between identical builds: $before != $after"; exit 1; }
-          git diff --quiet -- reports/power-bi/oracura || { echo "build output is not reproducible:"; git diff --stat -- reports/power-bi/oracura; exit 1; }
-          echo "identical archive: $before"
+          rebuilt=$(sha256sum reports/power-bi/ORACURA_Module1_PBIP.zip | cut -d' ' -f1)
+          test "$committed" = "$rebuilt" || { echo "committed zip $committed != rebuilt zip $rebuilt"; exit 1; }
+          git diff --exit-code -- reports/power-bi/oracura reports/power-bi/ORACURA_Module1_PBIP.zip \
+            || { echo "committed report differs from a rebuild:"; git diff --stat -- reports/power-bi/oracura; exit 1; }
+          echo "ORACURA archive and tree reproduce: $committed"
+
+      - name: Package the five dossiers reproducibly
+        run: node scripts/package-dossiers.mjs
+
+      - name: Dossier archives match their folders byte for byte
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- 'reports/power-bi/*_PBIP.zip' \
+            || { echo "a committed dossier zip differs from its folder"; git diff --stat -- 'reports/power-bi/*_PBIP.zip'; exit 1; }
+          echo "dossier archives reproduce"

@@ -1,6 +1,8 @@
 table Sections
+	/// Questions per section; the plotted value for the section chart.
 	measure 'Plotted section questions' = SUM('Sections'[Questions])
 		formatString: #,##0
+	/// Estimated minutes per section; the plotted value for the effort chart.
 	measure 'Plotted section minutes' = SUM('Sections'[Est. minutes])
 		formatString: 0.0
 	column SectionKey

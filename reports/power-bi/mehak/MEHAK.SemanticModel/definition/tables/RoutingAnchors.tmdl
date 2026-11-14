@@ -1,4 +1,5 @@
 table RoutingAnchors
+	/// Routing references pointing at each question, in rank order.
 	measure 'Plotted inbound references' = SUM('RoutingAnchors'[Inbound refs])
 		formatString: #,##0
 	column Rank
