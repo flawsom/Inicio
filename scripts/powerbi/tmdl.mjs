@@ -93,12 +93,61 @@ function columnTmdl(column) {
   return lines.join('\n');
 }
 
+/**
+ * One-line descriptions for the questionnaire-dossier measure set. Exported so
+ * scripts/migrate-tmdl-model.mjs can add the same docs to dossiers that were emitted
+ * before measures carried them.
+ */
+export const MEASURE_DOCS = {
+  'Question count': 'Rows in Questions - every question in the instrument.',
+  'Answerable questions': 'Questions a respondent can actually answer, per AnswerableFlag.',
+  'Required questions': 'Questions marked required, including those required only on some paths.',
+  'Conditionally required': 'Questions required only when an earlier answer routes to them.',
+  'Routing rules': 'Questions carrying at least one logic rule that routes respondents.',
+  Constraints: 'Questions with a validation constraint on the answer.',
+  'Choice filters': 'Questions whose option list is narrowed by an earlier answer.',
+  'Choice options': 'Total answer options across all choice questions.',
+  'Section count': 'Distinct sections the instrument is divided into.',
+  'Estimated minutes': 'Sum of the per-question time estimates, in minutes.',
+  'Analysis families': 'Distinct analysis families the questions are grouped into.',
+  'Logic references': 'Sum of routing references across questions - how interconnected the logic is.',
+  'Open text questions': 'Questions analysed as verbatim coding (free text).',
+  'Numeric questions': 'Questions analysed as a numeric distribution (scales, counts).',
+  'Median choices': 'Median option count per choice question - typical list length.',
+  'Fieldwork status': 'Readiness label: Awaiting data until responses are loaded.',
+  'Responses loaded': 'Rows in Responses, or 0 when none were supplied.',
+  Completion: 'Share of loaded responses submitted rather than left as drafts.',
+  'Quality flags': 'Sum of per-response quality flags raised during cleaning.',
+  'Answer rows': 'Rows in Answers - one per question answered per response.',
+  'Plotted section questions': 'Questions per section; the plotted value for the section chart.',
+  'Plotted section minutes': 'Estimated minutes per section; the plotted value for the effort chart.',
+  'Plotted type questions': 'Questions per type; the plotted value for the type chart.',
+  'Plotted family questions': 'Questions per analysis family; the plotted value for the family chart.',
+  'Plotted inbound references': 'Routing references pointing at each question, in rank order.',
+};
+
 function tableTmdl(table) {
   const parts = [`table ${qName(table.name)}`];
   if (table.measures?.length) {
     for (const measure of table.measures) {
-      parts.push(`\tmeasure ${qName(measure.name)} = ${measure.expression}`);
+      // Descriptions are /// doc comments immediately above the object. TMDL has no
+      // `description` property: emitting one makes Desktop reject the whole model
+      // with "Property 'description' is unknown". Blank line separates objects.
+      if (measure.description) parts.push(`\t/// ${String(measure.description).replace(/\s+/g, ' ').trim()}`);
+      // A multi-line expression sits one level deeper than the object's *properties*:
+      // measure at 1 tab, properties at 2, expression at 3. At column 0 the parser reads
+      // the first DAX keyword as a root object ("Unsupported object type - VAR is not a
+      // supported property in the current context!"); at 2 tabs it is property-level.
+      // Relative indentation inside the DAX is preserved.
+      const expression = String(measure.expression);
+      if (expression.includes('\n')) {
+        parts.push(`\tmeasure ${qName(measure.name)} =`);
+        for (const line of expression.split('\n')) parts.push(line.trim() === '' ? '' : `\t\t\t${line}`);
+      } else {
+        parts.push(`\tmeasure ${qName(measure.name)} = ${expression}`);
+      }
       if (measure.formatString) parts.push(`\t\tformatString: ${measure.formatString}`);
+      parts.push('');
     }
   }
   for (const column of table.columns) {
@@ -136,9 +185,9 @@ export function buildSemanticModel(study) {
     RequiredText: question.required.label,
     RequiredFlag: question.required.flag,
     RequiredMode: question.required.conditional ? 'conditional' : question.required.flag ? 'required' : question.answerable ? 'optional' : 'not-asked',
-    LogicText: question.routed ? 'Conditional' : '—',
+    LogicText: question.routed ? 'Conditional' : '-',
     LogicFlag: question.routed,
-    ConstraintText: question.constrained ? 'Set' : '—',
+    ConstraintText: question.constrained ? 'Set' : '-',
     ConstraintFlag: question.constrained,
     ChoiceFilterFlag: question.choiceFiltered,
     ChoiceCount: question.choiceCount,
@@ -372,8 +421,8 @@ export function buildSemanticModel(study) {
     { name: 'Median choices', expression: "MEDIAN('Questions'[Choices])", formatString: '0' },
     { name: 'Fieldwork status', expression: "IF(COUNTROWS('Responses') = 0, \"Awaiting data\", \"Loaded\")" },
     { name: 'Responses loaded', expression: "IF(COUNTROWS('Responses') = 0, \"0\", FORMAT(COUNTROWS('Responses'), \"#,##0\"))" },
-    { name: 'Completion', expression: "IF(COUNTROWS('Responses') = 0, \"—\", FORMAT(DIVIDE(CALCULATE(COUNTROWS('Responses'), 'Responses'[Status] = \"Submitted\"), COUNTROWS('Responses')), \"0.0%\"))" },
-    { name: 'Quality flags', expression: "IF(COUNTROWS('Responses') = 0, \"—\", FORMAT(SUM('Responses'[FlagCount]), \"#,##0\"))" },
+    { name: 'Completion', expression: "IF(COUNTROWS('Responses') = 0, \"-\", FORMAT(DIVIDE(CALCULATE(COUNTROWS('Responses'), 'Responses'[Status] = \"Submitted\"), COUNTROWS('Responses')), \"0.0%\"))" },
+    { name: 'Quality flags', expression: "IF(COUNTROWS('Responses') = 0, \"-\", FORMAT(SUM('Responses'[FlagCount]), \"#,##0\"))" },
     { name: 'Answer rows', expression: "COUNTROWS('Answers')", formatString: '#,##0' },
   ];
 
@@ -383,6 +432,14 @@ export function buildSemanticModel(study) {
     measures,
     calculated: 'ROW("Dummy", BLANK())',
   });
+
+  // Every measure documented once, from the shared map: an undocumented measure is the
+  // one a later author duplicates, and the validator enforces this.
+  for (const table of [questions, sections, types, families, anchors, hotspots, dataContract, responses, answers, measureTable]) {
+    for (const measure of table.measures ?? []) {
+      if (!measure.description && MEASURE_DOCS[measure.name]) measure.description = MEASURE_DOCS[measure.name];
+    }
+  }
 
   const tables = [questions, sections, types, families, anchors, hotspots, dataContract, responses, answers, measureTable];
   const relationships = [
@@ -406,13 +463,22 @@ export function semanticModelFiles(study, model) {
 \tlanguage: 1033
 `;
 
-  const refs = model.tables.map((table) => `\tref table ${qName(table.name)}`).join('\n');
+  // Root-level `ref` lines: TMDL reads indentation as parentage, so a tab here makes
+  // `ref table` a child of `model` and Desktop fails with "Unexpected line type:
+  // ReferenceObject!". Refs belong at column 0, alongside `ref cultureInfo`.
+  const refs = model.tables.map((table) => `ref table ${qName(table.name)}`).join('\n');
   const modelFile = `model Model
 \tculture: en-US
 \tdefaultPowerBIDataSourceVersion: powerBI_V3
 \tsourceQueryCulture: en-US
+
+annotation PBI_QueryOrder = [${model.tables.map((table) => JSON.stringify(table.name)).join(',')}]
+
 ${refs}
+
+ref cultureInfo en-US
 `;
+  const culture = 'cultureInfo en-US\n';
 
   const relationships = model.relationships.map((relationship) => (
     `relationship ${qName(relationship.name)}\n\tfromColumn: ${qName(relationship.from)}.${qName(relationship.fromColumn)}\n\ttoColumn: ${qName(relationship.to)}.${qName(relationship.toColumn)}`
@@ -421,6 +487,7 @@ ${refs}
   return {
     database,
     model: modelFile,
+    culture,
     relationships: relationships ? `${relationships}\n` : '',
     tables: Object.fromEntries(model.tables.map((table) => [`${table.name}.tmdl`, tableTmdl(table)])),
   };

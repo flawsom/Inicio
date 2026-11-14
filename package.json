@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Inicio \u2014 multi-tenant survey and data-collection platform (schema, RLS, authoring studio, offline collection, exports)",
+  "description": "Inicio — multi-tenant survey and data-collection platform (schema, RLS, authoring studio, offline collection, exports)",
   "packageManager": "pnpm@9.15.0",
   "engines": {
     "node": ">=22"
@@ -24,7 +24,11 @@
     "fabric:deploy": "node scripts/fabric-deploy.mjs",
     "fabric:test": "node --test scripts/fabric-deploy.test.mjs",
     "powerbi:report": "node scripts/build-powerbi-report.mjs",
-    "powerbi:test": "node --test scripts/build-powerbi-report.test.mjs",
+    "powerbi:test": "node --test scripts/build-powerbi-report.test.mjs scripts/powerbi/tmdl-parse.test.mjs",
+    "powerbi:migrate": "node scripts/migrate-tmdl-model.mjs",
+    "powerbi:syntax": "node scripts/check-syntax.mjs",
+    "powerbi:oracura": "node scripts/build-oracura-powerbi.mjs",
+    "powerbi:oracura:validate": "node scripts/validate-pbip.mjs reports/power-bi/oracura --data reports/power-bi/oracura/data/evaluations.csv --dimensions City,Age,Gender,Family --manifest reports/power-bi/oracura/report-manifest.json --strict-relationship",
     "superset:provision": "node scripts/superset-provision.mjs",
     "superset:test": "node --test scripts/superset-provision.test.mjs",
     "icons": "node scripts/make-icons.mjs",
@@ -38,5 +42,8 @@
     "eslint": "^9.15.0",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.16.0"
+  },
+  "dependencies": {
+    "playwright-core": "^1.49.1"
   }
 }

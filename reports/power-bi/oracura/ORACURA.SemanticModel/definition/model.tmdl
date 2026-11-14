@@ -1,0 +1,13 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	sourceQueryCulture: en-US
+
+annotation PBI_QueryOrder = ["Evaluations","Respondents","_Measures","_Journey"]
+
+ref table Evaluations
+ref table Respondents
+ref table _Measures
+ref table _Journey
+
+ref cultureInfo en-US

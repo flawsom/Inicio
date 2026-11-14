@@ -1,0 +1,8 @@
+table _Journey
+	column Stage
+		dataType: string
+		summarizeBy: none
+		sourceColumn: Stage
+	partition _Journey = calculated
+		mode: import
+		source = DATATABLE("Stage", STRING, "Evaluations", "Current users", "Daily users", "Promoters")

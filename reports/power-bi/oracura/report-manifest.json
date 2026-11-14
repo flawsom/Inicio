@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 1,
+  "code": "ORACURA",
+  "source": "MODULE 1 CUSTOMER FEEDBACK_Live_Rawdata204N.xlsx + _Coded.xlsx + MODULE_1_QNR_CUST_FEEDBACK_V1.4.docx",
+  "generatedAt": "2026-11-13T00:00:00.000Z",
+  "boundary": "Real respondent data embedded (204 respondents, 220 product evaluations). Like/Improve verbatims are coded themes derived from CF12/CF13 text; full verbatims remain in the source workbooks.",
+  "counts": {
+    "respondents": 204,
+    "evaluations": 220,
+    "kpi": {
+      "respondents": 204,
+      "evaluations": 220,
+      "avgSat": "4.15",
+      "top2": "88.2",
+      "avgRec": "8.35",
+      "nps": 44,
+      "better": "59.5",
+      "daily": "52.7",
+      "current": "90.9",
+      "service": 11,
+      "top2Count": 194,
+      "promoters": 117,
+      "detractors": 21,
+      "currentCount": 200,
+      "dailyCount": 116,
+      "warrantyN": 17,
+      "warrantyDetPct": "17.6",
+      "detBasePct": "9.5",
+      "detThemes": [
+        [
+          "No issue",
+          4
+        ],
+        [
+          "Leakage",
+          3
+        ],
+        [
+          "Other",
+          3
+        ],
+        [
+          "Battery",
+          3
+        ],
+        [
+          "Service",
+          3
+        ],
+        [
+          "Quality reliability",
+          2
+        ],
+        [
+          "Nozzle head",
+          1
+        ],
+        [
+          "Taste flavour",
+          1
+        ],
+        [
+          "Pressure speed",
+          1
+        ]
+      ],
+      "improveCounts": {
+        "Taste flavour": 3,
+        "Service": 13,
+        "Quality reliability": 8,
+        "Pressure speed": 19,
+        "Other": 32,
+        "Battery": 24,
+        "Size portability": 10,
+        "Leakage": 6,
+        "Nozzle head": 7,
+        "No issue": 80,
+        "Colours design": 6,
+        "Water capacity": 2,
+        "Modes settings": 5,
+        "Price": 5
+      },
+      "serviceDet": 3
+    }
+  },
+  "pages": [
+    {
+      "name": "00 Cover",
+      "id": "11bc6e503ab4025c8b5f",
+      "visuals": 27
+    },
+    {
+      "name": "01 Findings",
+      "id": "d5c7a7542dfde67bd758",
+      "visuals": 38
+    },
+    {
+      "name": "00 Overview",
+      "id": "75ebfef892158f803660",
+      "visuals": 88
+    },
+    {
+      "name": "02 Executive",
+      "id": "163c536a81f23493488c",
+      "visuals": 25
+    },
+    {
+      "name": "03 Who bought what",
+      "id": "35bc25248cc9bd6a275a",
+      "visuals": 26
+    },
+    {
+      "name": "04 Usage & retention",
+      "id": "472e5a2f8af54f79e0b2",
+      "visuals": 28
+    },
+    {
+      "name": "05 Experience & satisfaction",
+      "id": "168e9615216aa6f34c5e",
+      "visuals": 22
+    },
+    {
+      "name": "06 Recommendation & voice",
+      "id": "e5b9f4b86ae1f00ba6b1",
+      "visuals": 25
+    },
+    {
+      "name": "07 Voice of customer",
+      "id": "b31b4aece8358000d03c",
+      "visuals": 21
+    },
+    {
+      "name": "08 Where to act",
+      "id": "255d4f0ad05524609099",
+      "visuals": 26
+    },
+    {
+      "name": "09 Journey & heat",
+      "id": "205fce9b009ab93700ae",
+      "visuals": 28
+    },
+    {
+      "name": "10 Family deep-dive",
+      "id": "9b16c3b704ec16f7fc7c",
+      "visuals": 21
+    },
+    {
+      "name": "11 Deck reconciliation",
+      "id": "bbc46296c06af756927d",
+      "visuals": 102
+    }
+  ],
+  "visualCount": 477,
+  "semanticModel": {
+    "tables": [
+      {
+        "name": "Evaluations",
+        "columns": 32,
+        "rows": 220,
+        "measures": 0
+      },
+      {
+        "name": "Respondents",
+        "columns": 5,
+        "rows": 204,
+        "measures": 0
+      },
+      {
+        "name": "_Measures",
+        "columns": 1,
+        "rows": 0,
+        "measures": 28
+      },
+      {
+        "name": "_Journey",
+        "columns": 1,
+        "rows": 0,
+        "measures": 0
+      }
+    ],
+    "relationships": 1
+  },
+  "paths": {
+    "project": "ORACURA.pbip",
+    "report": "ORACURA.Report",
+    "semanticModel": "ORACURA.SemanticModel"
+  }
+}

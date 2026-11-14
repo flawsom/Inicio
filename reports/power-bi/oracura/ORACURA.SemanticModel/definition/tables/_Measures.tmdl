@@ -1,0 +1,124 @@
+table _Measures
+	/// Distinct respondents in Module 1 (one row per questionnaire).
+	measure Respondents = COUNTROWS(Respondents)
+		formatString: #,##0
+
+	/// Product evaluations in Module 1 - one row per product a respondent rated.
+	measure Evaluations = COUNTROWS(Evaluations)
+		formatString: #,##0
+
+	/// Evaluations scoring 9-10 on CF14 - the base count behind NPS and Promoter %.
+	measure Promoters = CALCULATE([Evaluations], Evaluations[Recommend] >= 9)
+		formatString: #,##0
+
+	/// Evaluations scoring 0-6 on CF14 - the base count behind NPS and Detractor %.
+	measure Detractors = CALCULATE([Evaluations], Evaluations[Recommend] <= 6)
+		formatString: #,##0
+
+	/// Evaluations rating 4 or 5 on CF10 - the base count behind Top-2 satisfaction %.
+	measure 'Top-2 evaluations' = CALCULATE([Evaluations], Evaluations[Satisfaction] >= 4)
+		formatString: #,##0
+
+	/// Evaluations where CF11 says the product beat expectations.
+	measure 'Better than expected' = CALCULATE([Evaluations], Evaluations[Expectation] = "Better than expected")
+		formatString: #,##0
+
+	/// Evaluations where CF11 says the experience matched expectations.
+	measure 'About as expected' = CALCULATE([Evaluations], Evaluations[Expectation] = "About as expected")
+		formatString: #,##0
+
+	/// Evaluations where CF11 says the product fell short of expectations.
+	measure 'Worse than expected' = CALCULATE([Evaluations], Evaluations[Expectation] = "Worse than expected")
+		formatString: #,##0
+
+	/// Evaluations where CF7 usage is Daily.
+	measure 'Daily users' = CALCULATE([Evaluations], Evaluations[Frequency] = "Daily")
+		formatString: #,##0
+
+	/// Evaluations from respondents still using the product (CF3).
+	measure 'Current users' = CALCULATE([Evaluations], Evaluations[Situation] = "Current")
+		formatString: #,##0
+
+	/// Evaluations where CF8 says usage has stopped.
+	measure Stopped = CALCULATE([Evaluations], Evaluations[UsageChange] = "Stopped")
+		formatString: #,##0
+
+	/// Evaluations that left an improvement comment (CF13).
+	measure Commented = CALCULATE([Evaluations], NOT ISBLANK(Evaluations[CF13 improve one]))
+		formatString: #,##0
+
+	/// Mean CF10 overall satisfaction on the 1-5 scale.
+	measure 'Avg satisfaction (1-5)' = AVERAGE(Evaluations[Satisfaction])
+		formatString: 0.00
+
+	/// Mean CF14 likelihood-to-recommend on the 0-10 scale.
+	measure 'Avg recommend (0-10)' = AVERAGE(Evaluations[Recommend])
+		formatString: 0.00
+
+	/// Share of evaluations rating 4 or 5 (top-two-box satisfaction).
+	measure 'Top-2 satisfaction %' = DIVIDE([Top-2 evaluations], [Evaluations])
+		formatString: 0.0%
+
+	/// Share of evaluations scoring 9-10 on CF14.
+	measure 'Promoter %' = DIVIDE([Promoters], [Evaluations])
+		formatString: 0.0%
+
+	/// Share of evaluations scoring 0-6 on CF14.
+	measure 'Detractor %' = DIVIDE([Detractors], [Evaluations])
+		formatString: 0.0%
+
+	/// Share of evaluations where CF11 says the product beat expectations.
+	measure 'Better than expected %' = DIVIDE([Better than expected], [Evaluations])
+		formatString: 0.0%
+
+	/// Share of evaluations where CF7 usage is Daily.
+	measure 'Daily use %' = DIVIDE([Daily users], [Evaluations])
+		formatString: 0.0%
+
+	/// Share of evaluations from respondents currently using the product (CF3).
+	measure 'Still using %' = DIVIDE([Current users], [Evaluations])
+		formatString: 0.0%
+
+	/// Net Promoter Score: %promoters (9-10) minus %detractors (0-6) across product evaluations. Rounded to a whole number; blank when no evaluations are in context.
+	measure NPS = IF([Evaluations] = 0, BLANK(), ROUND(DIVIDE([Promoters] - [Detractors], [Evaluations]) * 100, 0))
+		formatString: 0
+
+	/// Evaluations carrying captured verbatim text in CF12 (liked most) or CF13 (improve one thing).
+	measure Verbatims = CALCULATE([Evaluations], NOT ISBLANK(Evaluations[CF12 liked most]) || NOT ISBLANK(Evaluations[CF13 improve one]))
+		formatString: #,##0
+
+	/// Detractor evaluations (0-6) that left an improvement comment - the escalation queue.
+	measure 'Detractor verbatims' = CALCULATE([Evaluations], Evaluations[Recommend] <= 6, NOT ISBLANK(Evaluations[CF13 improve one]))
+		formatString: #,##0
+
+	/// Most frequent CF13 improvement theme in the current filter context, excluding "No issue" so the result is an action rather than the absence of one.
+	measure 'Top complaint' =
+			VAR _themes = FILTER(VALUES(Evaluations[Improve theme]), Evaluations[Improve theme] <> "No issue")
+			VAR _ranked = ADDCOLUMNS(_themes, "@n", CALCULATE([Evaluations]))
+			VAR _top = TOPN(1, _ranked, [@n], DESC)
+			RETURN CONCATENATEX(_top, Evaluations[Improve theme], ", ")
+
+	/// Improvement comments mentioning service or customer care. One row counts once however many keywords it contains.
+	measure 'Service mentions' = CALCULATE([Evaluations], SEARCH("service", Evaluations[CF13 improve one], 1, 0) > 0 || SEARCH("care", Evaluations[CF13 improve one], 1, 0) > 0)
+		formatString: #,##0
+
+	/// The funnel measure: value of the active journey stage. Evaluations to current use to daily habit to advocacy.
+	measure 'Journey value' = SWITCH(TRUE(), _Journey[Stage] = "Evaluations", [Evaluations], _Journey[Stage] = "Current users", [Current users], _Journey[Stage] = "Daily users", [Daily users], _Journey[Stage] = "Promoters", [Promoters])
+		formatString: #,##0
+
+	/// Constant 100: the top of a 0-100 gauge scale (NPS-style cards).
+	measure 'Scale max 100' = 100
+		formatString: 0
+
+	/// Constant -100: the bottom of an NPS (-100 to +100) gauge scale.
+	measure 'Scale min -100' = -100
+		formatString: 0
+
+	column Dummy
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: [Dummy]
+	partition _Measures = calculated
+		mode: import
+		source = ROW("Dummy", BLANK())

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "SemanticModel",
+    "displayName": "ORACURA"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "0b58641f-49d7-4bb0-8b75-8ea3998b97de"
+  }
+}

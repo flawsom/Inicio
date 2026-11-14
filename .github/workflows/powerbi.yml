@@ -1,0 +1,85 @@
+name: Power BI reports
+
+# A PBIP is a deliverable, not a by-product, and the two ways its proof silently stops
+# being true are cheap to check and expensive to discover in a client meeting:
+#
+#   1. a generator that no longer parses (a stray token in a template string), which
+#      every downstream check would report as a mysterious empty page; and
+#   2. a package that still contains pages from an earlier build. `zip -qr` updates an
+#      archive in place, and page ids are random per build, so a stale page survives as
+#      a duplicate under a new id - that is how a 477-visual build once validated as
+#      557 visuals inside the delivered zip.
+#
+# So this rebuilds the data-driven ORACURA report from the evaluations CSV committed
+# beside it, validates the project folder, validates the zip it just wrote, and compares
+# both against the build manifest's own page and visual counts. The five questionnaire
+# dossiers are covered by `pnpm powerbi:test` in ci.yml; this job exists because the
+# data-driven report is not part of that suite.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'reports/power-bi/**'
+      - '.github/workflows/powerbi.yml'
+
+concurrency:
+  group: powerbi-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  oracura:
+    name: rebuild, validate, package, count
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Same gate the README documents: every .mjs parses before anything runs it.
+      - name: Syntax gate
+        run: node scripts/check-syntax.mjs
+
+      # The extractor is importable without openpyxl (that import is lazy, inside
+      # extract()), so this needs no Python packages. It proves the rules still
+      # reproduce the shipped Family column on all 220 product names.
+      - name: Extractor rules reproduce the shipped CSV
+        run: python3 scripts/test-oracura-extractor.py
+
+      - name: Build the PBIP from the committed data
+        run: node scripts/build-oracura-powerbi.mjs
+
+      - name: Validate the project folder
+        run: |
+          node scripts/validate-pbip.mjs reports/power-bi/oracura \
+            --data reports/power-bi/oracura/data/evaluations.csv \
+            --dimensions City,Age,Gender,Family \
+            --manifest reports/power-bi/oracura/report-manifest.json --strict-relationship
+
+      - name: Drillthrough bindings
+        run: node scripts/verify-drillthrough.mjs
+
+      # Delete first, always. The `rm` is the fix for the stale-page failure above,
+      # not hygiene: without it this step would pass on a dirty workspace and the next
+      # reader would find pages nobody built.
+      - name: Package the deliverable, deleting first
+        run: |
+          set -e
+          rm -f reports/power-bi/ORACURA_Module1_PBIP.zip
+          cd reports/power-bi/oracura
+          zip -qr ../ORACURA_Module1_PBIP.zip \
+            ORACURA.pbip ORACURA.Report ORACURA.SemanticModel data report-manifest.json README.md
+
+      # The count check lives in the validator: with --manifest it compares page ids,
+      # page count and visual count against the build that produced them, so a zip that
+      # still carries an earlier build's pages fails here rather than at the client.
+      - name: Validate the zip, including page and visual counts
+        run: |
+          node scripts/validate-pbip.mjs reports/power-bi/ORACURA_Module1_PBIP.zip \
+            --data reports/power-bi/oracura/data/evaluations.csv \
+            --dimensions City,Age,Gender,Family \
+            --manifest reports/power-bi/oracura/report-manifest.json --strict-relationship
