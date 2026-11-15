@@ -18,7 +18,10 @@
 # sitemap and robots.txt, and `apps/web/test/sitemap.test.ts` holds it there.
 
 [build]
-  command = "pnpm --filter @inicio/web build"
+  # The web app consumes @inicio/engine through its built dist, which is not
+  # committed. Building only the web package fails on a clean Netlify checkout,
+  # so this mirrors the Vercel build order: engine first, then the SPA.
+  command = "pnpm --filter @inicio/engine build && pnpm --filter @inicio/web build"
   publish = "apps/web/dist"
 
 [build.environment]
