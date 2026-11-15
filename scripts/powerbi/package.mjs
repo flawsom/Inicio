@@ -18,7 +18,7 @@
 // earlier build, which is the stale-page failure the validator's count check exists for.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, readFileSync, readdirSync, rmSync, utimesSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, readdirSync, rmSync, statSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 
 // 2026-11-13T00:00:00Z, the ORACURA build date; the earliest date zip can encode is 1980.
@@ -51,15 +51,39 @@ const normalise = (dir, epoch, files = []) => {
   return files;
 };
 
+// The archive's entry order is part of its bytes, and `zip -r` walks directories in
+// readdir order, which differs between a developer's ext4 volume and a CI checkout.
+// Listing every path ourselves, sorted, makes the order a property of the project
+// rather than of the filesystem.
+const orderedEntries = (projectDir, entries) => {
+  const paths = [];
+  const collect = (rel) => {
+    const full = join(projectDir, rel);
+    if (!statSync(full).isDirectory()) {
+      paths.push(rel);
+      return;
+    }
+    paths.push(`${rel.replace(/\/$/, '')}/`);
+    for (const name of readdirSync(full).sort()) collect(`${rel.replace(/\/$/, '')}/${name}`);
+  };
+  for (const entry of entries) collect(entry);
+  return paths;
+};
+
 export function packagePbip({ projectDir, zipPath, epoch = resolveEpoch(), entries = readdirSync(projectDir).sort() }) {
   if (!existsSync(projectDir)) throw new Error(`no project folder at ${projectDir}`);
   if (!entries.some((name) => name.endsWith('.pbip'))) {
     throw new Error(`no .pbip entry point in ${projectDir}`);
   }
   const files = normalise(projectDir, epoch);
+  const paths = orderedEntries(projectDir, entries);
   rmSync(zipPath, { force: true });
-  execFileSync('zip', ['-X', '-qr', zipPath, ...entries], {
+  // `-@` takes the entry list from stdin, so zip stores exactly this order. No `-r`:
+  // every directory and file is already listed, and letting zip recurse would put the
+  // filesystem back in charge of the order.
+  execFileSync('zip', ['-X', '-q', '-@', zipPath], {
     cwd: projectDir,
+    input: `${paths.join('\n')}\n`,
     env: { ...process.env, TZ: 'UTC' },
   });
   // A zip that cannot be read back is worse than one that fails here.
