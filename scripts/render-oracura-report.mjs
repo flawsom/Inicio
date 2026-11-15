@@ -490,7 +490,7 @@ function renderPage(pageId, filter) {
       const palette = ['#0E6B63','#B4431D','#395B70'];
       const totals = cats.map((c) => vals.reduce((s, v) => s + Number(evalMeasure(v, c.rows)), 0));
       const max = Math.max(...totals, 1);
-      const body = cats.map((c, ci) => {
+      const body = cats.map((c) => {
         let bottom = 0;
         const segs = vals.map((v, vi) => { const n = Number(evalMeasure(v, c.rows)); const h = (n / max) * 100; const seg = `<div style="position:absolute;left:30%;right:30%;bottom:${bottom}%;height:${h}%;background:${palette[vi % palette.length]};"></div>`; bottom += h; return seg; }).join('');
         return `<div style="flex:1;position:relative;height:100%;"><div style="position:absolute;inset:0 0 14px 0;">${segs}</div><div style="position:absolute;bottom:0;left:0;right:0;text-align:center;font:${px('7.5pt')} Segoe UI;color:#27221C;white-space:nowrap;overflow:hidden;">${esc(c.key)}</div></div>`;
@@ -556,7 +556,6 @@ function renderPage(pageId, filter) {
         const n = Number(evalMeasure(yName, c.rows));
         const x = 30 + i * bw + bw * 0.18, cw = bw * 0.64;
         const hgt = (n / yMax) * (bandH - 22);
-        const lineY = H - 18 - hgt - 6;
         return `<rect x="${x}" y="${H - 18 - hgt}" width="${cw}" height="${hgt}" rx="2" fill="#B4652F"/><text x="${x + cw / 2}" y="${H - 4}" text-anchor="middle" font-size="8" fill="#5A5148" font-family="Segoe UI">${esc(c.key.slice(0, 12))}</text>`;
       }).join('');
       const pts = cats.map((c, i) => {
@@ -637,7 +636,9 @@ function renderPage(pageId, filter) {
       // Approximation for review: per-dimension group value of the analyzed measure,
       // ranked; Desktop's Key Influencers does this with a model influence score.
       const qs = v.visual.query.queryState;
-      const yName = (qs.Analyze?.projections?.[0] ?? qs.Y?.projections?.[0]).field.Measure.Property;
+      const projection = qs.Analyze?.projections?.[0] ?? qs.Y?.projections?.[0];
+      const yName = projection?.field?.Measure?.Property;
+      if (!yName) continue;
       const legend = (qs.ExplainBy?.projections ?? qs.Legend?.projections ?? []).map((pr) => pr.field.Column.Property);
       const num = (s) => Number(String(s).replace(/[%,\s]/g, ''));
       // evalMeasure over a subset already returns the group value (NPS), so no divide.

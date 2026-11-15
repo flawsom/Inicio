@@ -827,7 +827,7 @@ const pages = [];
   ];
   // The card visual prints the measure name as its label under the value, so no
   // separate sub-caption: it would overprint that label (seen in the screenshot pass).
-  kpiCards.forEach(([label, note, sub, measure, scale, chipFill, mono], i) => {
+  kpiCards.forEach(([label, note, , measure, scale, chipFill, mono], i) => {
     const y = 184 + i * 100;
     p.panel(`kc${i}`, 48, y, 320, 92, { fill: C.card, border: C.hairline, radius: 9, z: 10 });
     p.panel(`kch${i}`, 64, y + 9, 30, 21, { fill: chipFill, border: null, radius: 6, z: 100 });

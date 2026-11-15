@@ -164,7 +164,6 @@ const profile = head.map((name) => {
   const distinct = new Set(values);
   const numeric = values.filter((v) => Number.isFinite(Number(v)) && v.trim() !== '');
   const avgLen = values.length ? values.reduce((s, v) => s + v.length, 0) / values.length : 0;
-  const isNumeric = values.length > 0 && numeric.length / values.length >= 0.9;
   return {
     name,
     mName: safeName(name, taken),

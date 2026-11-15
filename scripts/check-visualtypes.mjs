@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Print the visualType enum from the visualConfiguration schema that the container
 // schema references, so new visuals only use types Desktop is known to accept.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 
 const url = 'https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualConfiguration/2.7.0/schema-embedded.json';
 const res = await fetch(url);

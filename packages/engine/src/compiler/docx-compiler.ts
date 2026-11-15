@@ -1382,15 +1382,6 @@ function instructionConstraint(prompt: string, builder: FormBuilder): { constrai
   };
 }
 
-function optionPrompt(text: string): string {
-  return cleanLabel(withoutCode(text))
-    .replace(/\bROTATE\s+(?:OPTIONS?|CATEGORIES|MOTIVATORS?|STATEMENTS?)\b.*$/i, '')
-    .replace(/\bmark\s+all(?:\s+that\s+apply)?\b.*$/i, '')
-    .replace(/\bSA\b|\bMA\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 function randomizedFor(options: RawOption[]): string | undefined {
   const trailing = [...options].reverse().findIndex((option) => !/other|none|nothing|no issues|did not work|don't know/i.test(option.label));
   if (trailing < 0) return `randomized(0,${options.length})`;
@@ -1967,7 +1958,7 @@ function readRankTable(table: DocxTable, fallbackCode: string): {
     const prompt = promptRows.at(-1) ?? '';
     const maxRank = Math.max(
       ...([...prompt.matchAll(/\brank\s*(?:of\s*)?(\d+)\b/gi)].map((match) => Number(match[1]))),
-      /top\s+(\d+)\b/i.exec(prompt)?.[1] ? Number(/\btop\s+(\d+)\b/i.exec(prompt)![1]) : 0,
+      /\btop\s+(\d+)\b/i.exec(prompt)?.[1] ? Number(/\btop\s+(\d+)\b/i.exec(prompt)![1]) : 0,
     );
     return {
       kind: 'rank-list',
