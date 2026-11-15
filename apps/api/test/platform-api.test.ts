@@ -645,7 +645,18 @@ describe('authoring, publishing and the XLSForm round trip', () => {
       payload: { orgId, name: 'Guarded again', xlsformBase64: file },
     });
     expect(duplicate.statusCode, duplicate.body).toBe(409);
-    expect((duplicate.json() as { message: string }).message).toBe(conflictMessage);
+    const duplicateBody = duplicate.json() as {
+      error: string;
+      message: string;
+      details?: { formId?: string; formName?: string; declaredFormId?: string };
+    };
+    expect(duplicateBody.message).toBe(conflictMessage);
+    expect(duplicateBody.error).toBe('form_id_taken');
+    expect(duplicateBody.details).toMatchObject({
+      formId,
+      formName: 'Guarded',
+      declaredFormId: 'guarded_instrument',
+    });
 
     // The import route reaches the same collision from a different door: a new,
     // otherwise empty form whose workbook declares an id another form owns.
@@ -664,7 +675,34 @@ describe('authoring, publishing and the XLSForm round trip', () => {
       payload: { xlsformBase64: file, versionId: null },
     });
     expect(conflictImport.statusCode, conflictImport.body).toBe(409);
-    expect((conflictImport.json() as { message: string }).message).toBe(conflictMessage);
+    const importBody = conflictImport.json() as {
+      error: string;
+      message: string;
+      details?: { formId?: string; formName?: string; declaredFormId?: string };
+    };
+    expect(importBody.message).toBe(conflictMessage);
+    expect(importBody.error).toBe('form_id_taken');
+    expect(importBody.details).toMatchObject({
+      formId,
+      formName: 'Guarded',
+      declaredFormId: 'guarded_instrument',
+    });
+
+    // Choosing "Import as copy" keeps the questions but assigns a fresh id, so
+    // the new instrument can coexist with the one that owns the original id.
+    const copied = await app.inject({
+      method: 'POST',
+      url: '/api/v1/forms',
+      headers: { cookie: owner.cookie },
+      payload: { orgId, name: 'Guarded copy', xlsformBase64: file, copyOnConflict: true },
+    });
+    expect(copied.statusCode, copied.body).toBe(201);
+    const copyDefinition = (copied.json() as { version: { definition: FormDefinition } }).version.definition;
+    const copyXlsform = copyDefinition.settings?.['xlsform'] as { formId?: string } | undefined;
+    const copyFormId = copyXlsform?.formId ?? '';
+    expect(copyFormId).toMatch(/^guarded_instrument_copy_[0-9a-f]{8}$/);
+    expect(copyFormId).not.toBe('guarded_instrument');
+    expect((copied.json() as { notes: Array<{ kind: string }> }).notes.some((note) => note.kind === 'copy')).toBe(true);
 
     // The same instrument may be updated, but only with a newer version.
     const older = Buffer.from(

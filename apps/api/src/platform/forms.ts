@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { z } from 'zod';
 import {
@@ -80,6 +80,9 @@ const createSchema = z.object({
   slug: z.string().trim().min(1).max(60).optional(),
   definition: z.unknown().optional(),
   templateId: z.string().optional(),
+  /** When the workbook's declared id belongs to another form, assign a fresh id
+   *  and import it as a separate instrument instead of refusing the upload. */
+  copyOnConflict: z.boolean().optional(),
   xlsformBase64: z.string().min(1).optional(),
   docxBase64: z.string().min(1).optional(),
   title: z.string().trim().min(1).max(200).optional(),
@@ -126,6 +129,38 @@ function withFallbackTitle(definition: FormDefinition, name: string): FormDefini
     title: name,
     settings: { ...(definition.settings ?? {}), xlsform: { ...xlsform, formId } },
   };
+}
+
+/** Rewrite the workbook identity before the definition is stored. */
+function withXlsformFormId(definition: FormDefinition, formId: string): FormDefinition {
+  const xlsform = (definition.settings?.['xlsform'] ?? {}) as Record<string, unknown>;
+  return {
+    ...definition,
+    settings: { ...(definition.settings ?? {}), xlsform: { ...xlsform, formId } },
+  };
+}
+
+/** A fresh identity for an intentional copy, readable but not derivable by collision. */
+function copyFormId(base: string): string {
+  const root = base.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 48) || 'form';
+  return `${root}_copy_${randomUUID().replace(/-/g, '').slice(0, 8)}`;
+}
+
+/** A refusal the browser can turn into "open that form" and "import as copy". */
+function formIdConflict(declared: string, owner: { id: string; name: string }): HttpError {
+  const message =
+    checkUpload({
+      formId: declared,
+      version: '',
+      conflictingFormId: declared,
+      conflictingFormName: owner.name,
+      requireVersion: false,
+    }).errors[0] ?? `The form ID (${declared}) already exists in this organisation.`;
+  return new HttpError(409, 'form_id_taken', message, undefined, {
+    formId: owner.id,
+    formName: owner.name,
+    declaredFormId: declared,
+  });
 }
 
 function xlsformMeta(definition: FormDefinition): XlsformMeta {
@@ -312,13 +347,23 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
             `SELECT id, name FROM form WHERE org_id = $1 AND xlsform_form_id = $2 LIMIT 1`,
             [parsed.data.orgId, meta.declared],
           );
+          if (conflicts[0]) {
+            if (!parsed.data.copyOnConflict) throw formIdConflict(meta.declared, conflicts[0]);
+            // The reader chose to keep the workbook's contents but not its
+            // identity. Assign a new id before the definition is stored, so the
+            // copy's own exports carry the new one.
+            const originalId = meta.declared;
+            const copyId = copyFormId(originalId);
+            definition = withXlsformFormId(definition, copyId);
+            meta = { ...meta, declared: copyId, formId: copyId };
+            notes.push({
+              kind: 'copy',
+              message: `Imported as a copy with form ID (${copyId}); the workbook's original ID (${originalId}) belongs to "${conflicts[0].name}".`,
+            });
+          }
           const guard = checkUpload({
             formId: meta.declared,
             version: meta.version,
-            // The guard compares ids, not row uuids: a row found here means this
-            // declared id already belongs to another instrument.
-            conflictingFormId: conflicts[0] ? meta.declared : null,
-            conflictingFormName: conflicts[0]?.name ?? null,
             requireVersion: false,
           });
           if (!guard.ok) throw new HttpError(409, 'upload_refused', guard.errors.join(' '));
@@ -731,13 +776,12 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
         `SELECT xlsform_version FROM form_version WHERE form_id = $1`,
         [form.id],
       );
+      // Only an id the workbook actually declares can belong to another form.
+      if (meta.declared && conflicts[0]) throw formIdConflict(meta.declared, conflicts[0]);
       const currentVersion = newestXlsformVersion(versionRows);
       const guard = checkUpload({
         formId: meta.declared || meta.formId,
         version: meta.version,
-        // Only an id the workbook actually declares can belong to another form.
-        conflictingFormId: meta.declared && conflicts[0] ? meta.declared : null,
-        conflictingFormName: meta.declared && conflicts[0] ? conflicts[0].name : null,
         currentVersion,
         // The first import into a form has nothing to be newer than. An exported
         // workbook from a form that never had a version carries a blank cached

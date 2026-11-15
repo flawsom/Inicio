@@ -573,7 +573,7 @@ export const api = {
   templates: () =>
     request<{ templates: Array<{ id: string; title: string; description: string; questionCount: number }> }>('GET', '/templates'),
   forms: () => request<{ forms: FormSummary[] }>('GET', '/forms'),
-  createForm: (payload: { orgId: string; name: string; templateId?: string; xlsformBase64?: string; docxBase64?: string; title?: string }) =>
+  createForm: (payload: { orgId: string; name: string; templateId?: string; xlsformBase64?: string; docxBase64?: string; title?: string; copyOnConflict?: boolean }) =>
     request<{ form: { id: string }; version: { id: string } }>('POST', '/forms', payload),
   form: (formId: string) =>
     request<{ form: FormSummary; versions: VersionSummary[]; responsesByStatus: Array<{ status: string; count: number }> }>(

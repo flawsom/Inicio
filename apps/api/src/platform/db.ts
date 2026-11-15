@@ -50,6 +50,8 @@ export class HttpError extends Error {
     message?: string,
     /** Present when the refusal is attributable: the handler records it as `access.denied`. */
     readonly audit?: RefusedActor,
+    /** Machine-readable facts a client can act on, sent beside the sentence. */
+    readonly details?: Record<string, unknown>,
   ) {
     super(message ?? code);
     this.statusCode = status;

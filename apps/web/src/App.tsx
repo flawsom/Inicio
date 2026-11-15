@@ -2184,6 +2184,42 @@ export function IntegrationsView({ orgId, canAdminister }: { orgId: string; canA
   );
 }
 
+/** The facts a duplicate form-ID refusal carries, if this error is one. */
+export interface ImportConflict {
+  formId: string;
+  formName: string;
+}
+
+export function importConflictFrom(err: unknown): ImportConflict | null {
+  if (!(err instanceof ApiError) || err.code !== 'form_id_taken') return null;
+  const details = (err.payload as { details?: { formId?: unknown; formName?: unknown } } | null)?.details;
+  return typeof details?.formId === 'string' && typeof details?.formName === 'string'
+    ? { formId: details.formId, formName: details.formName }
+    : null;
+}
+
+/** The two actions a person can take after a form-ID collision, in place. */
+export function ImportConflictActions({
+  formName,
+  onOpen,
+  onCopy,
+}: {
+  formName: string;
+  onOpen: () => void;
+  onCopy: () => void;
+}): JSX.Element {
+  return (
+    <div className="row">
+      <button type="button" className="ghost" onClick={onOpen}>
+        Open "{formName}"
+      </button>
+      <button type="button" onClick={onCopy}>
+        Import as copy
+      </button>
+    </div>
+  );
+}
+
 function Workspace({ me, onSignedOut }: { me: Me; onSignedOut: () => void }): JSX.Element {
   const [orgs, setOrgs] = useState<Organisation[]>(me.organisations);
   const [orgId, setOrgId] = useState<string | null>(me.organisations[0]?.id ?? null);
@@ -2192,6 +2228,7 @@ function Workspace({ me, onSignedOut }: { me: Me; onSignedOut: () => void }): JS
   const [newFormName, setNewFormName] = useState('');
   const [templateId, setTemplateId] = useState('school-ranking-2026');
   const [sideNotice, setSideNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const [copyOffer, setCopyOffer] = useState<{ file: File; formId: string; formName: string } | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const [showAdmin, setShowAdmin] = useState(false);
@@ -2236,25 +2273,36 @@ function Workspace({ me, onSignedOut }: { me: Me; onSignedOut: () => void }): JS
     }
   };
 
-  const uploadForm = async (file: File): Promise<void> => {
+  const uploadForm = async (file: File, asCopy = false): Promise<void> => {
     if (!orgId) return;
     setSideNotice(null);
+    if (!asCopy) setCopyOffer(null);
     try {
       const buffer = await file.arrayBuffer();
       let binary = '';
       const bytes = new Uint8Array(buffer);
       for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
       const isDocx = /\.docx$/i.test(file.name);
-      const name = file.name.replace(/\.(xlsx|docx)$/i, '');
+      const baseName = file.name.replace(/\.(xlsx|docx)$/i, '');
+      const name = asCopy ? `${baseName} (copy)` : baseName;
       const res = await api.createForm({
         orgId,
         name,
         ...(isDocx ? { docxBase64: btoa(binary) } : { xlsformBase64: btoa(binary) }),
+        ...(asCopy ? { copyOnConflict: true } : {}),
       });
       setFormId(res.form.id);
-      setSideNotice({ kind: 'ok', text: `Imported "${file.name}". Review it, then publish to start collecting.` });
+      setCopyOffer(null);
+      setSideNotice({
+        kind: 'ok',
+        text: asCopy
+          ? `Imported "${file.name}" as a copy with a new form ID. Review it, then publish to start collecting.`
+          : `Imported "${file.name}". Review it, then publish to start collecting.`,
+      });
       reloadForms();
     } catch (err) {
+      const conflict = importConflictFrom(err);
+      if (conflict) setCopyOffer({ file, ...conflict });
       setSideNotice({ kind: 'error', text: err instanceof ApiError ? (err.message ?? 'import failed') : 'import failed' });
     }
   };
@@ -2347,6 +2395,23 @@ function Workspace({ me, onSignedOut }: { me: Me; onSignedOut: () => void }): JS
         />
         {sideNotice && (
           <p className={sideNotice.kind === 'error' ? 'error small' : 'muted small'}>{sideNotice.text}</p>
+        )}
+        {copyOffer && (
+          <ImportConflictActions
+            formName={copyOffer.formName}
+            onOpen={() => {
+              setFormId(copyOffer.formId);
+              setShowAdmin(false);
+              setShowIntegrations(false);
+              setSideNotice(null);
+              setCopyOffer(null);
+            }}
+            onCopy={() => {
+              const file = copyOffer.file;
+              setCopyOffer(null);
+              void uploadForm(file, true);
+            }}
+          />
         )}
 
         {canAdminister && (

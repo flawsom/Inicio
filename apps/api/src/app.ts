@@ -103,6 +103,9 @@ export async function buildApp(): Promise<FastifyInstance> {
     return reply.code(status).send({
       error: status >= 500 ? 'internal_error' : error.code ?? 'request_error',
       message: status >= 500 ? 'An unexpected error occurred.' : error.message,
+      ...(status < 500 && (error as { details?: unknown }).details
+        ? { details: (error as { details?: unknown }).details }
+        : {}),
     });
   });
 
