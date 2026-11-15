@@ -623,6 +623,10 @@ describe('authoring, publishing and the XLSForm round trip', () => {
       settings: { xlsform: { formId: 'guarded_instrument', version: '2611011200' } },
     };
     const file = Buffer.from(exportXlsForm(guarded).bytes).toString('base64');
+    const conflictMessage =
+      'This workbook declares form ID (guarded_instrument), which already belongs to the form "Guarded". ' +
+      "Open that form and use its 'Upload' option to add a version, or change settings.form_id to " +
+      'import it as a separate form.';
 
     const first = await app.inject({
       method: 'POST',
@@ -641,11 +645,26 @@ describe('authoring, publishing and the XLSForm round trip', () => {
       payload: { orgId, name: 'Guarded again', xlsformBase64: file },
     });
     expect(duplicate.statusCode, duplicate.body).toBe(409);
-    expect((duplicate.json() as { message: string }).message).toBe(
-      'This workbook declares form ID (guarded_instrument), which already belongs to the form "Guarded". ' +
-        "Open that form and use its 'Upload' option to add a version, or change settings.form_id to " +
-        'import it as a separate form.',
-    );
+    expect((duplicate.json() as { message: string }).message).toBe(conflictMessage);
+
+    // The import route reaches the same collision from a different door: a new,
+    // otherwise empty form whose workbook declares an id another form owns.
+    const importTarget = await app.inject({
+      method: 'POST',
+      url: '/api/v1/forms',
+      headers: { cookie: owner.cookie },
+      payload: { orgId, name: 'Import target' },
+    });
+    expect(importTarget.statusCode, importTarget.body).toBe(201);
+    const importTargetId = (importTarget.json() as { form: { id: string } }).form.id;
+    const conflictImport = await app.inject({
+      method: 'POST',
+      url: `/api/v1/forms/${importTargetId}/import`,
+      headers: { cookie: owner.cookie },
+      payload: { xlsformBase64: file, versionId: null },
+    });
+    expect(conflictImport.statusCode, conflictImport.body).toBe(409);
+    expect((conflictImport.json() as { message: string }).message).toBe(conflictMessage);
 
     // The same instrument may be updated, but only with a newer version.
     const older = Buffer.from(
