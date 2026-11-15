@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import './monitor.css';
 import { AnalysisStudio } from './analysis-studio';
 import { ClientAnalysis } from './analysis';
 import { api } from './api';
