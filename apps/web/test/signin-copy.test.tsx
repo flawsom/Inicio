@@ -44,6 +44,8 @@ let status: MailStatusBody;
 let requestMail: MailStatusBody;
 let delivery: { ok: boolean; transport: string; detail: string; at: string };
 let requested: string[];
+/** When set, the code request itself fails, as it does for an uninvited address. */
+let otpError: { status: number; body: unknown } | null;
 /** When set, the mount-time mail-status read is held open until it is called. */
 let releaseStatus: (() => void) | null;
 let holdStatus: boolean;
@@ -58,6 +60,7 @@ function json(body: unknown, statusCode = 200): Response {
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   requested = [];
+  otpError = null;
   holdStatus = false;
   releaseStatus = null;
   status = {
@@ -85,6 +88,7 @@ beforeEach(() => {
     }
     if (url.endsWith('/auth/otp/request')) {
       requested.push(url);
+      if (otpError) return json(otpError.body, otpError.status);
       return json({ status: delivery.ok ? 'sent' : 'not_delivered', mail: requestMail, delivery });
     }
     return json({ error: 'unexpected' }, 500);
@@ -224,5 +228,18 @@ describe('the sign-in card states the server’s numbers, not its own', () => {
     const text = await mountLogin();
     expect(text()).toContain('Sign in codes cannot be sent right now.');
     expect(text()).toContain('contact your organisation administrator');
+  });
+});
+
+describe('a refused invitation is stated as an instruction', () => {
+  it('does not print the API code to a stranger', async () => {
+    otpError = { status: 404, body: { error: 'not_invited' } };
+    await mountLogin();
+    await askForCode('stranger@example.org');
+
+    const text = (container.textContent ?? '').replace(/\s+/g, ' ');
+    expect(text).toContain('That email address has no invitation.');
+    expect(text).toContain('Ask an owner or admin');
+    expect(text).not.toContain('not_invited');
   });
 });

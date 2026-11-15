@@ -50,3 +50,35 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# The document is the one response a browser turns into a frame, a script host and a
+# referrer, so it carries the protections that do not belong to any one route.
+# `frame-ancestors` duplicates X-Frame-Options for browsers that prefer the CSP form;
+# the policy deliberately does not restrict scripts or styles, because the Vite bundle
+# and the Google Fonts stylesheet are the app and this is not the place to break them.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(self)"
+    Content-Security-Policy = "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'"
+
+# Vite fingerprints everything under /assets, so a change is a new URL. That is the
+# whole point of the hash, and it is wasted by revalidating the file on every visit.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# The service worker is not fingerprinted: it must be able to replace itself.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"

@@ -45,6 +45,22 @@ export async function buildApp(): Promise<FastifyInstance> {
   // ceiling keyed on the distribution link (see platform/collect.ts); both count.
   await registerDurableLimit(app, { max: env.RATE_LIMIT_MAX, namespace: 'ip' });
 
+  // A session is a cookie, and a response that depends on one must never be stored by
+  // a shared cache. Routes that already chose their policy keep it (the public legal
+  // documents are deliberately cacheable for five minutes; analytics and exports are
+  // `private, no-store`), so this only fills the gap: `/auth/me` was answering 401 with
+  // Vercel's default `public, max-age=0, must-revalidate`, which is the wrong class of
+  // response to put in front of a cookie. `/health` is included because it reads the
+  // database on every call and a stale one would be a lie.
+  app.addHook('onSend', async (req, reply, payload) => {
+    if (reply.getHeader('cache-control') !== undefined) return payload;
+    const path = (req.url ?? '').split('?')[0] ?? '';
+    if (path === '/health' || path.startsWith('/auth/') || path.startsWith('/api/')) {
+      reply.header('cache-control', 'no-store');
+    }
+    return payload;
+  });
+
   // The error handler is installed *before* the route plugins: a Fastify child
   // context inherits the handler that was current when it was registered, so
   // setting it afterwards would leave every route on the default serialiser.

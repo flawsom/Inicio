@@ -370,6 +370,23 @@ function OtpInput({
   );
 }
 
+/** What a failed code request should say to a person standing at a phone.
+ *
+ * The API answers `{ error: 'not_invited' }` for an address nobody has invited, with no
+ * message, so the generic `err.message ?? err.code` path printed the machine code at the
+ * one moment the reader needed an instruction. The distinction the API makes is the one
+ * a reader can act on: an invitation exists or it does not. Anything else is a failure
+ * they can retry, and naming the internal code would only be noise. */
+function otpRequestMessage(err: unknown): string {
+  if (err instanceof ApiError && err.code === 'not_invited') {
+    return 'That email address has no invitation. Ask an owner or admin of your organisation to invite you.';
+  }
+  if (err instanceof ApiError && err.code === 'rate_limited') {
+    return 'Too many attempts. Wait a minute and try again.';
+  }
+  return 'We could not send a code. Check the address and try again.';
+}
+
 /** Exported for `signin-copy.test.tsx`: the copy on this card states facts the
  *  server owns, and the test is what keeps them coming from the server. */
 export function Login({ onSignedIn }: { onSignedIn: () => void }): JSX.Element {
@@ -434,7 +451,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void }): JSX.Element {
         setError('We could not send a code to that address. Check the address and try again.');
       }
     } catch (err) {
-      setError(err instanceof ApiError ? (err.message ?? err.code) : 'could not send the code');
+      setError(otpRequestMessage(err));
     } finally {
       setBusy(false);
     }
