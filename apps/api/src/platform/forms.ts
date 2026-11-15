@@ -730,12 +730,19 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
         `SELECT xlsform_version FROM form_version WHERE form_id = $1`,
         [form.id],
       );
+      const currentVersion = newestXlsformVersion(versionRows);
       const guard = checkUpload({
         formId: meta.declared || meta.formId,
         version: meta.version,
         // Only an id the workbook actually declares can belong to another form.
         conflictingFormId: meta.declared && conflicts[0] ? meta.declared : null,
-        currentVersion: newestXlsformVersion(versionRows),
+        currentVersion,
+        // The first import into a form has nothing to be newer than. An exported
+        // workbook from a form that never had a version carries a blank cached
+        // version (the formula fills it when Excel saves), so requiring one here
+        // refused a round trip the creation route already accepts. Once a version
+        // exists, a blank one is still refused: it cannot be compared for staleness.
+        requireVersion: currentVersion !== null,
       });
       if (!guard.ok) throw new HttpError(409, 'upload_refused', guard.errors.join(' '));
 

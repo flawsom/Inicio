@@ -33,7 +33,14 @@ let pass = 0, fail = 0;
 const failures = [];
 function check(name, cond, detail = '') {
   if (cond) { pass++; console.log(`  PASS  ${name}`); }
-  else { fail++; failures.push(`${name} :: ${detail}`); console.log(`  FAIL  ${name}  ${detail}`); }
+  else {
+    fail++;
+    failures.push(`${name} :: ${detail}`);
+    console.log(`  FAIL  ${name}  ${detail}`);
+    // A failed assertion has to reach the exit status. Without this the script
+    // printed "1 failed" and still exited 0, so CI called the harness green.
+    process.exitCode = 1;
+  }
 }
 const sha256 = (s) => createHash('sha256').update(s, 'utf8').digest('hex');
 
@@ -233,7 +240,7 @@ async function main() {
   const importFormId = importForm.json?.form?.id;
   const importRes = await s.req('POST', `/forms/${importFormId}/import`, { xlsformBase64: xlsBytes.toString('base64'), versionId: null });
   const importedQuestions = importRes.json?.definition?.questions?.length ?? 0;
-  check('re-importing the workbook reproduces the questions', importRes.status === 201 && importedQuestions === 3, `status ${importRes.status} questions ${importedQuestions} ${JSON.stringify(importRes.json?.notes)}`);
+  check('re-importing the workbook reproduces the questions', importRes.status === 201 && importedQuestions === 3, `status ${importRes.status} questions ${importedQuestions} ${String(importRes.json?.message ?? importRes.json?.error ?? importRes.text).slice(0, 300)}`);
 
   console.log('\n== cleanup ==');
   await cleanupOrg(orgId);

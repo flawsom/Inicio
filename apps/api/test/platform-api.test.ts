@@ -584,6 +584,37 @@ describe('authoring, publishing and the XLSForm round trip', () => {
     expect(notes.filter((n) => n.kind === 'dropped')).toEqual([]);
   });
 
+  it('imports an exported unversioned workbook into an empty form', async () => {
+    const owner = await signIn(`xlsform-first-import-${Date.now()}@example.com`);
+    const orgId = await createOrg(owner, 'First import org');
+    const sourceId = await createForm(owner, orgId, 'Pulse check 2026', validDefinition);
+
+    // A form that never had a version exports a blank cached version. Importing
+    // that workbook into an empty form is a first import, not an update, and has
+    // nothing to be newer than.
+    const downloaded = await app.inject({ method: 'GET', url: `/api/v1/forms/${sourceId}/xlsform`, headers: { cookie: owner.cookie } });
+    expect(downloaded.statusCode, downloaded.body).toBe(200);
+    const base64 = Buffer.from(downloaded.rawPayload).toString('base64');
+
+    const target = await app.inject({
+      method: 'POST',
+      url: '/api/v1/forms',
+      headers: { cookie: owner.cookie },
+      payload: { orgId, name: 'Import target' },
+    });
+    expect(target.statusCode, target.body).toBe(201);
+    const targetId = (target.json() as { form: { id: string } }).form.id;
+
+    const imported = await app.inject({
+      method: 'POST',
+      url: `/api/v1/forms/${targetId}/import`,
+      headers: { cookie: owner.cookie },
+      payload: { xlsformBase64: base64, versionId: null },
+    });
+    expect(imported.statusCode, imported.body).toBe(201);
+    expect((imported.json() as { definition: { questions: unknown[] } }).definition.questions).toHaveLength(3);
+  });
+
   it('refuses a duplicate form id and a version that is not newer, in the promised words', async () => {
     const owner = await signIn(`guards-${Date.now()}@example.com`);
     const orgId = await createOrg(owner, 'Guard org');
