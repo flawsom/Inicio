@@ -170,6 +170,21 @@ jobs:
       - name: Consumer journey, over HTTP against a real database
         run: pnpm e2e:consumer
 
+      # The harness must be able to fail the job. It once printed a failed assertion and
+      # exited 0, which let the cross-form XLSForm 409 through a green CI run. An owner
+      # that does not exist fails the first check and returns before writing anything.
+      - name: The consumer harness fails when an assertion fails
+        run: |
+          set +e
+          E2E_OWNER=nobody@example.invalid pnpm e2e:consumer > /tmp/e2e-selftest.log 2>&1
+          code=$?
+          cat /tmp/e2e-selftest.log
+          if [ "$code" -eq 0 ]; then
+            echo "the harness exited 0 after a failed assertion"
+            exit 1
+          fi
+          echo "harness exited $code, as required"
+
       - name: Offline sync contract, over HTTP against a real database
         run: pnpm e2e:offline
 

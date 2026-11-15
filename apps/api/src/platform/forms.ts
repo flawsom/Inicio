@@ -308,8 +308,8 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
         // instrument in this organisation already owns. The version is free to
         // start anywhere: there is nothing yet for it to be newer than.
         if (meta.declared !== '') {
-          const { rows: conflicts } = await client.query<{ id: string }>(
-            `SELECT id FROM form WHERE org_id = $1 AND xlsform_form_id = $2 LIMIT 1`,
+          const { rows: conflicts } = await client.query<{ id: string; name: string }>(
+            `SELECT id, name FROM form WHERE org_id = $1 AND xlsform_form_id = $2 LIMIT 1`,
             [parsed.data.orgId, meta.declared],
           );
           const guard = checkUpload({
@@ -318,6 +318,7 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
             // The guard compares ids, not row uuids: a row found here means this
             // declared id already belongs to another instrument.
             conflictingFormId: conflicts[0] ? meta.declared : null,
+            conflictingFormName: conflicts[0]?.name ?? null,
             requireVersion: false,
           });
           if (!guard.ok) throw new HttpError(409, 'upload_refused', guard.errors.join(' '));
@@ -722,8 +723,8 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
       // the previous draft are only correct if they see the whole sequence.
       await client.query(`SELECT id FROM form WHERE id = $1 FOR UPDATE`, [form.id]);
 
-      const { rows: conflicts } = await client.query<{ id: string }>(
-        `SELECT id FROM form WHERE org_id = $1 AND xlsform_form_id = $2 AND id <> $3 LIMIT 1`,
+      const { rows: conflicts } = await client.query<{ id: string; name: string }>(
+        `SELECT id, name FROM form WHERE org_id = $1 AND xlsform_form_id = $2 AND id <> $3 LIMIT 1`,
         [form.org_id, meta.formId, form.id],
       );
       const { rows: versionRows } = await client.query<{ xlsform_version: string | null }>(
@@ -736,6 +737,7 @@ export const platformFormRoutes: FastifyPluginAsync = async (app) => {
         version: meta.version,
         // Only an id the workbook actually declares can belong to another form.
         conflictingFormId: meta.declared && conflicts[0] ? meta.declared : null,
+        conflictingFormName: meta.declared && conflicts[0] ? conflicts[0].name : null,
         currentVersion,
         // The first import into a form has nothing to be newer than. An exported
         // workbook from a form that never had a version carries a blank cached

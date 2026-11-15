@@ -570,6 +570,9 @@ export interface UploadGuardInput {
    * the caller must pass null for it.
    */
   conflictingFormId?: string | null;
+  /** The owning form's name, when the caller can look it up, so the refusal can
+   *  tell the reader which form to open instead of only which id collided. */
+  conflictingFormName?: string | null;
   /** The version currently deployed for the form being uploaded, if any. */
   currentVersion?: string | null;
   /**
@@ -608,9 +611,14 @@ export function checkUpload(input: UploadGuardInput): UploadGuardResult {
   const version = (input.version ?? '').trim();
 
   if (formId !== '' && formId === (input.conflictingFormId ?? '').trim()) {
+    const owner = (input.conflictingFormName ?? '').trim();
     errors.push(
-      `Your form definition specifies a form ID (${formId}) that already exists. ` +
-        `If you would like to update that existing form, please use the 'Upload' option for that form.`,
+      owner !== ''
+        ? `This workbook declares form ID (${formId}), which already belongs to the form "${owner}". ` +
+          `Open that form and use its 'Upload' option to add a version, or change settings.form_id to ` +
+          `import it as a separate form.`
+        : `Your form definition specifies a form ID (${formId}) that already exists. ` +
+          `If you would like to update that existing form, please use the 'Upload' option for that form.`,
     );
   }
 

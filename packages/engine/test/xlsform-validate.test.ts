@@ -211,6 +211,21 @@ describe('upload guards', () => {
     );
   });
 
+  it('names the owning form when the caller knows it', () => {
+    const result = checkUpload({
+      formId: 'household_2026',
+      version: '2611011200',
+      conflictingFormId: 'household_2026',
+      conflictingFormName: 'Household 2026',
+    });
+    expect(result.ok).toBe(false);
+    expect(result.errors[0]).toBe(
+      'This workbook declares form ID (household_2026), which already belongs to the form "Household 2026". ' +
+        "Open that form and use its 'Upload' option to add a version, or change settings.form_id to " +
+        'import it as a separate form.',
+    );
+  });
+
   it('uses the exact non-monotonic version sentence', () => {
     const same = checkUpload({ formId: 'household_2026', version: '2611011200', currentVersion: '2611011200' });
     expect(same.errors[0]).toBe(

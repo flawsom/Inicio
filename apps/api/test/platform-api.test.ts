@@ -642,8 +642,9 @@ describe('authoring, publishing and the XLSForm round trip', () => {
     });
     expect(duplicate.statusCode, duplicate.body).toBe(409);
     expect((duplicate.json() as { message: string }).message).toBe(
-      'Your form definition specifies a form ID (guarded_instrument) that already exists. ' +
-        "If you would like to update that existing form, please use the 'Upload' option for that form.",
+      'This workbook declares form ID (guarded_instrument), which already belongs to the form "Guarded". ' +
+        "Open that form and use its 'Upload' option to add a version, or change settings.form_id to " +
+        'import it as a separate form.',
     );
 
     // The same instrument may be updated, but only with a newer version.
